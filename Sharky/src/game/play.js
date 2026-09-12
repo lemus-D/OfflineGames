@@ -16,6 +16,10 @@ const FIXED_DT = 1 / 60;
 const WORLD_FLOOR = 2200;
 const WORLD_CEIL = 40;
 const SPAWN_MARGIN = 520;
+/** Seconds after dive-in before predators may chase or kill. */
+const SPAWN_GRACE = 2.75;
+/** Minimum spawn distance for predators (world px). */
+const PREDATOR_MIN_SPAWN_DIST = SPAWN_MARGIN * 1.15;
 
 // #region agent log
 function _dbg(hypothesisId, location, message, data) {
@@ -25,21 +29,32 @@ function _dbg(hypothesisId, location, message, data) {
     message,
     data,
     timestamp: Date.now(),
+    runId: 'post-fix',
   };
   try {
     if (typeof window !== 'undefined') {
       window.__SHARKY_DBG__ = window.__SHARKY_DBG__ || [];
       window.__SHARKY_DBG__.push(payload);
+      window.__SHARKY_DBG_LAST__ = payload;
     }
   } catch (_) {}
   try {
     console.log('[SHARKY_DBG]', JSON.stringify(payload));
   } catch (_) {}
   try {
+    const body = JSON.stringify(payload);
+    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+      navigator.sendBeacon(
+        'http://127.0.0.1:5199/log',
+        new Blob([body + '\n'], { type: 'application/json' })
+      );
+    }
     fetch('http://127.0.0.1:5199/log', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body,
+      mode: 'cors',
+      keepalive: true,
     }).catch(() => {});
   } catch (_) {}
 }
@@ -80,14 +95,16 @@ export class PlaySession {
     this.paused = false;
     this.draft = null; // { picks: Upgrade[] } while choosing
     this.camera = { x: 0, y: 900, zoom: 1 };
-    this._spawnTimer = 0;
+    // Delay first ambient spawn so dive-in is not a predator drop.
+    this._spawnTimer = SPAWN_GRACE * 0.45;
     this._nextId = 1;
+    this._graceUntil = SPAWN_GRACE;
     // #region agent log
     this._dbgStepCount = 0;
     this._dbgFirstCollide = true;
     // #endregion
 
-    // Seed initial school.
+    // Seed initial school — prey only (see _spawnNear).
     for (let i = 0; i < 28; i++) this._spawnNear(true);
 
     // #region agent log
@@ -104,7 +121,8 @@ export class PlaySession {
         const clen = lengthFromMass(c.mass);
         const dist = Math.hypot(c.x - p.x, c.y - p.y);
         const hitR = (pLen + clen) * 0.28;
-        const lethal = c.mass >= p.mass * adv;
+        const lethal =
+          c.kind === 'predator' && c.mass >= p.mass * adv;
         if (lethal) {
           lethalCount++;
           if (dist < minDistLethal) minDistLethal = dist;
@@ -131,15 +149,18 @@ export class PlaySession {
         predatorAdvantage: adv,
         creatureCount: this.creatures.length,
         lethalCount,
+        predatorCount: this.creatures.filter((c) => c.kind === 'predator').length,
         overlapLethal,
         minDistLethal: minDistLethal === Infinity ? null : +minDistLethal.toFixed(1),
         maxHitR: +maxHitR.toFixed(1),
+        graceUntil: this._graceUntil,
         samples,
       });
       _dbg('H2', 'play.js:constructor', 'lethal predator mass check', {
         lethalCount,
         predatorAdvantage: adv,
         anyLethal: lethalCount > 0,
+        preyOnlySchool: this.creatures.every((c) => c.kind === 'prey'),
       });
       _dbg('H4', 'play.js:constructor', 'hitR vs spawn distance', {
         maxHitR: +maxHitR.toFixed(1),
@@ -189,7 +210,7 @@ export class PlaySession {
       let nearestLethal = null;
       const adv = this.stats.predatorAdvantage;
       for (const c of this.creatures) {
-        if (c.mass < p.mass * adv) continue;
+        if (c.kind !== 'predator' || c.mass < p.mass * adv) continue;
         const dist = Math.hypot(c.x - p.x, c.y - p.y);
         if (!nearestLethal || dist < nearestLethal.dist) {
           nearestLethal = {
@@ -289,26 +310,32 @@ export class PlaySession {
   _spawnNear(initial) {
     const p = this.player;
     const ang = this.rng() * Math.PI * 2;
-    const dist = initial
-      ? 120 + this.rng() * 700
+
+    // Bias fauna band toward current mass. Initial school is prey-only so
+    // dive-in never places a lethal predator on top of the player.
+    const roll = this.rng();
+    let template;
+    if (initial || roll < 0.55) {
+      template = FAUNA[(this.rng() * 4) | 0]; // prey tiers 0–3
+    } else if (roll < 0.82) {
+      template = FAUNA[4 + ((this.rng() * 2) | 0)]; // barracuda / mako
+    } else {
+      template = FAUNA[4 + ((this.rng() * 3) | 0)]; // barracuda–leviathan
+    }
+
+    let dist = initial
+      ? 160 + this.rng() * 680
       : SPAWN_MARGIN * (0.7 + this.rng() * 0.8);
+    if (template.kind === 'predator') {
+      dist = Math.max(dist, PREDATOR_MIN_SPAWN_DIST);
+    }
+
     const x = p.x + Math.cos(ang) * dist;
     const y = clamp(
       p.y + Math.sin(ang) * dist * 0.7,
       WORLD_CEIL + 60,
       WORLD_FLOOR - 80
     );
-
-    // Bias fauna band toward current mass.
-    const roll = this.rng();
-    let template;
-    if (roll < 0.55) {
-      template = FAUNA[(this.rng() * 4) | 0]; // prey tiers
-    } else if (roll < 0.82) {
-      template = FAUNA[3 + ((this.rng() * 2) | 0)]; // mid / small predator
-    } else {
-      template = FAUNA[4 + ((this.rng() * 3) | 0)];
-    }
 
     const rel = lerp(template.massMin, template.massMax, this.rng());
     const mass = Math.max(0.05, p.mass * rel);
@@ -332,6 +359,20 @@ export class PlaySession {
       stunnedUntil: 0,
     });
 
+    // #region agent log
+    if (template.kind === 'predator' || initial) {
+      _dbg('H2', 'play.js:_spawnNear', 'spawned creature', {
+        initial: !!initial,
+        kind: template.kind,
+        name: template.name,
+        mass: +mass.toFixed(3),
+        dist: +dist.toFixed(1),
+        graceLeft: +Math.max(0, this._graceUntil - this.time).toFixed(3),
+        time: +this.time.toFixed(4),
+      });
+    }
+    // #endregion
+
     // Cap population.
     if (this.creatures.length > 55) {
       this.creatures.sort(
@@ -348,8 +389,12 @@ export class PlaySession {
       if (c.stunnedUntil > this.time) {
         c.vx *= 0.9;
         c.vy *= 0.9;
-      } else if (c.kind === 'predator' && c.mass > p.mass * this.stats.predatorAdvantage * 0.95) {
-        // Chase player.
+      } else if (
+        c.kind === 'predator' &&
+        this.time >= this._graceUntil &&
+        c.mass > p.mass * this.stats.predatorAdvantage * 0.95
+      ) {
+        // Chase player (after spawn grace).
         const dx = p.x - c.x,
           dy = p.y - c.y;
         const d = Math.hypot(dx, dy) || 1;
@@ -413,7 +458,12 @@ export class PlaySession {
         const hitR = (playerLen + clen) * 0.28;
         if (dist <= hitR) {
           overlaps++;
-          if (c.mass >= p.mass * adv) lethalOverlaps++;
+          if (
+            c.kind === 'predator' &&
+            c.mass >= p.mass * adv
+          ) {
+            lethalOverlaps++;
+          }
         }
       }
       _dbg('H1', 'play.js:_collide', 'first collide pass', {
@@ -454,8 +504,12 @@ export class PlaySession {
         continue;
       }
 
-      // Predator contact.
-      if (c.mass >= p.mass * this.stats.predatorAdvantage) {
+      // Predator contact — only true predators can swallow the player.
+      // Oversized prey (e.g. grouper just above bite mass) must not kill.
+      if (
+        c.kind === 'predator' &&
+        c.mass >= p.mass * this.stats.predatorAdvantage
+      ) {
         // #region agent log
         _dbg('H1', 'play.js:_collide', 'lethal contact', {
           time: +this.time.toFixed(4),
@@ -469,6 +523,8 @@ export class PlaySession {
           hitR: +hitR.toFixed(1),
           predatorAdvantage: this.stats.predatorAdvantage,
           secondWind: this.stats.secondWind,
+          inGrace: this.time < this._graceUntil,
+          graceUntil: this._graceUntil,
         });
         _dbg('H4', 'play.js:_collide', 'lethal hit radii', {
           playerLen: +playerLen.toFixed(1),
@@ -478,6 +534,18 @@ export class PlaySession {
           ratioDistHitR: +(dist / hitR).toFixed(3),
         });
         // #endregion
+        // Spawn grace: contact knocks back but does not kill.
+        if (this.time < this._graceUntil) {
+          const dx = c.x - p.x,
+            dy = c.y - p.y;
+          const d = Math.hypot(dx, dy) || 1;
+          c.vx += (dx / d) * 180;
+          c.vy += (dy / d) * 180;
+          p.vx -= (dx / d) * 120;
+          p.vy -= (dy / d) * 120;
+          remain.push(c);
+          continue;
+        }
         if (this.stats.secondWind && !p.secondWindUsed) {
           p.secondWindUsed = true;
           p.hunger = Math.max(p.hunger, 0.35);
