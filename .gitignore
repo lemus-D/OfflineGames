@@ -1,0 +1,3 @@
+.playwright-mcp/
+.shots/
+node_modules/
