@@ -227,7 +227,7 @@ export const FAUNA = [
   { kind: 'prey', name: 'minnow', massMin: 0.08, massMax: 0.22, speed: 0.7, hue: 48 },
   { kind: 'prey', name: 'sardine', massMin: 0.2, massMax: 0.45, speed: 0.85, hue: 190 },
   { kind: 'prey', name: 'parrot', massMin: 0.4, massMax: 0.75, speed: 0.75, hue: 140 },
-  { kind: 'prey', name: 'grouper', massMin: 0.7, massMax: 1.05, speed: 0.55, hue: 30 },
+  { kind: 'prey', name: 'grouper', massMin: 0.65, massMax: 0.95, speed: 0.55, hue: 30 },
   { kind: 'predator', name: 'barracuda', massMin: 1.15, massMax: 1.8, speed: 1.05, hue: 210 },
   { kind: 'predator', name: 'mako', massMin: 1.6, massMax: 2.6, speed: 1.15, hue: 200 },
   { kind: 'predator', name: 'leviathan', massMin: 2.4, massMax: 4.0, speed: 0.9, hue: 220 },

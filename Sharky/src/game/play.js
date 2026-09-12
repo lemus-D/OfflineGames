@@ -17,7 +17,9 @@ const WORLD_FLOOR = 2200;
 const WORLD_CEIL = 40;
 const SPAWN_MARGIN = 520;
 /** Seconds after dive-in before predators may chase or kill. */
-const SPAWN_GRACE = 2.75;
+const SPAWN_GRACE = 4.5;
+/** After grace, keep predator spawns rare until the player has settled in. */
+const EARLY_PREY_WINDOW = 14;
 /** Minimum spawn distance for predators (world px). */
 const PREDATOR_MIN_SPAWN_DIST = SPAWN_MARGIN * 1.15;
 
@@ -181,10 +183,11 @@ export class PlaySession {
     // Bias fauna band toward current mass. Initial school is prey-only so
     // dive-in never places a lethal predator on top of the player.
     const roll = this.rng();
+    const early = !initial && this.time < EARLY_PREY_WINDOW;
     let template;
-    if (initial || roll < 0.55) {
+    if (initial || early || roll < 0.72) {
       template = FAUNA[(this.rng() * 4) | 0]; // prey tiers 0–3
-    } else if (roll < 0.82) {
+    } else if (roll < 0.9) {
       template = FAUNA[4 + ((this.rng() * 2) | 0)]; // barracuda / mako
     } else {
       template = FAUNA[4 + ((this.rng() * 3) | 0)]; // barracuda–leviathan
