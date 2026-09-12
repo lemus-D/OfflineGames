@@ -17,6 +17,34 @@ const WORLD_FLOOR = 2200;
 const WORLD_CEIL = 40;
 const SPAWN_MARGIN = 520;
 
+// #region agent log
+function _dbg(hypothesisId, location, message, data) {
+  const payload = {
+    hypothesisId,
+    location,
+    message,
+    data,
+    timestamp: Date.now(),
+  };
+  try {
+    if (typeof window !== 'undefined') {
+      window.__SHARKY_DBG__ = window.__SHARKY_DBG__ || [];
+      window.__SHARKY_DBG__.push(payload);
+    }
+  } catch (_) {}
+  try {
+    console.log('[SHARKY_DBG]', JSON.stringify(payload));
+  } catch (_) {}
+  try {
+    fetch('http://127.0.0.1:5199/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+  } catch (_) {}
+}
+// #endregion
+
 export class PlaySession {
   constructor(animalId, seed, hooks = {}) {
     this.animalId = animalId;
@@ -54,9 +82,73 @@ export class PlaySession {
     this.camera = { x: 0, y: 900, zoom: 1 };
     this._spawnTimer = 0;
     this._nextId = 1;
+    // #region agent log
+    this._dbgStepCount = 0;
+    this._dbgFirstCollide = true;
+    // #endregion
 
     // Seed initial school.
     for (let i = 0; i < 28; i++) this._spawnNear(true);
+
+    // #region agent log
+    {
+      const p = this.player;
+      const pLen = lengthFromMass(p.mass);
+      const adv = this.stats.predatorAdvantage;
+      let overlapLethal = 0;
+      let lethalCount = 0;
+      let minDistLethal = Infinity;
+      let maxHitR = 0;
+      const samples = [];
+      for (const c of this.creatures) {
+        const clen = lengthFromMass(c.mass);
+        const dist = Math.hypot(c.x - p.x, c.y - p.y);
+        const hitR = (pLen + clen) * 0.28;
+        const lethal = c.mass >= p.mass * adv;
+        if (lethal) {
+          lethalCount++;
+          if (dist < minDistLethal) minDistLethal = dist;
+        }
+        if (hitR > maxHitR) maxHitR = hitR;
+        if (dist <= hitR && lethal) overlapLethal++;
+        if (samples.length < 12 || lethal) {
+          samples.push({
+            id: c.id,
+            kind: c.kind,
+            name: c.name,
+            mass: +c.mass.toFixed(3),
+            dist: +dist.toFixed(1),
+            hitR: +hitR.toFixed(1),
+            lethal,
+            overlapping: dist <= hitR,
+          });
+        }
+      }
+      _dbg('H1', 'play.js:constructor', 'initial school snapshot', {
+        seed: this.seed,
+        animalId,
+        playerMass: p.mass,
+        predatorAdvantage: adv,
+        creatureCount: this.creatures.length,
+        lethalCount,
+        overlapLethal,
+        minDistLethal: minDistLethal === Infinity ? null : +minDistLethal.toFixed(1),
+        maxHitR: +maxHitR.toFixed(1),
+        samples,
+      });
+      _dbg('H2', 'play.js:constructor', 'lethal predator mass check', {
+        lethalCount,
+        predatorAdvantage: adv,
+        anyLethal: lethalCount > 0,
+      });
+      _dbg('H4', 'play.js:constructor', 'hitR vs spawn distance', {
+        maxHitR: +maxHitR.toFixed(1),
+        minDistLethal: minDistLethal === Infinity ? null : +minDistLethal.toFixed(1),
+        hitRExceedsMinDist:
+          minDistLethal !== Infinity && maxHitR >= minDistLethal,
+      });
+    }
+    // #endregion
   }
 
   get length() {
@@ -91,6 +183,32 @@ export class PlaySession {
     const p = this.player;
     const len = this.length;
     const top = this.topSpeed();
+    // #region agent log
+    this._dbgStepCount++;
+    if (this._dbgStepCount <= 3 || this._dbgStepCount % 30 === 0) {
+      let nearestLethal = null;
+      const adv = this.stats.predatorAdvantage;
+      for (const c of this.creatures) {
+        if (c.mass < p.mass * adv) continue;
+        const dist = Math.hypot(c.x - p.x, c.y - p.y);
+        if (!nearestLethal || dist < nearestLethal.dist) {
+          nearestLethal = {
+            id: c.id,
+            kind: c.kind,
+            name: c.name,
+            mass: +c.mass.toFixed(3),
+            dist: +dist.toFixed(1),
+          };
+        }
+      }
+      _dbg('H3', 'play.js:_fixedStep', 'fixed step tick', {
+        step: this._dbgStepCount,
+        time: +this.time.toFixed(4),
+        alive: p.alive,
+        nearestLethal,
+      });
+    }
+    // #endregion
 
     let ax = 0,
       ay = 0;
@@ -283,6 +401,35 @@ export class PlaySession {
     const bite = this.stats.biteRatio;
     const remain = [];
 
+    // #region agent log
+    if (this._dbgFirstCollide) {
+      this._dbgFirstCollide = false;
+      let overlaps = 0;
+      let lethalOverlaps = 0;
+      const adv = this.stats.predatorAdvantage;
+      for (const c of this.creatures) {
+        const clen = lengthFromMass(c.mass);
+        const dist = Math.hypot(c.x - p.x, c.y - p.y);
+        const hitR = (playerLen + clen) * 0.28;
+        if (dist <= hitR) {
+          overlaps++;
+          if (c.mass >= p.mass * adv) lethalOverlaps++;
+        }
+      }
+      _dbg('H1', 'play.js:_collide', 'first collide pass', {
+        time: +this.time.toFixed(4),
+        step: this._dbgStepCount,
+        overlaps,
+        lethalOverlaps,
+      });
+      _dbg('H3', 'play.js:_collide', 'collision on first fixed step', {
+        step: this._dbgStepCount,
+        time: +this.time.toFixed(4),
+        ranBeforePlayerMoved: this._dbgStepCount === 1,
+      });
+    }
+    // #endregion
+
     for (const c of this.creatures) {
       const clen = lengthFromMass(c.mass);
       const dist = Math.hypot(c.x - p.x, c.y - p.y);
@@ -309,6 +456,28 @@ export class PlaySession {
 
       // Predator contact.
       if (c.mass >= p.mass * this.stats.predatorAdvantage) {
+        // #region agent log
+        _dbg('H1', 'play.js:_collide', 'lethal contact', {
+          time: +this.time.toFixed(4),
+          step: this._dbgStepCount,
+          id: c.id,
+          kind: c.kind,
+          name: c.name,
+          mass: +c.mass.toFixed(3),
+          playerMass: p.mass,
+          dist: +dist.toFixed(1),
+          hitR: +hitR.toFixed(1),
+          predatorAdvantage: this.stats.predatorAdvantage,
+          secondWind: this.stats.secondWind,
+        });
+        _dbg('H4', 'play.js:_collide', 'lethal hit radii', {
+          playerLen: +playerLen.toFixed(1),
+          clen: +clen.toFixed(1),
+          hitR: +hitR.toFixed(1),
+          dist: +dist.toFixed(1),
+          ratioDistHitR: +(dist / hitR).toFixed(3),
+        });
+        // #endregion
         if (this.stats.secondWind && !p.secondWindUsed) {
           p.secondWindUsed = true;
           p.hunger = Math.max(p.hunger, 0.35);
@@ -361,6 +530,16 @@ export class PlaySession {
 
   _kill(reason) {
     if (!this.player.alive) return;
+    // #region agent log
+    _dbg('H3', 'play.js:_kill', 'player died', {
+      reason,
+      time: +this.time.toFixed(4),
+      step: this._dbgStepCount,
+      score: this.score,
+      mass: +this.player.mass.toFixed(3),
+      eaten: this.eaten,
+    });
+    // #endregion
     this.player.alive = false;
     this.player.deathReason = reason;
     this.hooks.onDeath?.(reason);
