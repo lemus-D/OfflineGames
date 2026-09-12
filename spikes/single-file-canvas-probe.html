@@ -1,0 +1,465 @@
+<!doctype html>
+<!--
+  Feasibility probe for the download-and-play model.
+
+  Open this by double-clicking it. No server, no install, no network.
+  It exists to prove four things at once, all of which the plan depends on:
+
+    1. One self-contained file works from file://, where ES modules do not.
+    2. Canvas 2D plus code-generated art is enough to look like something.
+    3. One parametric body plan can produce a whole bestiary, at any size.
+    4. A namespaced localStorage key survives a restart without colliding
+       with other games the player has downloaded.
+
+  Everything drawn below is arithmetic. There are no image or audio files.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sharky — single-file feasibility probe</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #04080f; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #hud {
+    position: fixed; left: 14px; top: 12px;
+    font: 12px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color: #9fd8e6; text-shadow: 0 1px 3px #000a; pointer-events: none;
+  }
+  #hud b { color: #eaf6fa; font-weight: 600; }
+  #hud .warn { color: #ffd08a; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+
+<script>
+/* ============================================================
+   Deterministic noise. Lifted in spirit from moon-rover's core/rng.js:
+   one seeded source means the same world every run, and no drift.
+   ============================================================ */
+function makeRNG(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hash2i(x, y, seed) {
+  let h = Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1) ^ Math.imul(seed | 0, 0x9e3779b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function vnoise(x, y, seed) {
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x - ix, fy = y - iy;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+  const a = hash2i(ix, iy, seed), b = hash2i(ix + 1, iy, seed);
+  const c = hash2i(ix, iy + 1, seed), d = hash2i(ix + 1, iy + 1, seed);
+  return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
+}
+function fbm(x, y, oct, seed) {
+  let amp = 1, freq = 1, sum = 0, norm = 0;
+  for (let o = 0; o < oct; o++) {
+    sum += vnoise(x * freq, y * freq, seed + o * 131) * amp;
+    norm += amp; amp *= 0.5; freq *= 2.07;
+  }
+  return sum / norm;
+}
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+
+/* ============================================================
+   ONE BODY PLAN.
+
+   This is the whole argument for "assets are code" on a game about
+   creatures. A species is ~14 numbers. Everything below reads those
+   numbers, so a new fish costs a line of data rather than a sprite sheet,
+   and it is correct at every size because nothing is rasterised.
+   ============================================================ */
+function makeSpecies(seed) {
+  const rng = makeRNG(seed);
+  const pick = (arr) => arr[(rng() * arr.length) | 0];
+  const hue = rng() * 360;
+  return {
+    seed,
+    bodyDepth: lerp(0.26, 0.52, rng()),   // depth as a fraction of length
+    noseSharp: lerp(0.35, 1.0, rng()),    // 1 = pointed snout, 0.35 = blunt
+    tailKind: pick(['fork', 'lunate', 'round']),
+    tailSpan: lerp(0.5, 1.0, rng()),
+    dorsal: lerp(0.1, 0.42, rng()),       // dorsal fin height
+    pectoral: lerp(0.12, 0.3, rng()),
+    eye: lerp(0.05, 0.12, rng()),
+    jaw: lerp(0.0, 1.0, rng()),           // 0 = no teeth, 1 = full grin
+    pattern: pick(['none', 'stripes', 'spots', 'belly']),
+    bend: lerp(0.5, 1.5, rng()),          // how much the spine swims
+    hue,
+    hue2: (hue + lerp(12, 50, rng())) % 360,
+    sat: lerp(25, 68, rng()),
+    light: lerp(38, 66, rng())
+  };
+}
+
+/* The spine is the only animation. Offsetting a body along a travelling
+   sine wave is what makes a fish read as swimming, and it costs nothing. */
+function spineAt(u, t, s, speed) {
+  const amp = 0.12 * s.bend * (0.25 + u * u);
+  return Math.sin(u * 4.2 - t * speed) * amp;
+}
+
+function drawCreature(g, s, x, y, len, t, speed, facing) {
+  const d = len * s.bodyDepth;
+  g.save();
+  g.translate(x, y);
+  g.scale(facing, 1);
+
+  const N = 26;
+  const top = [], bot = [];
+  for (let i = 0; i <= N; i++) {
+    const u = i / N;                                  // 0 = snout, 1 = tail root
+    // Body profile: quick rise at the shoulder, long taper to the peduncle.
+    const prof = Math.pow(Math.sin(Math.PI * Math.pow(u, 0.62)), 0.85) *
+                 lerp(1, 0.30, Math.pow(u, 2.1));
+    const px = lerp(-len * 0.5, len * 0.46, u);
+    const py = spineAt(u, t, s, speed) * len;
+    const half = prof * d * 0.5;
+    top.push([px, py - half * lerp(1, s.noseSharp, 1 - u)]);
+    bot.push([px, py + half]);
+  }
+
+  const tailX = lerp(-len * 0.5, len * 0.46, 1);
+  const tailY = spineAt(1, t, s, speed) * len;
+
+  /* ---- tail, drawn behind the body ---- */
+  const span = d * s.tailSpan;
+  g.beginPath();
+  g.moveTo(tailX, tailY);
+  if (s.tailKind === 'round') {
+    g.quadraticCurveTo(tailX + len * 0.14, tailY - span * 0.6, tailX + len * 0.10, tailY);
+    g.quadraticCurveTo(tailX + len * 0.14, tailY + span * 0.6, tailX, tailY);
+  } else {
+    const reach = s.tailKind === 'lunate' ? 0.20 : 0.15;
+    g.lineTo(tailX + len * reach, tailY - span);
+    g.quadraticCurveTo(tailX + len * 0.06, tailY, tailX + len * reach, tailY + span);
+  }
+  g.closePath();
+  g.fillStyle = `hsl(${s.hue2} ${s.sat}% ${s.light * 0.72}%)`;
+  g.fill();
+
+  /* ---- dorsal and pectoral fins ---- */
+  const shoulder = Math.round(N * 0.34), mid = Math.round(N * 0.52);
+  g.beginPath();
+  g.moveTo(top[shoulder][0], top[shoulder][1]);
+  g.quadraticCurveTo(top[mid][0] - len * 0.02, top[mid][1] - d * s.dorsal,
+                     top[mid + 4][0], top[mid + 4][1]);
+  g.closePath();
+  g.fillStyle = `hsl(${s.hue2} ${s.sat}% ${s.light * 0.66}%)`;
+  g.fill();
+
+  g.beginPath();
+  g.moveTo(bot[shoulder][0], bot[shoulder][1]);
+  g.quadraticCurveTo(bot[shoulder][0] + len * 0.06, bot[shoulder][1] + d * s.pectoral,
+                     bot[mid][0], bot[mid][1]);
+  g.closePath();
+  g.fillStyle = `hsl(${s.hue2} ${s.sat}% ${s.light * 0.58}%)`;
+  g.fill();
+
+  /* ---- body ---- */
+  g.beginPath();
+  g.moveTo(top[0][0], top[0][1]);
+  for (let i = 1; i <= N; i++) g.lineTo(top[i][0], top[i][1]);
+  for (let i = N; i >= 0; i--) g.lineTo(bot[i][0], bot[i][1]);
+  g.closePath();
+
+  const grad = g.createLinearGradient(0, -d * 0.6, 0, d * 0.6);
+  grad.addColorStop(0, `hsl(${s.hue} ${s.sat}% ${s.light}%)`);
+  grad.addColorStop(0.55, `hsl(${s.hue} ${s.sat * 0.9}% ${s.light * 0.74}%)`);
+  grad.addColorStop(1, `hsl(${s.hue2} ${s.sat * 0.5}% ${Math.min(92, s.light * 1.5)}%)`);
+  g.fillStyle = grad;
+  g.fill();
+
+  /* ---- pattern, clipped to the body we just filled ---- */
+  if (s.pattern !== 'none') {
+    g.save();
+    g.clip();
+    g.fillStyle = `hsla(${s.hue} ${s.sat + 10}% ${s.light * 0.5}% / 0.5)`;
+    if (s.pattern === 'stripes') {
+      for (let i = 0; i < 7; i++) {
+        const px = lerp(-len * 0.42, len * 0.4, i / 6);
+        g.fillRect(px, -d, len * 0.028, d * 2);
+      }
+    } else if (s.pattern === 'spots') {
+      const rng = makeRNG(s.seed ^ 0x9e37);
+      for (let i = 0; i < 22; i++) {
+        g.beginPath();
+        g.arc(lerp(-len * 0.45, len * 0.42, rng()), lerp(-d * 0.45, d * 0.45, rng()),
+              len * 0.018 * (0.5 + rng()), 0, 7);
+        g.fill();
+      }
+    } else {
+      g.fillRect(-len * 0.5, d * 0.12, len, d);
+    }
+    g.restore();
+  }
+
+  /* ---- eye and jaw ----
+     Eye radius grows with the square root of length, not linearly. Big
+     animals have proportionally small eyes; scaling it linearly gave the
+     150 px shark a dinner-plate eye and made it read as a cartoon minnow. */
+  const eyeR = Math.sqrt(len) * s.eye * 5.1;
+  const ex = -len * 0.34, ey = spineAt(0.1, t, s, speed) * len - d * 0.12;
+  g.beginPath(); g.arc(ex, ey, eyeR, 0, 7);
+  g.fillStyle = '#f4f8fb'; g.fill();
+  g.beginPath(); g.arc(ex - eyeR * 0.22, ey, eyeR * 0.52, 0, 7);
+  g.fillStyle = '#0a1016'; g.fill();
+
+  if (s.jaw > 0.35) {
+    g.beginPath();
+    g.moveTo(-len * 0.5, ey + d * 0.16);
+    g.lineTo(-len * 0.30, ey + d * 0.26);
+    g.lineWidth = Math.max(1, len * 0.012);
+    g.strokeStyle = '#0b1118cc';
+    g.stroke();
+    const teeth = Math.round(3 + s.jaw * 5);
+    g.fillStyle = '#f7fbfd';
+    for (let i = 0; i < teeth; i++) {
+      const u = i / (teeth - 1);
+      const tx = lerp(-len * 0.485, -len * 0.315, u);
+      const ty = lerp(ey + d * 0.165, ey + d * 0.255, u);
+      const h = len * 0.022 * s.jaw;
+      g.beginPath();
+      g.moveTo(tx, ty); g.lineTo(tx + h * 0.7, ty); g.lineTo(tx + h * 0.35, ty - h);
+      g.closePath(); g.fill();
+    }
+  }
+
+  g.restore();
+}
+
+/* ============================================================
+   Environment. Also arithmetic: depth gradient, caustics, god rays,
+   particulate, kelp. This is the part that reads as "good graphics",
+   and it is the same fbm the Moon was built from.
+   ============================================================ */
+const LW = 160, LH = 90;
+let lightCv = null, lightCtx = null, lightImg = null;
+
+/* Sunlight through moving water, rendered small. Two counter-drifting noise
+   fields make the caustic mesh; a sharp power of a phase-shifted sine makes
+   the shafts. Both fade out with depth, because that is what actually
+   happens. Returned as a canvas for the caller to upscale. */
+function lightLayer(t) {
+  if (!lightCv) {
+    lightCv = document.createElement('canvas');
+    lightCv.width = LW; lightCv.height = LH;
+    lightCtx = lightCv.getContext('2d');
+    lightImg = lightCtx.createImageData(LW, LH);
+  }
+  const px = lightImg.data;
+  for (let y = 0; y < LH; y++) {
+    const depth = y / LH;
+    const causticFade = Math.max(0, 1 - depth / 0.55);
+    const rayFade = Math.max(0, 1 - depth / 0.95);
+    for (let x = 0; x < LW; x++) {
+      const mesh = (fbm(x * 0.105 + t * 0.30, y * 0.165, 3, 11) +
+                    fbm(x * 0.140 - t * 0.22, y * 0.205, 2, 29)) * 0.5;
+      const caustic = clamp((mesh - 0.50) * 3.2, 0, 1) * causticFade;
+
+      // Shafts lean slightly with depth, so they converge toward the surface.
+      const phase = x * 0.115 + depth * 1.5 + t * 0.22 + Math.sin(x * 0.021) * 1.6;
+      const shaft = Math.pow(Math.max(0, Math.sin(phase)), 7) * rayFade;
+
+      const v = clamp(caustic * 0.80 + shaft * 0.55, 0, 1);
+      const o = (y * LW + x) * 4;
+      px[o] = 175; px[o + 1] = 238; px[o + 2] = 255;
+      px[o + 3] = v * 128;
+    }
+  }
+  lightCtx.putImageData(lightImg, 0, 0);
+  return lightCv;
+}
+
+function drawWater(g, W, H, t) {
+  const sky = g.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, '#2e93b8');
+  sky.addColorStop(0.22, '#12607f');
+  sky.addColorStop(0.62, '#06324a');
+  sky.addColorStop(1, '#02121d');
+  g.fillStyle = sky;
+  g.fillRect(0, 0, W, H);
+
+  // Caustics and god rays, both from the same low-resolution light layer,
+  // then upscaled. Drawing the noise per-pixel at full size showed its own
+  // sample grid as hard squares; rendering it at 160x90 and letting
+  // drawImage's bilinear filter blow it up gives a soft falloff for free,
+  // and costs 14k pixels a frame instead of a million.
+  g.save();
+  g.globalCompositeOperation = 'lighter';
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(lightLayer(t), 0, 0, W, H);
+  g.restore();
+
+  // Kelp silhouettes, swaying, with blades so they are not bare sticks.
+  for (let i = 0; i < 18; i++) {
+    const bx = (i * 73 + 22) % W;
+    const h = H * (0.22 + 0.30 * vnoise(i * 7.3, 1.2, 3));
+    const pts = [[bx, H]];
+    for (let k = 1; k <= 8; k++) {
+      const u = k / 8;
+      const sway = Math.sin(t * 0.8 + i * 1.7 + u * 2.4) * 30 * u * u;
+      pts.push([bx + sway, H - h * u]);
+    }
+    g.strokeStyle = 'rgba(5,30,30,0.70)';
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    g.beginPath();
+    g.moveTo(pts[0][0], pts[0][1]);
+    for (const p of pts) g.lineTo(p[0], p[1]);
+    g.lineWidth = 5 + 5 * vnoise(i * 3.7, 0.5, 9);
+    g.stroke();
+    // Blades hang off alternating sides of the stipe.
+    g.lineWidth = 2.5;
+    for (let k = 2; k < pts.length; k += 2) {
+      const side = k % 4 === 0 ? 1 : -1;
+      g.beginPath();
+      g.moveTo(pts[k][0], pts[k][1]);
+      g.quadraticCurveTo(pts[k][0] + side * 22, pts[k][1] + 6,
+                         pts[k][0] + side * 34, pts[k][1] + 20);
+      g.stroke();
+    }
+  }
+
+  // Seabed, so the kelp is rooted in something.
+  g.beginPath();
+  g.moveTo(0, H);
+  for (let x = 0; x <= W; x += 24) {
+    g.lineTo(x, H - 14 - 26 * fbm(x * 0.004, 0.7, 3, 41));
+  }
+  g.lineTo(W, H);
+  g.closePath();
+  g.fillStyle = 'rgba(3,22,30,0.85)';
+  g.fill();
+
+  // Suspended particulate: the cheapest possible sense of a medium.
+  const prng = makeRNG(0x5eed);
+  g.fillStyle = 'rgba(200,235,245,0.30)';
+  for (let i = 0; i < 220; i++) {
+    const px = (prng() * W + t * 9) % W;
+    const py = (prng() * H + Math.sin(t * 0.5 + i) * 6 + t * 4) % H;
+    g.fillRect(px, py, 1.6, 1.6);
+  }
+}
+
+/* ============================================================
+   Scene
+   ============================================================ */
+const canvas = document.getElementById('c');
+const g = canvas.getContext('2d');
+let W = 0, H = 0;
+
+function resize() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  W = canvas.clientWidth; H = canvas.clientHeight;
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+
+// A bestiary from one code path. Note the size range: 18 px to 150 px, all
+// from the same function, which is exactly what eat-to-grow needs.
+const school = [];
+for (let i = 0; i < 15; i++) {
+  school.push({
+    s: makeSpecies(1000 + i * 77),
+    x: (i * 173) % 1200, y: 90 + ((i * 311) % 460),
+    len: 18 + (i % 5) * 14,
+    speed: 5 + (i % 4), dir: i % 2 ? 1 : -1,
+    drift: 14 + (i % 7) * 5
+  });
+}
+/* The player, authored rather than rolled. A shark is a specific set of
+   values in the same body plan: pointed snout, tall dorsal, crescent tail,
+   slim body, pale belly, every tooth showing. */
+const player = {
+  s: Object.assign(makeSpecies(31337), {
+    bodyDepth: 0.30, noseSharp: 1.0, tailKind: 'lunate', tailSpan: 0.95,
+    dorsal: 0.62, pectoral: 0.34, eye: 0.055, jaw: 1, pattern: 'belly',
+    bend: 0.8, hue: 205, hue2: 200, sat: 14, light: 46
+  }),
+  len: 150
+};
+
+/* Namespaced save. On file:// every game shares one localStorage, so the
+   prefix is not tidiness — it is the only thing preventing collisions. */
+const SAVE_KEY = 'sharky.v1.save';
+function loadSave() {
+  try { return JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'); }
+  catch (e) { return {}; }
+}
+function writeSave(o) {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(o)); return true; }
+  catch (e) { return false; }
+}
+const save = loadSave();
+save.runs = (save.runs || 0) + 1;
+save.best = Math.max(save.best || 0, 1240 + save.runs * 37);
+const saveOK = writeSave(save);
+
+// Anything another downloaded game left in the shared file:// origin.
+const foreignKeys = Object.keys(localStorage).filter((k) => !k.startsWith('sharky.'));
+
+let t = 2.4;   // fixed start so a screenshot of frame one is a good pose
+
+function draw() {
+  drawWater(g, W, H, t);
+
+  for (const f of school) {
+    const x = ((f.x + f.dir * f.speed * t * 10) % (W + 300) + W + 300) % (W + 300) - 150;
+    const y = f.y + Math.sin(t * 0.6 + f.x) * f.drift;
+    // Depth haze: smaller fish sit further back and wash out into the water.
+    const back = 1 - clamp(f.len / 90, 0, 1);
+    g.globalAlpha = lerp(1, 0.42, back);
+    drawCreature(g, f.s, x, y, f.len, t, f.speed * 1.6, f.dir);
+    g.globalAlpha = 1;
+  }
+
+  drawCreature(g, player.s, W * 0.42, H * 0.56 + Math.sin(t * 0.8) * 12,
+               player.len, t, 7, 1);
+
+  // Vignette, to sell depth at the edges.
+  const vg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.34,
+                                    W / 2, H / 2, Math.max(W, H) * 0.78);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,8,16,0.62)');
+  g.fillStyle = vg;
+  g.fillRect(0, 0, W, H);
+
+  document.getElementById('hud').innerHTML =
+    `<b>SINGLE-FILE PROBE</b> — served from <b>${location.protocol}</b><br>` +
+    `species drawn from one body plan: <b>${school.length + 1}</b> ` +
+    `(sizes ${Math.min.apply(null, school.map(f => f.len))}\u2013${player.len} px)<br>` +
+    `image files: <b>0</b> · audio files: <b>0</b> · network requests: <b>0</b><br>` +
+    `localStorage: <b>${saveOK ? 'writable' : 'FAILED'}</b> · ` +
+    `run #<b>${save.runs}</b> · best <b>${save.best}</b><br>` +
+    (foreignKeys.length
+      ? `<span class="warn">shared file:// origin also holds: ${foreignKeys.join(', ')}</span>`
+      : `no foreign keys in this origin yet`);
+}
+
+function frame() {
+  t += 1 / 60;
+  draw();
+  requestAnimationFrame(frame);
+}
+
+resize();
+draw();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
