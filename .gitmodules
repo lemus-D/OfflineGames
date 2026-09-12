@@ -1,0 +1,3 @@
+[submodule "moon-rover"]
+	path = moon-rover
+	url = https://github.com/winchxyz/moon-rover.git
