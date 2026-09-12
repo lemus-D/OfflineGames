@@ -21,45 +21,6 @@ const SPAWN_GRACE = 2.75;
 /** Minimum spawn distance for predators (world px). */
 const PREDATOR_MIN_SPAWN_DIST = SPAWN_MARGIN * 1.15;
 
-// #region agent log
-function _dbg(hypothesisId, location, message, data) {
-  const payload = {
-    hypothesisId,
-    location,
-    message,
-    data,
-    timestamp: Date.now(),
-    runId: 'post-fix',
-  };
-  try {
-    if (typeof window !== 'undefined') {
-      window.__SHARKY_DBG__ = window.__SHARKY_DBG__ || [];
-      window.__SHARKY_DBG__.push(payload);
-      window.__SHARKY_DBG_LAST__ = payload;
-    }
-  } catch (_) {}
-  try {
-    console.log('[SHARKY_DBG]', JSON.stringify(payload));
-  } catch (_) {}
-  try {
-    const body = JSON.stringify(payload);
-    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-      navigator.sendBeacon(
-        'http://127.0.0.1:5199/log',
-        new Blob([body + '\n'], { type: 'application/json' })
-      );
-    }
-    fetch('http://127.0.0.1:5199/log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-      mode: 'cors',
-      keepalive: true,
-    }).catch(() => {});
-  } catch (_) {}
-}
-// #endregion
-
 export class PlaySession {
   constructor(animalId, seed, hooks = {}) {
     this.animalId = animalId;
@@ -99,77 +60,9 @@ export class PlaySession {
     this._spawnTimer = SPAWN_GRACE * 0.45;
     this._nextId = 1;
     this._graceUntil = SPAWN_GRACE;
-    // #region agent log
-    this._dbgStepCount = 0;
-    this._dbgFirstCollide = true;
-    // #endregion
 
     // Seed initial school — prey only (see _spawnNear).
     for (let i = 0; i < 28; i++) this._spawnNear(true);
-
-    // #region agent log
-    {
-      const p = this.player;
-      const pLen = lengthFromMass(p.mass);
-      const adv = this.stats.predatorAdvantage;
-      let overlapLethal = 0;
-      let lethalCount = 0;
-      let minDistLethal = Infinity;
-      let maxHitR = 0;
-      const samples = [];
-      for (const c of this.creatures) {
-        const clen = lengthFromMass(c.mass);
-        const dist = Math.hypot(c.x - p.x, c.y - p.y);
-        const hitR = (pLen + clen) * 0.28;
-        const lethal =
-          c.kind === 'predator' && c.mass >= p.mass * adv;
-        if (lethal) {
-          lethalCount++;
-          if (dist < minDistLethal) minDistLethal = dist;
-        }
-        if (hitR > maxHitR) maxHitR = hitR;
-        if (dist <= hitR && lethal) overlapLethal++;
-        if (samples.length < 12 || lethal) {
-          samples.push({
-            id: c.id,
-            kind: c.kind,
-            name: c.name,
-            mass: +c.mass.toFixed(3),
-            dist: +dist.toFixed(1),
-            hitR: +hitR.toFixed(1),
-            lethal,
-            overlapping: dist <= hitR,
-          });
-        }
-      }
-      _dbg('H1', 'play.js:constructor', 'initial school snapshot', {
-        seed: this.seed,
-        animalId,
-        playerMass: p.mass,
-        predatorAdvantage: adv,
-        creatureCount: this.creatures.length,
-        lethalCount,
-        predatorCount: this.creatures.filter((c) => c.kind === 'predator').length,
-        overlapLethal,
-        minDistLethal: minDistLethal === Infinity ? null : +minDistLethal.toFixed(1),
-        maxHitR: +maxHitR.toFixed(1),
-        graceUntil: this._graceUntil,
-        samples,
-      });
-      _dbg('H2', 'play.js:constructor', 'lethal predator mass check', {
-        lethalCount,
-        predatorAdvantage: adv,
-        anyLethal: lethalCount > 0,
-        preyOnlySchool: this.creatures.every((c) => c.kind === 'prey'),
-      });
-      _dbg('H4', 'play.js:constructor', 'hitR vs spawn distance', {
-        maxHitR: +maxHitR.toFixed(1),
-        minDistLethal: minDistLethal === Infinity ? null : +minDistLethal.toFixed(1),
-        hitRExceedsMinDist:
-          minDistLethal !== Infinity && maxHitR >= minDistLethal,
-      });
-    }
-    // #endregion
   }
 
   get length() {
@@ -204,32 +97,6 @@ export class PlaySession {
     const p = this.player;
     const len = this.length;
     const top = this.topSpeed();
-    // #region agent log
-    this._dbgStepCount++;
-    if (this._dbgStepCount <= 3 || this._dbgStepCount % 30 === 0) {
-      let nearestLethal = null;
-      const adv = this.stats.predatorAdvantage;
-      for (const c of this.creatures) {
-        if (c.kind !== 'predator' || c.mass < p.mass * adv) continue;
-        const dist = Math.hypot(c.x - p.x, c.y - p.y);
-        if (!nearestLethal || dist < nearestLethal.dist) {
-          nearestLethal = {
-            id: c.id,
-            kind: c.kind,
-            name: c.name,
-            mass: +c.mass.toFixed(3),
-            dist: +dist.toFixed(1),
-          };
-        }
-      }
-      _dbg('H3', 'play.js:_fixedStep', 'fixed step tick', {
-        step: this._dbgStepCount,
-        time: +this.time.toFixed(4),
-        alive: p.alive,
-        nearestLethal,
-      });
-    }
-    // #endregion
 
     let ax = 0,
       ay = 0;
@@ -359,20 +226,6 @@ export class PlaySession {
       stunnedUntil: 0,
     });
 
-    // #region agent log
-    if (template.kind === 'predator' || initial) {
-      _dbg('H2', 'play.js:_spawnNear', 'spawned creature', {
-        initial: !!initial,
-        kind: template.kind,
-        name: template.name,
-        mass: +mass.toFixed(3),
-        dist: +dist.toFixed(1),
-        graceLeft: +Math.max(0, this._graceUntil - this.time).toFixed(3),
-        time: +this.time.toFixed(4),
-      });
-    }
-    // #endregion
-
     // Cap population.
     if (this.creatures.length > 55) {
       this.creatures.sort(
@@ -446,40 +299,6 @@ export class PlaySession {
     const bite = this.stats.biteRatio;
     const remain = [];
 
-    // #region agent log
-    if (this._dbgFirstCollide) {
-      this._dbgFirstCollide = false;
-      let overlaps = 0;
-      let lethalOverlaps = 0;
-      const adv = this.stats.predatorAdvantage;
-      for (const c of this.creatures) {
-        const clen = lengthFromMass(c.mass);
-        const dist = Math.hypot(c.x - p.x, c.y - p.y);
-        const hitR = (playerLen + clen) * 0.28;
-        if (dist <= hitR) {
-          overlaps++;
-          if (
-            c.kind === 'predator' &&
-            c.mass >= p.mass * adv
-          ) {
-            lethalOverlaps++;
-          }
-        }
-      }
-      _dbg('H1', 'play.js:_collide', 'first collide pass', {
-        time: +this.time.toFixed(4),
-        step: this._dbgStepCount,
-        overlaps,
-        lethalOverlaps,
-      });
-      _dbg('H3', 'play.js:_collide', 'collision on first fixed step', {
-        step: this._dbgStepCount,
-        time: +this.time.toFixed(4),
-        ranBeforePlayerMoved: this._dbgStepCount === 1,
-      });
-    }
-    // #endregion
-
     for (const c of this.creatures) {
       const clen = lengthFromMass(c.mass);
       const dist = Math.hypot(c.x - p.x, c.y - p.y);
@@ -510,30 +329,6 @@ export class PlaySession {
         c.kind === 'predator' &&
         c.mass >= p.mass * this.stats.predatorAdvantage
       ) {
-        // #region agent log
-        _dbg('H1', 'play.js:_collide', 'lethal contact', {
-          time: +this.time.toFixed(4),
-          step: this._dbgStepCount,
-          id: c.id,
-          kind: c.kind,
-          name: c.name,
-          mass: +c.mass.toFixed(3),
-          playerMass: p.mass,
-          dist: +dist.toFixed(1),
-          hitR: +hitR.toFixed(1),
-          predatorAdvantage: this.stats.predatorAdvantage,
-          secondWind: this.stats.secondWind,
-          inGrace: this.time < this._graceUntil,
-          graceUntil: this._graceUntil,
-        });
-        _dbg('H4', 'play.js:_collide', 'lethal hit radii', {
-          playerLen: +playerLen.toFixed(1),
-          clen: +clen.toFixed(1),
-          hitR: +hitR.toFixed(1),
-          dist: +dist.toFixed(1),
-          ratioDistHitR: +(dist / hitR).toFixed(3),
-        });
-        // #endregion
         // Spawn grace: contact knocks back but does not kill.
         if (this.time < this._graceUntil) {
           const dx = c.x - p.x,
@@ -598,16 +393,6 @@ export class PlaySession {
 
   _kill(reason) {
     if (!this.player.alive) return;
-    // #region agent log
-    _dbg('H3', 'play.js:_kill', 'player died', {
-      reason,
-      time: +this.time.toFixed(4),
-      step: this._dbgStepCount,
-      score: this.score,
-      mass: +this.player.mass.toFixed(3),
-      eaten: this.eaten,
-    });
-    // #endregion
     this.player.alive = false;
     this.player.deathReason = reason;
     this.hooks.onDeath?.(reason);
