@@ -1,216 +1,202 @@
 # Platform constraints
 
-What the delivery model actually permits. Every number here was measured in this
-repo or in a browser, not estimated. Where something is unverified it says so.
+What the delivery model permits, and what it forbids. Every number and every
+capability below was measured in a browser, not estimated. Where something is
+unverified it says so explicitly.
 
-Re-measure before trusting anything here after a browser generation passes.
-
----
-
-## The model we are building for
-
-A customer visits a website, buys a game, downloads it, and plays it offline.
-
-That is not the same target as a hosted web game, and the difference is not
-cosmetic. A downloaded game is opened from the local filesystem, so it runs on
-the `file:` protocol, and `file:` is a materially weaker environment than
-`http:`. The constraints below all follow from that one fact.
+Re-measure before trusting this after a browser generation passes.
 
 ---
 
-## The reference bar
+## The delivery model
 
-`moon-rover` (REGOLITH) is the quality bar. Measured from the submodule:
+**Each game is an installable PWA.** The customer buys it on the website, opens
+it, and it installs to their home screen or desktop. A service worker precaches
+the whole game so it runs with no network at all.
 
-| | |
-|--:|:--|
-| **379 KB** | gzipped download (1.61 MB raw) |
-| **266 KB** | of that is the vendored three.js — **70% of the whole download** |
-| **113 KB** | the game itself: all code, all art, all audio, all content |
-| **7,309** | lines in `src/` |
-| **0** | npm dependencies, build steps, asset files |
+This was chosen over a file download because the games are mobile-shaped and a
+downloaded `.html` is painful to open on a phone. The consequences of that choice
+run through everything below, so it is worth understanding why it matters rather
+than treating it as packaging.
 
-The lesson is in the third row. Every texture, sound, rock and star is generated
-by code at load, which is why a 3D game fits in less space than a single
-uncompressed screenshot. **Assets are code.**
+### Verified: a PWA really does run with the server dead
 
----
-
-## What `file:` takes away
-
-Probed in Chrome, default flags, no `--allow-file-access-from-files` (customers
-will not have it either).
-
-| capability | on `file:` | consequence |
-|---|---|---|
-| Inline `<script>` | works | this is the one to use |
-| External `<script src>` | works | classic scripts load fine |
-| **External ES module `import`** | **BLOCKED** | see below |
-| **Import maps** | **BLOCKED** | same failure |
-| `fetch()` of a sibling file | **BLOCKED** | no external JSON, levels or data |
-| **IndexedDB** | **BLOCKED** | saves cannot use it |
-| `localStorage` | works, and persists across restarts | this is the only save store |
-| Canvas 2D, `getImageData`, `toDataURL` | works | procedural texture work is fine |
-| WebAudio | works, starts `suspended` | needs a user gesture first |
-| WebGL2 | works | a 2.5D or 3D game is still possible later |
-
-### The module problem
-
-This is the single most important finding, because it invalidates the reference
-project's architecture for our use case:
+Not assumed. The probe registered a service worker, precached its files, then the
+server process was killed and the page reloaded:
 
 ```
-BLOCKED: TypeError: Failed to fetch dynamically imported module: file:///…/lib.js
+$ curl -m 3 http://localhost:5199/
+curl HTTP code: 000        (connection refused)
 ```
 
-Relative imports and bare specifiers behind an import map both fail. `moon-rover`
-is built entirely from ES modules and says so in its own README — it requires
-HTTP, not `file://`. That is fine for a game published to GitHub Pages, and fatal
-for a game someone downloads and double-clicks.
+```json
+{
+  "moduleImport": "external ES module import worked",
+  "swActive": true,
+  "controlled": true,
+  "storage": true,
+  "indexedDB": true,
+  "uncachedRequestToServer": "UNREACHABLE (TypeError: Failed to fetch)"
+}
+```
 
-Note that an *inline* `<script type="module">` does run. Only fetching a separate
-module file is blocked, so the failure looks confusing at first: modules "work"
-right up until you split the code into files.
+The last line is the one that makes the rest trustworthy: a request for a URL the
+cache does not hold *fails*, which proves the server was genuinely down and
+everything else came from the service worker.
 
-**So: each game ships as one self-contained `.html` file with inline classic
-scripts.** Author it as many files if that is more pleasant and concatenate on
-release, but the artifact the customer gets is one file with no external
-references. That also means no TypeScript and no bundler unless we add a build
-step purely for release packaging.
+### Two caveats that came out of that probe
 
-### The shared-origin problem
+**A game is only offline-capable from the second load onward.** On the first
+visit `controlled` was `false` — a page that registers its worker during load is
+not itself intercepted by it. So the install flow has to get the player to load
+the game at least twice, or precache aggressively on first visit and tell them
+when it is ready to go offline. Do not promise offline play on first paint.
 
-Every page loaded from `file:` shares one origin — literally `file://`. There is
-no per-file separation, so two games a customer has downloaded read and write the
-same `localStorage`.
+**`navigator.onLine` is not an offline signal.** It reported `true` throughout the
+test, because the network interface was up and only the server was dead. Never
+branch on it. If you need to know whether something is reachable, try the request
+and handle the failure.
 
-Demonstrated: a key written by `probe2.html` was visible to `othergame.html`,
-and vice versa. The spike's own HUD reports the foreign keys it can see sitting
-next to its own save.
+---
 
-**So: every storage key is prefixed with the game and a schema version**, e.g.
-`sharky.v1.save`. This is not tidiness. It is the only thing standing between two
-of our own games corrupting each other's saves. It also means a save can never
-hold anything private — another downloaded game, ours or not, can read it.
+## What the PWA choice buys back
+
+Serving over HTTP (HTTPS in production; `localhost` also counts as a secure
+context, which is why local development works) restores nearly everything a file
+download would have cost us:
+
+| capability | available |
+|---|---|
+| External ES modules, split across files | yes |
+| Import maps | yes |
+| `fetch()` of game data files | yes |
+| IndexedDB | yes |
+| `localStorage` | yes |
+| Canvas 2D, WebAudio, WebGL2 | yes |
+
+So we can keep `moon-rover`'s readable module layout — `src/core/`, `src/game/`,
+`src/ui/`, plain ES modules, no build step. **This is the main practical reason
+the PWA decision matters**: the alternative forced every game into a single
+inlined HTML file with no module boundaries.
+
+Service worker registration itself requires a secure context, so a PWA cannot be
+tested from `file://` at all. Use the local dev server.
+
+---
+
+## What still bites
+
+### `localStorage` is scoped to an ORIGIN, not to a path
+
+This is the one hazard that survives the move to PWAs, and it is easy to get
+wrong because it looks fixed.
+
+Two games served from `example.com/sharky/` and `example.com/yes-general/` share
+one `localStorage`. There is no path-level separation. The same is true, more
+severely, on `file://`, where every page in the world shares the single origin
+`file://` — demonstrated in the probe, where one local file read a save written
+by a different local file:
+
+```
+"sawOtherGameKey": "SHARK_SAVE_FROM_A_DIFFERENT_FILE"
+```
+
+**Every storage key is prefixed with the game and a schema version**, e.g.
+`sharky.v1.profile`. Not for tidiness — it is the only thing preventing two of
+our own games from corrupting each other's saves. It also means a save can never
+hold anything secret, since anything else on that origin can read it.
+
+Giving each game its own subdomain would isolate them properly. Until that is
+certain, assume a shared store.
+
+### Storage can be evicted
+
+Browsers may evict `localStorage` and IndexedDB under storage pressure, and
+Safari is the most aggressive about it for sites the user has not installed. A
+progression game that silently loses a profile is a refund request.
+
+Mitigations, in order of cost: ship an export/import save code so a player can
+recover or migrate by hand; prompt installation, since installed PWAs are treated
+as more durable; and call
+[`navigator.storage.persist()`](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist),
+which *requests* exemption from eviction and may be refused. **Unverified here:**
+actual iOS eviction behaviour and whether `persist()` is granted were not tested
+on this VM and need checking on real devices.
+
+### WebAudio starts suspended
+
+An `AudioContext` begins in state `suspended` and needs a user gesture before it
+will produce sound. `moon-rover` handles this by gating every public audio method
+on a `ready` flag, because its menu clicks call into audio before the game has
+started and any ungated path throws. Copy that pattern.
+
+### Offline means content is frozen at install
+
+There is no server call to change balance or push an event. Updating a game means
+shipping a new service worker cache version and having clients pick it up, which
+is a deliberate mechanism to build rather than something that happens for free.
 
 ---
 
 ## Size is not the binding constraint
 
-Worth being honest about, because it changes what we should optimise for.
+Worth internalising, because it changes what to optimise.
 
 | | download | wait at 25 Mbps |
 |---|--:|--:|
 | The single-file spike in `spikes/` | 6.7 KB | 0.002 s |
-| moon-rover, a full 3D game | 379 KB | 0.12 s |
+| `moon-rover`, a complete 3D game | 379 KB | 0.12 s |
 | A hypothetical 5 MB asset-heavy game | 5 MB | 1.6 s |
 
 A 5 MB download is already imperceptible, and a paying customer tolerates far
-more than a casual web visitor. So "small enough to download quickly" is
-satisfied almost automatically and should not be the reason we make decisions.
+more than a casual visitor. "Small enough to download quickly" is satisfied
+almost automatically and should not be the reason for any decision.
 
-The real reasons to generate art from code are different and better:
+Generate art from code for the reasons that actually hold:
 
-- No asset pipeline, no licensing, and nothing to attribute.
+- No asset pipeline, nothing to license, nothing to attribute.
 - One parametric body plan yields an unlimited bestiary, which is what a
-  solo-plus-agent workflow can actually sustain.
-- Creatures stay correct at every size, which an eat-to-grow game needs
-  continuously and a sprite sheet cannot give without many resolutions.
+  small team plus agents can sustain.
+- Creatures stay correct at every size — which an eat-to-grow game needs
+  continuously, and which a sprite sheet cannot provide without shipping many
+  resolutions.
 
-Keep the no-assets doctrine. Just stop justifying it with download size.
+Keep the no-assets doctrine. Stop justifying it with download size.
+
+For reference, measured runtime cost of the alternatives, minified and gzipped:
+`kontra` 11 KB, `kaplay` 67 KB, `excalibur` 143 KB, `pixi.js` 225 KB, `phaser`
+343 KB, `three.js` 250 KB, and no library at all 0 KB.
 
 ---
 
 ## What cannot be protected
 
-The game ships as readable HTML and JavaScript, so a paid download can be opened,
-read, copied and reshared. Minifying is a speed bump, not protection, and an
-offline licence check is breakable by definition because the check runs on the
-customer's machine with no server to appeal to.
+The game ships as readable HTML and JavaScript. It can be opened, read, copied
+and reshared, and an offline licence check runs on the customer's machine with no
+server to appeal to. Minification is a speed bump, not protection.
 
-There is no technical fix within this delivery model. Price and position
-accordingly, the way indie storefronts already do. Do not spend effort on DRM
-that cannot work.
-
----
-
-## Scores now, leaderboards later
-
-Offline high scores are the near-term goal, with a leaderboard later. Two
-consequences worth handling now, while it is free:
-
-**Nothing submitted from an offline client is trustworthy.** `localStorage` is
-player-editable, so any score uploaded later is a claim, not a fact. A future
-leaderboard either accepts that (and is a fun list rather than a ranking), or
-validates server-side by replaying a recorded input log against a deterministic
-simulation.
-
-That second option is only available if we keep it open, and it is cheap to keep
-open: make the simulation deterministic from a seed, and keep a fixed timestep
-separate from rendering. `moon-rover` already demonstrates the pattern with its
-seeded `core/rng.js` shared between CPU and GPU. If simulation is deterministic,
-a replay is a seed plus an input list — kilobytes, and verifiable later.
-
-**Give the save a schema version and stable ids from the first commit.**
-`moon-rover`'s `ARCHITECTURE.md` documents exactly what happens otherwise: its
-anomaly saves are a bare array of `0/1/2` codes re-keyed by array index, so any
-change to world generation silently moves flags onto the wrong objects, and the
-only reset lever is bumping a magic string. Do not repeat that. Write
-`{ schema: 1, ... }` with named keys, and add an export/import save code so a
-player can move or recover their progress.
+There is no technical fix inside this delivery model. Price and position
+accordingly, as indie storefronts already do, and do not spend effort on DRM that
+cannot work.
 
 ---
 
-## Per-game notes
+## Appendix: why not a file download
 
-### Sharky
+Recorded so the question does not get reopened by accident. A downloaded `.html`
+opened from disk runs on `file:`, where Chrome (default flags) blocks:
 
-Decided: 2D canvas, no library, parametric creatures. See
-`spikes/single-file-canvas-probe.html` for a working proof of all of it.
+- **External ES module imports**, and import maps with them:
+  ```
+  BLOCKED: TypeError: Failed to fetch dynamically imported module: file:///…/lib.js
+  ```
+  Note that an *inline* `<script type="module">` does run, so the failure is
+  confusing: modules appear to work right up until the code is split into files.
+- **`fetch()` of a sibling file**, so no external level or data files.
+- **IndexedDB**, entirely.
+- **Service workers**, since `file:` is not a secure context.
 
-The one place the reference project's approach does **not** transfer for free:
-the Moon is noise, so fractal noise genuinely produces a lunar surface. Nothing
-about noise produces a charismatic animal. Creature art has to come from
-parametric shape construction instead — a body plan of roughly a dozen numbers
-per species, animated by a travelling sine wave down the spine. The environment
-(caustics, shafts, murk, particulate, kelp) is squarely back in noise territory
-and is what will read as "good graphics".
-
-Two things the spike already taught us:
-
-- Eye radius must scale with the *square root* of body length. Scaling it
-  linearly gave the 150 px shark a dinner-plate eye and made it read as a
-  cartoon minnow.
-- Do not evaluate a noise field per-pixel at full resolution; its sample grid
-  shows up as hard squares. Render light at 160×90 and let `drawImage` upscale
-  it, which buys a smooth falloff for free and costs 14k pixels a frame instead
-  of a million.
-
-### Yes-General
-
-Has effectively no size or rendering problem: hexes, icons and text land well
-under 150 KB with no library at all. Its difficulty is entirely design —
-economy balance, era progression, and AI opponents worth playing against.
-
-One warning inherited directly from the reference project. Its `ARCHITECTURE.md`
-says of its own mission system:
-
-> Fix this before writing story content, not after. Each mission added before
-> the refactor makes the refactor more expensive.
-
-Its objectives are nine hardcoded ids plus comparisons against `missionIdx` that
-gate content by position in the campaign. A strategy game is that same trap at
-ten times the scale, so Yes-General's rules and content must be data-driven from
-the first commit rather than retrofitted.
-
----
-
-## Verify it yourself
-
-```bash
-git submodule update --init --depth 1    # fetch the reference game
-cd moon-rover && npm start               # then open http://localhost:5173
-```
-
-The spike needs no server at all, which is the whole point — open
-`spikes/single-file-canvas-probe.html` directly in a browser.
+`localStorage`, Canvas 2D, WebAudio and WebGL2 all do work there, so a
+single-file game is genuinely possible — `spikes/single-file-canvas-probe.html`
+is a working one, and it is worth opening to see the technique. But it forces
+every game into one inlined file, and it does not solve mobile. Hence the PWA.
