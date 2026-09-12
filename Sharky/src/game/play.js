@@ -146,7 +146,7 @@ export class PlaySession {
     p.y = clamp(p.y, WORLD_CEIL + len * 0.3, WORLD_FLOOR - len * 0.25);
 
     // Hunger drain.
-    p.hunger -= dt * 0.045 * this.stats.hungerDrain;
+    p.hunger -= dt * 0.028 * this.stats.hungerDrain;
     if (p.hunger <= 0) {
       p.hunger = 0;
       this._kill('starved');
@@ -316,7 +316,7 @@ export class PlaySession {
         const gain = c.mass * 0.22 * this.stats.growthMul;
         const oversize = c.mass > p.mass;
         p.mass += gain;
-        p.hunger = Math.min(1, p.hunger + 0.18 + c.mass / p.mass * 0.12);
+        p.hunger = Math.min(1, p.hunger + 0.28 + (c.mass / p.mass) * 0.2);
         if (oversize && this.stats.oversizeHeal) {
           p.hunger = Math.min(1, p.hunger + this.stats.oversizeHeal);
         }
