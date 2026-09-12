@@ -1,0 +1,1 @@
+I want to make a strategy game somewhere between catan and pre civilization bronze age which is a little flash game people used to play.

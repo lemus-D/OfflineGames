@@ -1,0 +1,1 @@
+I want to make a hungry shark style game with side scrolling action where it is endless and a little silly. I like feed and grow fish an other games like that so I want to make a game where you play as some animal and you eat things to get bigger.
