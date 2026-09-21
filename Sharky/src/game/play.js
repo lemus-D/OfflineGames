@@ -72,9 +72,11 @@ export class PlaySession {
     this._nextId = 1;
     this._graceUntil = SPAWN_GRACE;
     this.chunks = new Map();
+    this.structList = [];
     this.splashes = [];
 
     ensureStructureChunks(this.chunks, 0, this.seed);
+    this.structList = allStructures(this.chunks);
     for (let i = 0; i < 28; i++) this._spawnNear(true);
     for (let i = 0; i < 10; i++) this._spawnCrab(true);
   }
@@ -84,7 +86,7 @@ export class PlaySession {
   }
 
   get structures() {
-    return allStructures(this.chunks);
+    return this.structList;
   }
 
   topSpeed() {
@@ -114,7 +116,9 @@ export class PlaySession {
     const len = this.length;
     const top = this.topSpeed();
 
-    ensureStructureChunks(this.chunks, p.x, this.seed);
+    if (ensureStructureChunks(this.chunks, p.x, this.seed)) {
+      this.structList = allStructures(this.chunks);
+    }
 
     let ax = 0,
       ay = 0;
@@ -189,7 +193,7 @@ export class PlaySession {
     }
 
     // Soft structure collision (underwater / on surface).
-    const push = resolveStructurePush(p.x, p.y, len * 0.28, this.structures);
+    const push = resolveStructurePush(p.x, p.y, len * 0.28, this.structList);
     p.x += push.dx;
     p.y += push.dy;
     if (push.dx || push.dy) {
@@ -305,7 +309,7 @@ export class PlaySession {
 
   _spawnCrab(initial) {
     const p = this.player;
-    const structs = this.structures;
+    const structs = this.structList;
     let pose = null;
     const preferWall = this.rng() < 0.45 && structs.length > 0;
     if (preferWall) {

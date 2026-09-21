@@ -97,19 +97,25 @@ export function structuresForChunk(chunkX, worldSeed) {
   return out;
 }
 
-/** Ensure chunks covering [camX - margin, camX + margin] exist in the map. */
+/** Ensure chunks covering [camX - margin, camX + margin] exist in the map.
+ *  Returns true if the chunk set changed. */
 export function ensureStructureChunks(chunkMap, camX, worldSeed, margin = 2400) {
   const lo = Math.floor((camX - margin) / CHUNK_W);
   const hi = Math.floor((camX + margin) / CHUNK_W);
+  let changed = false;
   for (let cx = lo; cx <= hi; cx++) {
     if (!chunkMap.has(cx)) {
       chunkMap.set(cx, structuresForChunk(cx, worldSeed));
+      changed = true;
     }
   }
-  // Drop far chunks.
   for (const key of chunkMap.keys()) {
-    if (key < lo - 2 || key > hi + 2) chunkMap.delete(key);
+    if (key < lo - 2 || key > hi + 2) {
+      chunkMap.delete(key);
+      changed = true;
+    }
   }
+  return changed;
 }
 
 export function allStructures(chunkMap) {

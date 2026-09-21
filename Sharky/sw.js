@@ -1,5 +1,5 @@
 /* Sharky service worker — precache, versioned cache name. */
-const CACHE = 'sharky-v4';
+const CACHE = 'sharky-v5';
 const PRECACHE = [
   './',
   './index.html',

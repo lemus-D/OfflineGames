@@ -190,7 +190,7 @@ function drawPlaying(dt) {
 
   if (state === 'playing') s.step(dt, aim);
 
-  drawWorld(g, W, H, animTime, cam.x, cam.y, s.structures, WORLD_FLOOR);
+  drawWorld(g, W, H, animTime, cam.x, cam.y, s.structList, WORLD_FLOOR);
 
   // Splash rings at the surface.
   for (const sp of s.splashes) {
@@ -203,9 +203,10 @@ function drawPlaying(dt) {
     g.stroke();
   }
 
-  // Creatures.
-  const sorted = s.creatures.slice().sort((a, b) => a.mass - b.mass);
-  for (const c of sorted) {
+  // Creatures — draw far-to-near without allocating a sorted copy every frame.
+  const creatures = s.creatures;
+  for (let i = 0; i < creatures.length; i++) {
+    const c = creatures[i];
     const sp = worldToScreen(c.x, c.y, cam);
     const len = lengthFromMass(c.mass) * cam.zoom;
     if (sp.x < -120 || sp.x > W + 120 || sp.y < -120 || sp.y > H + 120) continue;

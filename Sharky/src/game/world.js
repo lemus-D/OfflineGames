@@ -1,31 +1,37 @@
-/* Water, sky/surface, light, kelp, seabed, structures, particulate. */
+/* Water, sky/surface, light, seabed, structures, particulate. */
 
-import { makeRNG, vnoise, fbm, clamp } from '../core/rng.js';
+import { makeRNG, fbm, clamp } from '../core/rng.js';
 import { SURFACE_Y, WORLD_FLOOR } from './structures.js';
 
-const LW = 160,
-  LH = 90;
+const LW = 128,
+  LH = 72;
 let lightCv = null,
   lightCtx = null,
-  lightImg = null;
+  lightImg = null,
+  lightStamp = -1e9;
 
+/** Caustics/shafts — rebuilt ~15 Hz, not every paint. Dominates frame cost otherwise. */
 function lightLayer(t) {
   if (!lightCv) {
     lightCv = document.createElement('canvas');
     lightCv.width = LW;
     lightCv.height = LH;
-    lightCtx = lightCv.getContext('2d');
+    lightCtx = lightCv.getContext('2d', { willReadFrequently: true });
     lightImg = lightCtx.createImageData(LW, LH);
   }
+  if (t - lightStamp < 1 / 15 && lightStamp >= 0) return lightCv;
+  lightStamp = t;
+
   const px = lightImg.data;
   for (let y = 0; y < LH; y++) {
     const depth = y / LH;
     const causticFade = Math.max(0, 1 - depth / 0.55);
     const rayFade = Math.max(0, 1 - depth / 0.95);
     for (let x = 0; x < LW; x++) {
+      // Fewer fbm octaves than the spike — still reads as water, much cheaper.
       const mesh =
-        (fbm(x * 0.105 + t * 0.3, y * 0.165, 3, 2.07, 0.5, 11) +
-          fbm(x * 0.14 - t * 0.22, y * 0.205, 2, 2.07, 0.5, 29)) *
+        (fbm(x * 0.105 + t * 0.3, y * 0.165, 2, 2.07, 0.5, 11) +
+          fbm(x * 0.14 - t * 0.22, y * 0.205, 1, 2.07, 0.5, 29)) *
         0.5;
       const caustic = clamp((mesh - 0.5) * 3.2, 0, 1) * causticFade;
       const phase = x * 0.115 + depth * 1.5 + t * 0.22 + Math.sin(x * 0.021) * 1.6;
@@ -72,7 +78,7 @@ function drawStructure(g, s, originX, originY, viewW, viewH) {
     return;
   }
 
-  // Pillar default — slightly tapered.
+  // Pillar — slightly tapered.
   g.fillStyle = `hsla(${s.hue} 30% 26% / 0.94)`;
   g.beginPath();
   g.moveTo(sx + s.w * 0.12, sy + s.h);
@@ -94,7 +100,7 @@ export function drawWorld(g, W, H, t, camX, camY, structures = [], floorY = WORL
   const originY = camY - H * 0.5;
   const surfaceScreenY = SURFACE_Y - originY;
 
-  // Sky (above the surface).
+  // Sky (flat gradient — no clouds).
   if (surfaceScreenY > 0) {
     const skyH = Math.min(H, surfaceScreenY);
     const sky = g.createLinearGradient(0, 0, 0, skyH);
@@ -103,16 +109,6 @@ export function drawWorld(g, W, H, t, camX, camY, structures = [], floorY = WORL
     sky.addColorStop(1, '#2e93b8');
     g.fillStyle = sky;
     g.fillRect(0, 0, W, skyH);
-
-    // Soft clouds.
-    g.fillStyle = 'rgba(255,255,255,0.18)';
-    for (let i = 0; i < 6; i++) {
-      const cx = ((i * 211 + t * 8) % (W + 200)) - 100;
-      const cy = 40 + (i * 37) % Math.max(20, skyH - 60);
-      g.beginPath();
-      g.ellipse(cx, cy, 70 + i * 8, 18 + i * 2, 0, 0, 7);
-      g.fill();
-    }
   }
 
   // Water fill below surface.
@@ -133,18 +129,17 @@ export function drawWorld(g, W, H, t, camX, camY, structures = [], floorY = WORL
     g.clip();
     g.globalCompositeOperation = 'lighter';
     g.imageSmoothingEnabled = true;
-    g.imageSmoothingQuality = 'high';
-    g.drawImage(lightLayer(t), 0, 0, W, H);
+    g.drawImage(lightLayer(t), 0, waterTop, W, H - waterTop);
     g.restore();
 
     g.fillStyle = `rgba(2,12,22,${0.12 + depthFrac * 0.48})`;
     g.fillRect(0, waterTop, W, H - waterTop);
   }
 
-  // Surface wave line.
+  // Surface wave line (coarser step).
   if (surfaceScreenY > -30 && surfaceScreenY < H + 30) {
     g.beginPath();
-    for (let x = 0; x <= W; x += 10) {
+    for (let x = 0; x <= W; x += 16) {
       const wx = originX + x;
       const wave =
         Math.sin(wx * 0.012 + t * 2.1) * 5 + Math.sin(wx * 0.031 - t * 1.4) * 2.5;
@@ -155,7 +150,6 @@ export function drawWorld(g, W, H, t, camX, camY, structures = [], floorY = WORL
     g.strokeStyle = 'rgba(220,245,255,0.55)';
     g.lineWidth = 2.5;
     g.stroke();
-    // Foam band.
     g.lineTo(W, surfaceScreenY + 18);
     g.lineTo(0, surfaceScreenY + 18);
     g.closePath();
@@ -164,52 +158,18 @@ export function drawWorld(g, W, H, t, camX, camY, structures = [], floorY = WORL
   }
 
   // Structures.
-  for (const s of structures) drawStructure(g, s, originX, originY, W, H);
-
-  // Kelp rooted near the seabed.
-  for (let i = 0; i < 22; i++) {
-    const worldX = Math.floor(camX / 180) * 180 + i * 90 - 400;
-    const bx = worldX - originX;
-    if (bx < -80 || bx > W + 80) continue;
-    const h = 180 + 220 * vnoise(i * 7.3 + Math.floor(camX / 900), 1.2, 3);
-    const baseY = floorY - originY;
-    const pts = [[bx, baseY]];
-    for (let k = 1; k <= 8; k++) {
-      const u = k / 8;
-      const sway = Math.sin(t * 0.8 + i * 1.7 + u * 2.4) * 30 * u * u;
-      pts.push([bx + sway, baseY - h * u]);
-    }
-    g.strokeStyle = 'rgba(5,30,30,0.70)';
-    g.lineCap = 'round';
-    g.lineJoin = 'round';
-    g.beginPath();
-    g.moveTo(pts[0][0], pts[0][1]);
-    for (const p of pts) g.lineTo(p[0], p[1]);
-    g.lineWidth = 5 + 5 * vnoise(i * 3.7, 0.5, 9);
-    g.stroke();
-    g.lineWidth = 2.5;
-    for (let k = 2; k < pts.length; k += 2) {
-      const side = k % 4 === 0 ? 1 : -1;
-      g.beginPath();
-      g.moveTo(pts[k][0], pts[k][1]);
-      g.quadraticCurveTo(
-        pts[k][0] + side * 22,
-        pts[k][1] + 6,
-        pts[k][0] + side * 34,
-        pts[k][1] + 20
-      );
-      g.stroke();
-    }
+  for (let i = 0; i < structures.length; i++) {
+    drawStructure(g, structures[i], originX, originY, W, H);
   }
 
-  // Seabed.
+  // Seabed — cheap sine profile instead of per-segment fbm.
   const bedY = floorY - originY;
   if (bedY < H + 80) {
     g.beginPath();
     g.moveTo(0, Math.max(bedY, H));
-    for (let x = 0; x <= W; x += 24) {
+    for (let x = 0; x <= W; x += 32) {
       const wx = originX + x;
-      g.lineTo(x, bedY - 14 - 26 * fbm(wx * 0.004, 0.7, 3, 2.07, 0.5, 41));
+      g.lineTo(x, bedY - 18 - 14 * Math.sin(wx * 0.008) - 8 * Math.sin(wx * 0.023));
     }
     g.lineTo(W, H + 40);
     g.lineTo(0, H + 40);
@@ -218,11 +178,11 @@ export function drawWorld(g, W, H, t, camX, camY, structures = [], floorY = WORL
     g.fill();
   }
 
-  // Particulate (underwater only).
+  // Sparse particulate.
   if (surfaceScreenY < H) {
     const prng = makeRNG(0x5eed);
     g.fillStyle = 'rgba(200,235,245,0.28)';
-    for (let i = 0; i < 160; i++) {
+    for (let i = 0; i < 70; i++) {
       const px = ((prng() * W * 2 + t * 9 - originX * 0.15) % W + W) % W;
       const py =
         ((prng() * H * 2 + Math.sin(t * 0.5 + i) * 6 + t * 4 - originY * 0.08) % H + H) % H;
