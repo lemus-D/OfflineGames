@@ -72,18 +72,6 @@ function drawStructure(g, s, originX, originY, viewW, viewH) {
     return;
   }
 
-  if (s.kind === 'shelf') {
-    g.fillStyle = `hsla(${s.hue} 32% 30% / 0.9)`;
-    g.beginPath();
-    g.moveTo(sx, sy + s.h);
-    g.lineTo(sx, sy);
-    g.quadraticCurveTo(sx + s.w * 0.5, sy - s.h * 0.4, sx + s.w, sy);
-    g.lineTo(sx + s.w, sy + s.h);
-    g.closePath();
-    g.fill();
-    return;
-  }
-
   // Pillar default — slightly tapered.
   g.fillStyle = `hsla(${s.hue} 30% 26% / 0.94)`;
   g.beginPath();

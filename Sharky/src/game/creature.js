@@ -17,7 +17,11 @@ export function drawCreature(g, s, x, y, len, t, speed, angle = 0, opts = {}) {
   const d = len * s.bodyDepth;
   g.save();
   g.translate(x, y);
+  // Body is authored snout-left (−X), belly toward +Y. Rotate so the snout
+  // tracks `angle`, then flip vertically when heading rightward so the belly
+  // stays "down" instead of reading upside-down.
   g.rotate(angle + Math.PI);
+  if (Math.cos(angle) > 0) g.scale(1, -1);
 
   if (opts.outline) {
     g.shadowColor = opts.outline;

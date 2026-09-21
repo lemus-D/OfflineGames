@@ -71,7 +71,7 @@ function makeRuin(rng, baseX) {
   const w = lerp(120, 220, rng());
   const h = lerp(140, 300, rng());
   const x = baseX + lerp(40, CHUNK_W - w - 40, rng());
-  const y = WORLD_FLOOR - h - lerp(0, 80, rng());
+  const y = WORLD_FLOOR - h;
   return {
     kind: 'ruin',
     x,
@@ -83,33 +83,13 @@ function makeRuin(rng, baseX) {
   };
 }
 
-function makeShelf(rng, baseX) {
-  const w = lerp(140, 260, rng());
-  const h = lerp(36, 70, rng());
-  const x = baseX + lerp(30, CHUNK_W - w - 30, rng());
-  const y = lerp(WORLD_FLOOR * 0.35, WORLD_FLOOR - 200, rng());
-  return {
-    kind: 'shelf',
-    x,
-    y,
-    w,
-    h,
-    hue: lerp(24, 44, rng()),
-    surfaces: [
-      { x: x, y: y, tx: 1, ty: 0, len: w },
-      { x: x, y: y, tx: 0, ty: 1, len: h },
-      { x: x + w, y: y, tx: 0, ty: 1, len: h },
-    ],
-  };
-}
-
-/** Structures for one horizontal chunk. */
+/** Structures for one horizontal chunk — always rooted on the seabed. */
 export function structuresForChunk(chunkX, worldSeed) {
   const rng = chunkRng(chunkX, worldSeed);
   const baseX = chunkX * CHUNK_W;
   const n = 1 + ((rng() * 3) | 0);
   const out = [];
-  const builders = [makePillar, makeArch, makeRuin, makeShelf];
+  const builders = [makePillar, makeArch, makeRuin];
   for (let i = 0; i < n; i++) {
     const build = builders[(rng() * builders.length) | 0];
     out.push(build(rng, baseX));
