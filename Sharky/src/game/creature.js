@@ -8,14 +8,16 @@ function spineAt(u, t, s, speed) {
 }
 
 /**
- * Draw a creature centered at (x, y) facing ±1 along X.
+ * Draw a creature centered at (x, y).
+ * `angle` is radians in world space: 0 = nose pointing right, π/2 = down.
+ * The body plan is authored with the snout on −X; we rotate so it matches `angle`.
  * Eye radius scales with sqrt(length) — linear scaling reads as cartoon minnows.
  */
-export function drawCreature(g, s, x, y, len, t, speed, facing, opts = {}) {
+export function drawCreature(g, s, x, y, len, t, speed, angle = 0, opts = {}) {
   const d = len * s.bodyDepth;
   g.save();
   g.translate(x, y);
-  g.scale(facing, 1);
+  g.rotate(angle + Math.PI);
 
   if (opts.outline) {
     g.shadowColor = opts.outline;
@@ -158,6 +160,100 @@ export function drawCreature(g, s, x, y, len, t, speed, facing, opts = {}) {
 
   g.shadowBlur = 0;
   g.restore();
+}
+
+/**
+ * Draw a crab. `angle` is crawl heading (0 = right). Legs animate with `t`.
+ */
+export function drawCrab(g, x, y, size, t, angle = 0, opts = {}) {
+  g.save();
+  g.translate(x, y);
+  g.rotate(angle);
+
+  if (opts.outline) {
+    g.shadowColor = opts.outline;
+    g.shadowBlur = Math.max(3, size * 0.12);
+  }
+
+  const bodyW = size * 0.72;
+  const bodyH = size * 0.48;
+  const hue = opts.hue ?? 18;
+
+  // Legs (3 pairs).
+  g.strokeStyle = `hsl(${hue} 55% 32%)`;
+  g.lineWidth = Math.max(1.2, size * 0.08);
+  g.lineCap = 'round';
+  for (let i = 0; i < 3; i++) {
+    const side = i - 1;
+    const beat = Math.sin(t * 7 + i * 1.4) * size * 0.12;
+    for (const sgn of [-1, 1]) {
+      const lx = side * size * 0.18;
+      const ly = sgn * (bodyH * 0.35);
+      g.beginPath();
+      g.moveTo(lx, ly * 0.2);
+      g.quadraticCurveTo(
+        lx + size * 0.1,
+        sgn * (size * 0.28 + beat),
+        lx + size * 0.22,
+        sgn * (size * 0.42)
+      );
+      g.stroke();
+    }
+  }
+
+  // Claws.
+  for (const sgn of [-1, 1]) {
+    g.beginPath();
+    g.moveTo(bodyW * 0.35, sgn * bodyH * 0.15);
+    g.quadraticCurveTo(bodyW * 0.7, sgn * bodyH * 0.55, bodyW * 0.55, sgn * bodyH * 0.75);
+    g.strokeStyle = `hsl(${hue} 60% 38%)`;
+    g.lineWidth = Math.max(1.5, size * 0.1);
+    g.stroke();
+    g.beginPath();
+    g.arc(bodyW * 0.58, sgn * bodyH * 0.72, size * 0.1, 0, 7);
+    g.fillStyle = `hsl(${hue} 62% 42%)`;
+    g.fill();
+  }
+
+  // Carapace.
+  g.beginPath();
+  g.ellipse(0, 0, bodyW * 0.5, bodyH * 0.5, 0, 0, 7);
+  const grad = g.createRadialGradient(-bodyW * 0.1, -bodyH * 0.15, 1, 0, 0, bodyW * 0.55);
+  grad.addColorStop(0, `hsl(${hue} 58% 52%)`);
+  grad.addColorStop(1, `hsl(${hue + 8} 50% 34%)`);
+  g.fillStyle = grad;
+  g.fill();
+
+  // Eyes on stalks.
+  for (const sgn of [-1, 1]) {
+    g.strokeStyle = `hsl(${hue} 40% 28%)`;
+    g.lineWidth = Math.max(1, size * 0.05);
+    g.beginPath();
+    g.moveTo(bodyW * 0.12, sgn * bodyH * 0.1);
+    g.lineTo(bodyW * 0.28, sgn * bodyH * 0.42);
+    g.stroke();
+    g.beginPath();
+    g.arc(bodyW * 0.3, sgn * bodyH * 0.45, size * 0.09, 0, 7);
+    g.fillStyle = '#f4f8fb';
+    g.fill();
+    g.beginPath();
+    g.arc(bodyW * 0.32, sgn * bodyH * 0.45, size * 0.045, 0, 7);
+    g.fillStyle = '#0a1016';
+    g.fill();
+  }
+
+  g.shadowBlur = 0;
+  g.restore();
+}
+
+/** Smoothly turn `current` angle toward `target` by at most `maxStep` radians. */
+export function turnAngle(current, target, maxStep) {
+  let d = target - current;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  if (d > maxStep) d = maxStep;
+  if (d < -maxStep) d = -maxStep;
+  return current + d;
 }
 
 /** Length in world pixels from mass. Thresholds stay coherent as fractions of length. */

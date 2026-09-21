@@ -5,7 +5,7 @@ import { Save } from './core/save.js';
 import { Audio } from './core/audio.js';
 import { clamp } from './core/rng.js';
 import { ANIMALS, unlockAnimals } from './game/content.js';
-import { drawCreature, lengthFromMass } from './game/creature.js';
+import { drawCreature, drawCrab, lengthFromMass } from './game/creature.js';
 import { drawWorld } from './game/world.js';
 import { PlaySession, WORLD_FLOOR } from './game/play.js';
 
@@ -190,7 +190,18 @@ function drawPlaying(dt) {
 
   if (state === 'playing') s.step(dt, aim);
 
-  drawWorld(g, W, H, animTime, cam.x, cam.y, WORLD_FLOOR);
+  drawWorld(g, W, H, animTime, cam.x, cam.y, s.structures, WORLD_FLOOR);
+
+  // Splash rings at the surface.
+  for (const sp of s.splashes) {
+    const scr = worldToScreen(sp.x, sp.y, cam);
+    const u = sp.age / sp.life;
+    g.strokeStyle = `rgba(220,245,255,${(1 - u) * 0.55})`;
+    g.lineWidth = 2;
+    g.beginPath();
+    g.ellipse(scr.x, scr.y, (18 + u * 70) * sp.power * cam.zoom, (6 + u * 16) * sp.power * cam.zoom, 0, 0, 7);
+    g.stroke();
+  }
 
   // Creatures.
   const sorted = s.creatures.slice().sort((a, b) => a.mass - b.mass);
@@ -202,24 +213,31 @@ function drawPlaying(dt) {
       s.stats.chumSense && c.mass <= p.mass * s.stats.biteRatio ? 'rgba(120,255,200,0.9)' : null;
     const back = clamp(1 - c.mass / (p.mass * 2.5), 0, 0.55);
     g.globalAlpha = 1 - back * 0.5;
-    drawCreature(
-      g,
-      c.species,
-      sp.x,
-      sp.y,
-      len,
-      animTime,
-      4 + c.speedMul * 3,
-      c.facing,
-      outline ? { outline } : {}
-    );
+    if (c.form === 'crab') {
+      drawCrab(g, sp.x, sp.y, len * 0.95, animTime, c.angle, {
+        hue: c.hue,
+        outline: outline || undefined,
+      });
+    } else {
+      drawCreature(
+        g,
+        c.species,
+        sp.x,
+        sp.y,
+        len,
+        animTime,
+        4 + c.speedMul * 3,
+        c.angle,
+        outline ? { outline } : {}
+      );
+    }
     g.globalAlpha = 1;
   }
 
   // Player.
   const plen = s.length * cam.zoom;
   const swimSpeed = 3 + Math.hypot(p.vx, p.vy) / 40;
-  drawCreature(g, s.animal.species, screenP.x, screenP.y, plen, animTime, swimSpeed, p.facing);
+  drawCreature(g, s.animal.species, screenP.x, screenP.y, plen, animTime, swimSpeed, p.angle);
 
   // Aim hint.
   if (aim.mag > 12) {
@@ -241,9 +259,9 @@ function drawMenuBackdrop(dt) {
   animTime += dt;
   const camX = Math.sin(animTime * 0.15) * 200;
   const camY = 1000 + Math.sin(animTime * 0.11) * 80;
-  drawWorld(g, W, H, animTime, camX, camY, WORLD_FLOOR);
+  drawWorld(g, W, H, animTime, camX, camY, [], WORLD_FLOOR);
   const a = ANIMALS[selectedAnimal] || ANIMALS['reef-shark'];
-  drawCreature(g, a.species, W * 0.72, H * 0.55, 160, animTime, 6, -1);
+  drawCreature(g, a.species, W * 0.72, H * 0.55, 160, animTime, 6, Math.PI);
 }
 
 function frame(ts) {

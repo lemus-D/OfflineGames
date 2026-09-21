@@ -1,5 +1,5 @@
 /* Sharky service worker — precache, versioned cache name. */
-const CACHE = 'sharky-v2';
+const CACHE = 'sharky-v3';
 const PRECACHE = [
   './',
   './index.html',
@@ -13,6 +13,7 @@ const PRECACHE = [
   './src/game/creature.js',
   './src/game/world.js',
   './src/game/play.js',
+  './src/game/structures.js',
 ];
 
 self.addEventListener('install', (event) => {

@@ -233,6 +233,16 @@ export const FAUNA = [
   { kind: 'predator', name: 'leviathan', massMin: 2.4, massMax: 4.0, speed: 0.9, hue: 220 },
 ];
 
+/** Floor / wall scavengers — separate from free-swim fauna. */
+export const CRAB = {
+  kind: 'prey',
+  name: 'crab',
+  massMin: 0.12,
+  massMax: 0.38,
+  speed: 0.55,
+  hue: 18,
+};
+
 /** Growth milestones (player mass) that pause for an upgrade draft. */
 export const GROWTH_MILESTONES = [1.35, 1.9, 2.6, 3.5, 4.8, 6.5];
 

@@ -1,6 +1,7 @@
-/* Water, light layer, kelp, seabed, particulate — noise, not creatures. */
+/* Water, sky/surface, light, kelp, seabed, structures, particulate. */
 
 import { makeRNG, vnoise, fbm, clamp } from '../core/rng.js';
+import { SURFACE_Y, WORLD_FLOOR } from './structures.js';
 
 const LW = 160,
   LH = 90;
@@ -41,41 +42,148 @@ function lightLayer(t) {
   return lightCv;
 }
 
+function drawStructure(g, s, originX, originY, viewW, viewH) {
+  const sx = s.x - originX;
+  const sy = s.y - originY;
+  if (sx + s.w < -40 || sx > viewW + 40 || sy + s.h < -40 || sy > viewH + 40) return;
+
+  if (s.kind === 'arch') {
+    const pw = s.pillarW;
+    g.fillStyle = `hsla(${s.hue} 28% 28% / 0.92)`;
+    g.fillRect(sx, sy + s.h * 0.35, pw, s.h * 0.65);
+    g.fillRect(sx + s.w - pw, sy + s.h * 0.35, pw, s.h * 0.65);
+    g.beginPath();
+    g.moveTo(sx, sy + s.h * 0.38);
+    g.quadraticCurveTo(sx + s.w * 0.5, sy - s.h * 0.08, sx + s.w, sy + s.h * 0.38);
+    g.lineTo(sx + s.w - pw * 0.4, sy + s.h * 0.38);
+    g.quadraticCurveTo(sx + s.w * 0.5, sy + s.h * 0.12, sx + pw * 0.4, sy + s.h * 0.38);
+    g.closePath();
+    g.fill();
+    return;
+  }
+
+  if (s.kind === 'ruin') {
+    g.fillStyle = `hsla(${s.hue} 18% 36% / 0.88)`;
+    g.fillRect(sx, sy, s.w, s.h);
+    g.fillStyle = 'rgba(0,0,0,0.25)';
+    for (let i = 0; i < 4; i++) {
+      g.fillRect(sx + s.w * (0.15 + i * 0.2), sy + s.h * 0.2, s.w * 0.1, s.h * 0.22);
+    }
+    return;
+  }
+
+  if (s.kind === 'shelf') {
+    g.fillStyle = `hsla(${s.hue} 32% 30% / 0.9)`;
+    g.beginPath();
+    g.moveTo(sx, sy + s.h);
+    g.lineTo(sx, sy);
+    g.quadraticCurveTo(sx + s.w * 0.5, sy - s.h * 0.4, sx + s.w, sy);
+    g.lineTo(sx + s.w, sy + s.h);
+    g.closePath();
+    g.fill();
+    return;
+  }
+
+  // Pillar default — slightly tapered.
+  g.fillStyle = `hsla(${s.hue} 30% 26% / 0.94)`;
+  g.beginPath();
+  g.moveTo(sx + s.w * 0.12, sy + s.h);
+  g.lineTo(sx, sy);
+  g.lineTo(sx + s.w, sy);
+  g.lineTo(sx + s.w * 0.88, sy + s.h);
+  g.closePath();
+  g.fill();
+  g.fillStyle = `hsla(${s.hue} 25% 18% / 0.5)`;
+  g.fillRect(sx + s.w * 0.2, sy + s.h * 0.15, s.w * 0.15, s.h * 0.5);
+}
+
 /**
- * Draw the ocean parallaxed to camera (camX, camY).
- * World Y increases downward; seabed sits near world Y = floorY.
+ * Draw the ocean + sky, parallaxed to camera.
+ * World Y increases downward; surface is y = SURFACE_Y; seabed near WORLD_FLOOR.
  */
-export function drawWorld(g, W, H, t, camX, camY, floorY = 2200) {
-  const sky = g.createLinearGradient(0, 0, 0, H);
-  // Depth tint from camera Y.
-  const depthFrac = clamp(camY / floorY, 0, 1);
-  sky.addColorStop(0, depthFrac < 0.35 ? '#2e93b8' : '#1a6a8a');
-  sky.addColorStop(0.22, '#12607f');
-  sky.addColorStop(0.62, '#06324a');
-  sky.addColorStop(1, '#02121d');
-  g.fillStyle = sky;
-  g.fillRect(0, 0, W, H);
-
-  g.save();
-  g.globalCompositeOperation = 'lighter';
-  g.imageSmoothingEnabled = true;
-  g.imageSmoothingQuality = 'high';
-  g.drawImage(lightLayer(t), 0, 0, W, H);
-  g.restore();
-
-  // Murk thickens with depth.
-  g.fillStyle = `rgba(2,12,22,${0.15 + depthFrac * 0.45})`;
-  g.fillRect(0, 0, W, H);
-
+export function drawWorld(g, W, H, t, camX, camY, structures = [], floorY = WORLD_FLOOR) {
   const originX = camX - W * 0.5;
   const originY = camY - H * 0.5;
+  const surfaceScreenY = SURFACE_Y - originY;
 
-  // Kelp rooted near the seabed, scrolled with camera.
+  // Sky (above the surface).
+  if (surfaceScreenY > 0) {
+    const skyH = Math.min(H, surfaceScreenY);
+    const sky = g.createLinearGradient(0, 0, 0, skyH);
+    sky.addColorStop(0, '#7ec8e8');
+    sky.addColorStop(0.55, '#4aa3c8');
+    sky.addColorStop(1, '#2e93b8');
+    g.fillStyle = sky;
+    g.fillRect(0, 0, W, skyH);
+
+    // Soft clouds.
+    g.fillStyle = 'rgba(255,255,255,0.18)';
+    for (let i = 0; i < 6; i++) {
+      const cx = ((i * 211 + t * 8) % (W + 200)) - 100;
+      const cy = 40 + (i * 37) % Math.max(20, skyH - 60);
+      g.beginPath();
+      g.ellipse(cx, cy, 70 + i * 8, 18 + i * 2, 0, 0, 7);
+      g.fill();
+    }
+  }
+
+  // Water fill below surface.
+  const waterTop = Math.max(0, surfaceScreenY);
+  if (waterTop < H) {
+    const depthFrac = clamp((camY - SURFACE_Y) / floorY, 0, 1);
+    const water = g.createLinearGradient(0, waterTop, 0, H);
+    water.addColorStop(0, '#2e93b8');
+    water.addColorStop(0.22, '#12607f');
+    water.addColorStop(0.62, '#06324a');
+    water.addColorStop(1, '#02121d');
+    g.fillStyle = water;
+    g.fillRect(0, waterTop, W, H - waterTop);
+
+    g.save();
+    g.beginPath();
+    g.rect(0, waterTop, W, H - waterTop);
+    g.clip();
+    g.globalCompositeOperation = 'lighter';
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(lightLayer(t), 0, 0, W, H);
+    g.restore();
+
+    g.fillStyle = `rgba(2,12,22,${0.12 + depthFrac * 0.48})`;
+    g.fillRect(0, waterTop, W, H - waterTop);
+  }
+
+  // Surface wave line.
+  if (surfaceScreenY > -30 && surfaceScreenY < H + 30) {
+    g.beginPath();
+    for (let x = 0; x <= W; x += 10) {
+      const wx = originX + x;
+      const wave =
+        Math.sin(wx * 0.012 + t * 2.1) * 5 + Math.sin(wx * 0.031 - t * 1.4) * 2.5;
+      const y = surfaceScreenY + wave;
+      if (x === 0) g.moveTo(x, y);
+      else g.lineTo(x, y);
+    }
+    g.strokeStyle = 'rgba(220,245,255,0.55)';
+    g.lineWidth = 2.5;
+    g.stroke();
+    // Foam band.
+    g.lineTo(W, surfaceScreenY + 18);
+    g.lineTo(0, surfaceScreenY + 18);
+    g.closePath();
+    g.fillStyle = 'rgba(180,230,250,0.12)';
+    g.fill();
+  }
+
+  // Structures.
+  for (const s of structures) drawStructure(g, s, originX, originY, W, H);
+
+  // Kelp rooted near the seabed.
   for (let i = 0; i < 22; i++) {
     const worldX = Math.floor(camX / 180) * 180 + i * 90 - 400;
     const bx = worldX - originX;
     if (bx < -80 || bx > W + 80) continue;
-    const h = 180 + 220 * vnoise(i * 7.3, 1.2, 3);
+    const h = 180 + 220 * vnoise(i * 7.3 + Math.floor(camX / 900), 1.2, 3);
     const baseY = floorY - originY;
     const pts = [[bx, baseY]];
     for (let k = 1; k <= 8; k++) {
@@ -106,7 +214,7 @@ export function drawWorld(g, W, H, t, camX, camY, floorY = 2200) {
     }
   }
 
-  // Seabed strip.
+  // Seabed.
   const bedY = floorY - originY;
   if (bedY < H + 80) {
     g.beginPath();
@@ -122,13 +230,16 @@ export function drawWorld(g, W, H, t, camX, camY, floorY = 2200) {
     g.fill();
   }
 
-  // Suspended particulate, camera-relative.
-  const prng = makeRNG(0x5eed);
-  g.fillStyle = 'rgba(200,235,245,0.28)';
-  for (let i = 0; i < 180; i++) {
-    const px = ((prng() * W * 2 + t * 9 - originX * 0.15) % W + W) % W;
-    const py = ((prng() * H * 2 + Math.sin(t * 0.5 + i) * 6 + t * 4 - originY * 0.08) % H + H) % H;
-    g.fillRect(px, py, 1.6, 1.6);
+  // Particulate (underwater only).
+  if (surfaceScreenY < H) {
+    const prng = makeRNG(0x5eed);
+    g.fillStyle = 'rgba(200,235,245,0.28)';
+    for (let i = 0; i < 160; i++) {
+      const px = ((prng() * W * 2 + t * 9 - originX * 0.15) % W + W) % W;
+      const py =
+        ((prng() * H * 2 + Math.sin(t * 0.5 + i) * 6 + t * 4 - originY * 0.08) % H + H) % H;
+      if (py > surfaceScreenY) g.fillRect(px, py, 1.6, 1.6);
+    }
   }
 
   // Vignette.

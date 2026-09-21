@@ -26,6 +26,7 @@ for (const file of [
   'src/game/content.js',
   'src/game/creature.js',
   'src/game/world.js',
+  'src/game/structures.js',
   'src/core/rng.js',
 ]) {
   const src = readFileSync(new URL(file, import.meta.url), 'utf8')
