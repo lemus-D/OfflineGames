@@ -1,7 +1,7 @@
 /* Chunked procedural ocean structures — pillars, arches, ruins, shelves.
    Deterministic from (chunkX, worldSeed). Surfaces are crawl ledges for crabs. */
 
-import { makeRNG, lerp, clamp } from '../core/rng.js';
+import { makeRNG, lerp } from '../core/rng.js';
 
 export const CHUNK_W = 900;
 export const SURFACE_Y = 0;
