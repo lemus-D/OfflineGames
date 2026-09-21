@@ -18,7 +18,6 @@ import {
   AIR_CEIL,
   ensureStructureChunks,
   allStructures,
-  resolveStructurePush,
   randomSurfacePose,
 } from './structures.js';
 
@@ -192,14 +191,7 @@ export class PlaySession {
       this._splash(p.x, SURFACE_Y, Math.min(1.2, -p.vy / 380));
     }
 
-    // Soft structure collision (underwater / on surface).
-    const push = resolveStructurePush(p.x, p.y, len * 0.28, this.structList);
-    p.x += push.dx;
-    p.y += push.dy;
-    if (push.dx || push.dy) {
-      p.vx *= 0.7;
-      p.vy *= 0.7;
-    }
+    // Structures are decorative only — no collision.
 
     p.y = clamp(p.y, AIR_CEIL + len * 0.2, WORLD_FLOOR - len * 0.25);
 
@@ -252,7 +244,13 @@ export class PlaySession {
 
   _spawnNear(initial) {
     const p = this.player;
+    const cam = this.camera;
+    // Spawn just outside the current camera frame so fish swim into view.
+    const hw = 640 / cam.zoom + 40;
+    const hh = 360 / cam.zoom + 40;
     const ang = this.rng() * Math.PI * 2;
+    const rim = Math.hypot(hw * Math.cos(ang), hh * Math.sin(ang));
+    const dist = rim + 60 + this.rng() * (initial ? 280 : 220);
 
     const roll = this.rng();
     const early = !initial && this.time < EARLY_PREY_WINDOW;
@@ -265,20 +263,19 @@ export class PlaySession {
       template = FAUNA[4 + ((this.rng() * 3) | 0)];
     }
 
-    let dist = initial
-      ? 160 + this.rng() * 680
-      : SPAWN_MARGIN * (0.7 + this.rng() * 0.8);
-    if (template.kind === 'predator') {
-      dist = Math.max(dist, PREDATOR_MIN_SPAWN_DIST);
-    }
+    // Predators start a bit farther so they don't pop on the edge mid-chase.
+    const spawnDist =
+      template.kind === 'predator' ? Math.max(dist, rim + 140) : dist;
 
-    const x = p.x + Math.cos(ang) * dist;
-    // Keep fish below the surface.
+    const x = cam.x + Math.cos(ang) * spawnDist;
     const y = clamp(
-      p.y + Math.sin(ang) * dist * 0.7,
+      cam.y + Math.sin(ang) * spawnDist * 0.85,
       SURFACE_Y + 80,
       WORLD_FLOOR - 80
     );
+
+    // Safety: never place inside the visible rect.
+    if (Math.abs(x - cam.x) < hw && Math.abs(y - cam.y) < hh) return;
 
     const rel = lerp(template.massMin, template.massMax, this.rng());
     const mass = Math.max(0.05, p.mass * rel);
@@ -286,8 +283,16 @@ export class PlaySession {
     const species = speciesFromFauna(template, seed, this.rng);
     if (template.kind === 'predator') species.jaw = Math.max(species.jaw, 0.75);
 
-    const angle = this.rng() * Math.PI * 2;
+    // Swim roughly toward the play area so they enter frame naturally.
+    const toCamX = cam.x - x;
+    const toCamY = cam.y - y;
+    const toCam = Math.hypot(toCamX, toCamY) || 1;
     const spd = (40 + this.rng() * 80) * template.speed;
+    const drift = (this.rng() - 0.5) * 0.6;
+    const dirX = toCamX / toCam + drift;
+    const dirY = toCamY / toCam + drift;
+    const dlen = Math.hypot(dirX, dirY) || 1;
+
     this.creatures.push({
       id: this._nextId++,
       form: 'fish',
@@ -295,13 +300,16 @@ export class PlaySession {
       name: template.name,
       x,
       y,
-      vx: Math.cos(angle) * spd,
-      vy: Math.sin(angle) * spd * 0.4,
+      vx: (dirX / dlen) * spd,
+      vy: (dirY / dlen) * spd * 0.55,
       mass,
-      angle,
+      angle: Math.atan2(dirY, dirX),
       species,
       speedMul: template.speed,
       stunnedUntil: 0,
+      aiMode: 'wander',
+      aiTargetId: null,
+      aiUntil: this.time + 1 + this.rng() * 2,
     });
 
     this._trimCreatures();
@@ -309,27 +317,40 @@ export class PlaySession {
 
   _spawnCrab(initial) {
     const p = this.player;
+    const cam = this.camera;
+    const hw = 640 / cam.zoom + 40;
+    const hh = 360 / cam.zoom + 40;
     const structs = this.structList;
     let pose = null;
     const preferWall = this.rng() < 0.45 && structs.length > 0;
+
+    // Prefer off-screen structure surfaces.
     if (preferWall) {
-      pose = randomSurfacePose(structs, this.rng);
+      for (let tries = 0; tries < 8 && !pose; tries++) {
+        const candidate = randomSurfacePose(structs, this.rng);
+        if (
+          candidate &&
+          (Math.abs(candidate.x - cam.x) >= hw || Math.abs(candidate.y - cam.y) >= hh)
+        ) {
+          pose = candidate;
+        }
+      }
     }
     if (!pose) {
-      // Ocean floor crab.
-      const dir = this.rng() < 0.5 ? -1 : 1;
-      const dist = initial ? 80 + this.rng() * 700 : 200 + this.rng() * SPAWN_MARGIN;
+      const ang = this.rng() * Math.PI * 2;
+      const rim = Math.hypot(hw * Math.cos(ang), hh * Math.sin(ang));
+      const dist = rim + 40 + this.rng() * 200;
       pose = {
-        x: p.x + dir * dist,
+        x: cam.x + Math.cos(ang) * dist,
         y: WORLD_FLOOR - 18 - this.rng() * 10,
-        angle: dir > 0 ? 0 : Math.PI,
+        angle: Math.cos(ang) >= 0 ? 0 : Math.PI,
         surf: null,
         u: this.rng(),
       };
     }
 
-    // Don't drop crabs on top of the player at dive-in.
-    if (Math.hypot(pose.x - p.x, pose.y - p.y) < 90) return;
+    if (Math.hypot(pose.x - p.x, pose.y - p.y) < 120) return;
+    if (Math.abs(pose.x - cam.x) < hw && Math.abs(pose.y - cam.y) < hh) return;
 
     const rel = lerp(CRAB.massMin, CRAB.massMax, this.rng());
     const mass = Math.max(0.04, p.mass * rel);
@@ -366,6 +387,43 @@ export class PlaySession {
     }
   }
 
+  _pickPredatorAi(c) {
+    const p = this.player;
+    const canHuntPlayer =
+      c.mass > p.mass * this.stats.predatorAdvantage * 0.95 &&
+      Math.hypot(c.x - p.x, c.y - p.y) < 780;
+
+    // Prefer nearby edible fish / crabs over endless player pursuit.
+    let bestPrey = null;
+    let bestD = 520;
+    for (const o of this.creatures) {
+      if (o.id === c.id || o.kind === 'predator') continue;
+      if (o.mass >= c.mass * 0.95) continue;
+      const d = Math.hypot(o.x - c.x, o.y - c.y);
+      if (d < bestD) {
+        bestD = d;
+        bestPrey = o;
+      }
+    }
+
+    const roll = this.rng();
+    if (bestPrey && roll < 0.45) {
+      c.aiMode = 'prey';
+      c.aiTargetId = bestPrey.id;
+      c.aiUntil = this.time + 2.5 + this.rng() * 3.5;
+      return;
+    }
+    if (canHuntPlayer && roll < 0.75) {
+      c.aiMode = 'player';
+      c.aiTargetId = null;
+      c.aiUntil = this.time + 1.8 + this.rng() * 2.5;
+      return;
+    }
+    c.aiMode = 'wander';
+    c.aiTargetId = null;
+    c.aiUntil = this.time + 2 + this.rng() * 3;
+  }
+
   _updateCreatures(dt, playerLen) {
     const p = this.player;
     for (const c of this.creatures) {
@@ -380,15 +438,42 @@ export class PlaySession {
       } else if (
         c.kind === 'predator' &&
         this.time >= this._graceUntil &&
-        c.mass > p.mass * this.stats.predatorAdvantage * 0.95
+        c.mass > p.mass * this.stats.predatorAdvantage * 0.9
       ) {
-        const dx = p.x - c.x,
-          dy = p.y - c.y;
-        const d = Math.hypot(dx, dy) || 1;
-        if (d < 900) {
-          const chase = 160 * c.speedMul;
-          c.vx += (dx / d) * chase * dt;
-          c.vy += (dy / d) * chase * dt;
+        if (this.time >= (c.aiUntil || 0)) this._pickPredatorAi(c);
+
+        if (c.aiMode === 'player') {
+          const dx = p.x - c.x,
+            dy = p.y - c.y;
+          const d = Math.hypot(dx, dy) || 1;
+          if (d < 820) {
+            const chase = 150 * c.speedMul;
+            c.vx += (dx / d) * chase * dt;
+            c.vy += (dy / d) * chase * dt;
+          } else {
+            c.aiUntil = this.time; // lost them — reassess
+          }
+        } else if (c.aiMode === 'prey') {
+          const target = this.creatures.find((o) => o.id === c.aiTargetId);
+          if (!target || target.mass >= c.mass) {
+            c.aiUntil = this.time;
+          } else {
+            const dx = target.x - c.x,
+              dy = target.y - c.y;
+            const d = Math.hypot(dx, dy) || 1;
+            const chase = 165 * c.speedMul;
+            c.vx += (dx / d) * chase * dt;
+            c.vy += (dy / d) * chase * dt;
+            // Eat the prey if close enough.
+            if (d < (lengthFromMass(c.mass) + lengthFromMass(target.mass)) * 0.3) {
+              target._eatenByPredator = true;
+              c.aiUntil = this.time;
+            }
+          }
+        } else {
+          // Wander / lose interest — drift off the player's trail.
+          c.vx += Math.cos(this.time * 0.7 + c.id) * 40 * dt;
+          c.vy += Math.sin(this.time * 0.9 + c.id * 0.3) * 30 * dt;
         }
       } else {
         const dx = p.x - c.x,
@@ -422,6 +507,7 @@ export class PlaySession {
     }
 
     this.creatures = this.creatures.filter((c) => {
+      if (c._eatenByPredator) return false;
       const d = Math.hypot(c.x - p.x, c.y - p.y);
       return d < SPAWN_MARGIN * 2.6;
     });

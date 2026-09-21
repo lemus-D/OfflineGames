@@ -50,10 +50,12 @@ function makeArch(rng, baseX) {
   const x = baseX + lerp(40, CHUNK_W - w - 40, rng());
   const y = WORLD_FLOOR - h;
   const pillarW = lerp(28, 48, rng());
+  const pillarTop = y + h * 0.35;
+  const pillarH = h * 0.65;
   const surfaces = [
-    ...boxSurfaces(x, y + h * 0.35, pillarW, h * 0.65),
-    ...boxSurfaces(x + w - pillarW, y + h * 0.35, pillarW, h * 0.65),
-    { x: x + pillarW * 0.5, y: y, tx: 1, ty: 0, len: w - pillarW }, // arch top
+    ...boxSurfaces(x, pillarTop, pillarW, pillarH),
+    ...boxSurfaces(x + w - pillarW, pillarTop, pillarW, pillarH),
+    { x: x + pillarW * 0.5, y: y, tx: 1, ty: 0, len: w - pillarW },
   ];
   return {
     kind: 'arch',
@@ -124,42 +126,6 @@ export function allStructures(chunkMap) {
     for (const s of arr) list.push(s);
   }
   return list;
-}
-
-/** Soft AABB push-out. Returns {x,y} delta. */
-export function resolveStructurePush(px, py, radius, structures) {
-  let dx = 0,
-    dy = 0;
-  for (const s of structures) {
-    const left = s.x,
-      right = s.x + s.w,
-      top = s.y,
-      bot = s.y + s.h;
-    const cx = clamp(px, left, right);
-    const cy = clamp(py, top, bot);
-    const ox = px - cx,
-      oy = py - cy;
-    const d = Math.hypot(ox, oy);
-    if (d < 1e-4) {
-      // Centered inside — push toward nearest edge.
-      const dl = px - left,
-        dr = right - px,
-        dt = py - top,
-        db = bot - py;
-      const m = Math.min(dl, dr, dt, db);
-      if (m === dl) dx -= radius + dl;
-      else if (m === dr) dx += radius + dr;
-      else if (m === dt) dy -= radius + dt;
-      else dy += radius + db;
-      continue;
-    }
-    if (d < radius) {
-      const push = (radius - d) / d;
-      dx += ox * push;
-      dy += oy * push;
-    }
-  }
-  return { dx, dy };
 }
 
 /** Pick a random crawl pose on a structure surface. */
