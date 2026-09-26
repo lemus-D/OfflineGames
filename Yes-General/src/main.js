@@ -266,6 +266,7 @@ function showTooltipFor(btn, clientX, clientY) {
 }
 
 function bindActionButton(btn, action, handler) {
+  if (!btn) return;
   btn.addEventListener('click', (ev) => {
     if (btn.classList.contains('is-disabled')) {
       showTooltipFor(btn, ev.clientX, ev.clientY);
@@ -338,8 +339,8 @@ els.btnMenu.addEventListener('click', () => {
   refreshMenuChoices();
 });
 
-els.btnTutorialGo.addEventListener('click', () => finishTutorial(false));
-els.btnTutorialSkip.addEventListener('click', () => finishTutorial(true));
+els.btnTutorialGo?.addEventListener('click', () => finishTutorial(false));
+els.btnTutorialSkip?.addEventListener('click', () => finishTutorial(true));
 
 bindActionButton(els.btnGather, 'gather', () => {
   if (!match) return;

@@ -1,5 +1,5 @@
 /* Yes-General service worker — precache, versioned cache name. */
-const CACHE = 'yes-general-v2';
+const CACHE = 'yes-general-v3';
 const PRECACHE = [
   './',
   './index.html',
