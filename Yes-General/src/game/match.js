@@ -14,9 +14,9 @@ import {
   STARTING_TROOPS,
   RESOURCE_SCORE,
   PLAYER_COLORS,
+  RESOURCE_LABELS,
 } from '../data/content.js';
-import { generateMap, placeCapitals, hexKey, hexNeighbors, parseKey } from './hex.js';
-import { connectedToCapital } from './roads.js';
+import { generateMap, partitionAndPlace, hexKey, hexNeighbors, parseKey } from './hex.js';
 import { resolveCombat } from './combat.js';
 import { aiTakeTurn } from './ai.js';
 
@@ -32,7 +32,7 @@ export function createMatch(modeId, difficultyId, seed) {
   const tiles = generateMap(seed ^ 0x9e3779b9, mode.mapRadius);
 
   const civCount = 1 + difficulty.aiCount;
-  const capitalKeys = placeCapitals(tiles, civCount, rng);
+  const capitalKeys = partitionAndPlace(tiles, civCount, rng);
 
   /** @type {object[]} */
   const civs = [];
@@ -40,11 +40,14 @@ export function createMatch(modeId, difficultyId, seed) {
     const id = i === 0 ? 'player' : `ai-${i}`;
     const capKey = capitalKeys[i];
     const cap = tiles.get(capKey);
+
+    for (const tile of tiles.values()) {
+      if (tile.ownerId === `__pending_${i}`) tile.ownerId = id;
+    }
+
     cap.ownerId = id;
     cap.isCapital = true;
-    cap.hasRoad = true;
     cap.troops = STARTING_TROOPS;
-    // Capital starts gathering food without a farm (hub).
     if (cap.resourceId === 'barren') cap.resourceId = 'food';
 
     civs.push({
@@ -53,6 +56,7 @@ export function createMatch(modeId, difficultyId, seed) {
       isPlayer: i === 0,
       color: PLAYER_COLORS[i % PLAYER_COLORS.length],
       capital: { q: cap.q, r: cap.r },
+      regionId: i,
       stock: { ...STARTING_STOCK },
       alive: true,
       wonderBuilt: false,
@@ -69,10 +73,10 @@ export function createMatch(modeId, difficultyId, seed) {
     civs,
     turn: 1,
     maxTurns: mode.turns,
-    phase: 'play', // play | ended
+    phase: 'play',
     winnerId: null,
     winReason: null,
-    log: [],
+    log: ['Claim land, build gatherers, recruit, attack — spend freely until End turn.'],
     selectedKey: capitalKeys[0],
     rng,
     lastEvent: null,
@@ -108,6 +112,23 @@ function pay(stock, cost) {
   }
 }
 
+function formatCost(cost) {
+  const parts = [];
+  for (const [k, v] of Object.entries(cost)) {
+    if (v > 0) parts.push(`${v} ${RESOURCE_LABELS[k] || k}`);
+  }
+  return parts.length ? parts.join(', ') : 'Free';
+}
+
+function missingCost(stock, cost) {
+  const parts = [];
+  for (const [k, v] of Object.entries(cost)) {
+    const have = stock[k] || 0;
+    if (have < v) parts.push(`${v - have} more ${RESOURCE_LABELS[k] || k}`);
+  }
+  return parts;
+}
+
 function pushLog(match, msg) {
   match.log.unshift(msg);
   if (match.log.length > 40) match.log.length = 40;
@@ -115,16 +136,14 @@ function pushLog(match, msg) {
 
 export function collectYields(match, civ) {
   if (!civ.alive) return;
-  const connected = connectedToCapital(match.tiles, civ.id, civ.capital);
   const mul = civ.yieldMul;
-  for (const [key, tile] of match.tiles) {
+  for (const tile of match.tiles.values()) {
     if (tile.ownerId !== civ.id) continue;
     const res = RESOURCES[tile.resourceId];
     if (!res || res.yieldPerTurn <= 0) continue;
     const need = GATHER_FOR_RESOURCE[tile.resourceId];
     const hasGather = tile.isCapital || (need && tile.buildingId === need);
     if (!hasGather) continue;
-    if (!tile.isCapital && !connected.has(key)) continue;
     const amt = Math.max(0, Math.floor(res.yieldPerTurn * mul));
     civ.stock[res.id] = (civ.stock[res.id] || 0) + amt;
   }
@@ -168,33 +187,18 @@ function applyEvent(match, civ) {
       const loss = Math.floor(t.troops * ev.troopLoss);
       t.troops -= loss;
       lostTroops += loss;
-      if (t.hasRoad && !t.isCapital && match.rng() < ev.roadBreakChance) {
-        t.hasRoad = false;
-      }
     }
-    // Risk losing a non-capital border tile.
     if (match.rng() < ev.territoryRisk) {
       const candidates = owned.filter((t) => !t.isCapital);
       if (candidates.length) {
         const t = candidates[(match.rng() * candidates.length) | 0];
         t.ownerId = null;
         t.buildingId = null;
-        t.hasRoad = false;
         t.troops = 0;
         pushLog(match, `${ev.name}: lost territory at (${t.q},${t.r}).`);
       }
     }
     pushLog(match, `${ev.name}: lost ${lostTroops} troops.`);
-  } else if (ev.kind === 'roads') {
-    let broken = 0;
-    for (const t of match.tiles.values()) {
-      if (t.ownerId !== civ.id || t.isCapital || !t.hasRoad) continue;
-      if (match.rng() < ev.roadBreakChance) {
-        t.hasRoad = false;
-        broken += 1;
-      }
-    }
-    pushLog(match, `${ev.name}: ${broken} road(s) destroyed.`);
   }
 
   match.lastEvent = ev.id;
@@ -230,7 +234,6 @@ function checkConquest(match) {
     return true;
   }
 
-  // Whole map owned by a single civ (no neutrals).
   let sole = null;
   for (const t of match.tiles.values()) {
     if (!t.ownerId) return false;
@@ -270,7 +273,7 @@ function checkTimed(match) {
   return false;
 }
 
-/** Build gather / road / wonder on selected owned hex. */
+/** Build gather / wonder on selected owned hex. */
 export function tryBuild(match, civId, tileKey, buildingId) {
   if (match.phase !== 'play') return { ok: false, reason: 'ended' };
   const civ = civById(match, civId);
@@ -279,14 +282,6 @@ export function tryBuild(match, civId, tileKey, buildingId) {
   if (!civ?.alive || !tile || !def) return { ok: false, reason: 'bad' };
   if (tile.ownerId !== civId) return { ok: false, reason: 'not-yours' };
   if (!canAfford(civ.stock, def.cost)) return { ok: false, reason: 'cost' };
-
-  if (def.on === 'road') {
-    if (tile.hasRoad || tile.isCapital) return { ok: false, reason: 'has-road' };
-    pay(civ.stock, def.cost);
-    tile.hasRoad = true;
-    pushLog(match, `${civ.name} built a road at (${tile.q},${tile.r}).`);
-    return { ok: true };
-  }
 
   if (def.on === 'wonder') {
     if (!tile.isCapital) return { ok: false, reason: 'wonder-capital' };
@@ -302,6 +297,7 @@ export function tryBuild(match, civId, tileKey, buildingId) {
     const need = GATHER_FOR_RESOURCE[tile.resourceId];
     if (need !== buildingId) return { ok: false, reason: 'wrong-building' };
     if (tile.buildingId) return { ok: false, reason: 'has-building' };
+    if (tile.isCapital) return { ok: false, reason: 'capital' };
     pay(civ.stock, def.cost);
     tile.buildingId = buildingId;
     pushLog(match, `${civ.name} built ${def.name} at (${tile.q},${tile.r}).`);
@@ -335,21 +331,17 @@ export function tryAttack(match, civId, fromKey, toKey) {
   if (from.ownerId !== civId || from.troops <= 0) return { ok: false, reason: 'no-troops' };
   if (to.ownerId === civId) return { ok: false, reason: 'own' };
 
-  const adj = hexNeighbors(from.q, from.r).some(
-    (n) => hexKey(n.q, n.r) === toKey
-  );
+  const adj = hexNeighbors(from.q, from.r).some((n) => hexKey(n.q, n.r) === toKey);
   if (!adj) return { ok: false, reason: 'not-adjacent' };
 
   const atk = from.troops;
   const def = to.troops;
   from.troops = 0;
 
-  // Neutral empty: just take it.
   if (!to.ownerId && def <= 0) {
     to.ownerId = civId;
     to.troops = atk;
     to.buildingId = null;
-    to.hasRoad = false;
     to.isCapital = false;
     pushLog(match, `${civ.name} claimed (${to.q},${to.r}).`);
     checkConquest(match);
@@ -360,13 +352,11 @@ export function tryAttack(match, civId, fromKey, toKey) {
   if (result.attackerWins) {
     const loser = to.ownerId ? civById(match, to.ownerId) : null;
     if (to.isCapital && loser) {
-      // Capital fall: wipe the loser's other tiles, then claim this hex.
       loser.alive = false;
       for (const t of match.tiles.values()) {
         if (t.ownerId === loser.id && t !== to) {
           t.ownerId = null;
           t.buildingId = null;
-          t.hasRoad = false;
           t.isCapital = false;
           t.troops = 0;
         }
@@ -374,14 +364,12 @@ export function tryAttack(match, civId, fromKey, toKey) {
       to.ownerId = civId;
       to.troops = result.atkLeft;
       to.buildingId = null;
-      to.hasRoad = false;
       to.isCapital = false;
       pushLog(match, `${civ.name} sacked ${loser.name}'s capital!`);
     } else {
       to.ownerId = civId;
       to.troops = result.atkLeft;
       to.buildingId = null;
-      to.hasRoad = false;
       to.isCapital = false;
       pushLog(
         match,
@@ -390,7 +378,7 @@ export function tryAttack(match, civId, fromKey, toKey) {
     }
   } else {
     to.troops = result.defLeft;
-    from.troops = result.atkLeft; // survivors retreat
+    from.troops = result.atkLeft;
     pushLog(
       match,
       `${civ.name} failed at (${to.q},${to.r}) (${Math.round(result.winChance * 100)}% odds).`
@@ -419,7 +407,99 @@ export function tryMove(match, civId, fromKey, toKey, amount) {
 }
 
 /**
+ * Preview an action for tooltips.
+ * @param {'gather'|'recruit'|'wonder'|'end'} action
+ */
+export function actionPreview(match, civId, tileKey, action) {
+  const civ = civById(match, civId);
+  const tile = match.tiles.get(tileKey);
+  const base = { ok: false, title: '', effect: '', cost: '', need: '', blockers: [] };
+
+  if (action === 'end') {
+    return {
+      ok: true,
+      title: 'End turn',
+      effect:
+        'Collect yields from your gather buildings and capital, roll events, then rivals act.',
+      cost: 'Free',
+      need: '',
+      blockers: [],
+    };
+  }
+
+  if (!civ || !tile) {
+    return { ...base, title: 'Action', blockers: ['Select a hex first.'] };
+  }
+
+  if (action === 'recruit') {
+    const cost = TROOP_COST;
+    const missing = missingCost(civ.stock, cost);
+    const blockers = [];
+    if (tile.ownerId !== civId) blockers.push('Must own this hex.');
+    if (missing.length) blockers.push(`Need ${missing.join(', ')}.`);
+    return {
+      ok: blockers.length === 0,
+      title: 'Recruit',
+      effect: `Raise ${TROOPS_PER_RECRUIT} troops on this hex.`,
+      cost: formatCost(cost),
+      need: missing.length ? `Missing: ${missing.join(', ')}` : '',
+      blockers,
+    };
+  }
+
+  if (action === 'gather') {
+    const bid = GATHER_FOR_RESOURCE[tile.resourceId];
+    if (!bid) {
+      return {
+        ok: false,
+        title: 'Build gather',
+        effect: 'Barren land has no gather building.',
+        cost: '—',
+        need: '',
+        blockers: ['This hex has no resource to gather.'],
+      };
+    }
+    const def = BUILDINGS[bid];
+    const missing = missingCost(civ.stock, def.cost);
+    const blockers = [];
+    if (tile.ownerId !== civId) blockers.push('Must own this hex.');
+    if (tile.isCapital) blockers.push('Capital already gathers without a building.');
+    if (tile.buildingId) blockers.push('This hex already has a building.');
+    if (missing.length) blockers.push(`Need ${missing.join(', ')}.`);
+    const res = RESOURCES[tile.resourceId];
+    return {
+      ok: blockers.length === 0,
+      title: `Build ${def.name}`,
+      effect: `${def.effect} (+${res.yieldPerTurn} ${res.name}/turn).`,
+      cost: formatCost(def.cost),
+      need: missing.length ? `Missing: ${missing.join(', ')}` : '',
+      blockers,
+    };
+  }
+
+  if (action === 'wonder') {
+    const def = BUILDINGS.wonder;
+    const missing = missingCost(civ.stock, def.cost);
+    const blockers = [];
+    if (tile.ownerId !== civId) blockers.push('Must own this hex.');
+    if (!tile.isCapital) blockers.push('Wonder must be built on your capital.');
+    if (missing.length) blockers.push(`Need ${missing.join(', ')}.`);
+    return {
+      ok: blockers.length === 0,
+      title: def.name,
+      effect: def.effect,
+      cost: formatCost(def.cost),
+      need: missing.length ? `Missing: ${missing.join(', ')}` : '',
+      blockers,
+    };
+  }
+
+  return base;
+}
+
+/**
  * End player turn: collect for player, events, then each AI acts + collects.
+ * Player may spend freely all turn; this is the only phase gate.
  */
 export function endTurn(match) {
   if (match.phase !== 'play') return;
@@ -458,9 +538,6 @@ export function tileSummary(match, key) {
   if (!tile) return null;
   const res = RESOURCES[tile.resourceId];
   const owner = tile.ownerId ? civById(match, tile.ownerId) : null;
-  const connected =
-    owner &&
-    connectedToCapital(match.tiles, owner.id, owner.capital).has(key);
   return {
     key,
     q: tile.q,
@@ -468,10 +545,9 @@ export function tileSummary(match, key) {
     resource: res,
     owner,
     buildingId: tile.buildingId,
-    hasRoad: tile.hasRoad || tile.isCapital,
     isCapital: tile.isCapital,
     troops: tile.troops,
-    connected: !!connected || tile.isCapital,
+    regionId: tile.regionId,
     gatherBuilding: gatherBuildingForTile(tile),
   };
 }

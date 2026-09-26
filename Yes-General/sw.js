@@ -1,5 +1,5 @@
 /* Yes-General service worker — precache, versioned cache name. */
-const CACHE = 'yes-general-v1';
+const CACHE = 'yes-general-v2';
 const PRECACHE = [
   './',
   './index.html',
@@ -9,7 +9,6 @@ const PRECACHE = [
   './src/core/save.js',
   './src/data/content.js',
   './src/game/hex.js',
-  './src/game/roads.js',
   './src/game/combat.js',
   './src/game/match.js',
   './src/game/ai.js',

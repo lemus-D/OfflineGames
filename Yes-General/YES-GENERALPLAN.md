@@ -62,8 +62,9 @@ Higher difficulty means all of:
 
 - Hex map of hex tiles; each hex has resource properties.
 - Some resources need a **gather structure** before they produce.
-- Yields must travel to the **capital** along **roads**. No path → no stockpile.
-- Roads can be destroyed (events for now; player/AI road raids still open).
+- Owned gather buildings (and the capital) yield each turn — **no road network**.
+- Map is **Voronoi-partitioned** into roughly equal homelands; capitals spawn far
+  apart with a ~5-tile-wide starting claim.
 
 ## Combat **[decided]**
 

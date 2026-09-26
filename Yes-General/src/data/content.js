@@ -4,13 +4,13 @@
 /** @typedef {{ id: string, name: string, turns: number, mapRadius: number }} ModeDef */
 /** @typedef {{ id: string, name: string, aiCount: number, aiSkill: number, eventChance: number }} DifficultyDef */
 /** @typedef {{ id: string, name: string, color: string, landValue: number, needsBuilding: string|null, yieldPerTurn: number }} ResourceDef */
-/** @typedef {{ id: string, name: string, cost: Record<string, number>, on: 'gather'|'road'|'wonder' }} BuildingDef */
-/** @typedef {{ id: string, name: string, weight: number, kind: string, turns?: number, yieldMul?: number, troopLoss?: number, roadBreakChance?: number, territoryRisk?: number }} EventDef */
+/** @typedef {{ id: string, name: string, cost: Record<string, number>, on: 'gather'|'wonder', effect: string }} BuildingDef */
+/** @typedef {{ id: string, name: string, weight: number, kind: string, turns?: number, yieldMul?: number, troopLoss?: number, territoryRisk?: number }} EventDef */
 
 export const MODES = {
-  short: { id: 'short', name: 'Short', turns: 24, mapRadius: 3 },
-  standard: { id: 'standard', name: 'Standard', turns: 40, mapRadius: 4 },
-  long: { id: 'long', name: 'Long', turns: 60, mapRadius: 5 },
+  short: { id: 'short', name: 'Short', turns: 24, mapRadius: 4 },
+  standard: { id: 'standard', name: 'Standard', turns: 40, mapRadius: 5 },
+  long: { id: 'long', name: 'Long', turns: 60, mapRadius: 6 },
 };
 
 export const DIFFICULTIES = {
@@ -78,36 +78,35 @@ export const BUILDINGS = {
     name: 'Farm',
     on: 'gather',
     cost: { food: 0, wood: 4, stone: 0, ore: 0 },
+    effect: 'Harvests food from this hex each turn.',
   },
   camp: {
     id: 'camp',
     name: 'Lumber Camp',
     on: 'gather',
     cost: { food: 2, wood: 2, stone: 0, ore: 0 },
+    effect: 'Harvests wood from this hex each turn.',
   },
   quarry: {
     id: 'quarry',
     name: 'Quarry',
     on: 'gather',
     cost: { food: 2, wood: 3, stone: 0, ore: 0 },
+    effect: 'Harvests stone from this hex each turn.',
   },
   mine: {
     id: 'mine',
     name: 'Mine',
     on: 'gather',
     cost: { food: 3, wood: 4, stone: 2, ore: 0 },
-  },
-  road: {
-    id: 'road',
-    name: 'Road',
-    on: 'road',
-    cost: { food: 0, wood: 2, stone: 1, ore: 0 },
+    effect: 'Harvests ore from this hex each turn.',
   },
   wonder: {
     id: 'wonder',
     name: 'Ancient Wonder',
     on: 'wonder',
     cost: { food: 40, wood: 40, stone: 40, ore: 20 },
+    effect: 'Win the game immediately when completed at your capital.',
   },
 };
 
@@ -134,15 +133,15 @@ export const EVENTS = {
     weight: 3,
     kind: 'raid',
     troopLoss: 0.25,
-    roadBreakChance: 0.35,
     territoryRisk: 0.15,
   },
-  storm: {
-    id: 'storm',
-    name: 'Storm',
+  plague: {
+    id: 'plague',
+    name: 'Plague',
     weight: 2,
-    kind: 'roads',
-    roadBreakChance: 0.5,
+    kind: 'raid',
+    troopLoss: 0.35,
+    territoryRisk: 0.05,
   },
 };
 
@@ -150,10 +149,8 @@ export const EVENTS = {
 export const COMBAT = {
   minWinChance: 0.08,
   maxWinChance: 0.92,
-  /** Attacker casualties as fraction of their force when they win / lose. */
   winLossFrac: 0.2,
   loseLossFrac: 0.55,
-  /** Defender casualties when attacker wins / loses. */
   defWinLossFrac: 0.6,
   defLoseLossFrac: 0.15,
 };
@@ -166,7 +163,17 @@ export const TROOP_COST = { food: 2, wood: 0, stone: 0, ore: 0 };
 export const TROOPS_PER_RECRUIT = 5;
 export const STARTING_TROOPS = 12;
 
+/** Starting claim blob diameter ≈ 5 hexes → radius 2. */
+export const START_CLAIM_RADIUS = 2;
+
 /** Points per unit of stockpiled resource (timed victory). */
 export const RESOURCE_SCORE = { food: 1, wood: 1, stone: 2, ore: 4 };
 
 export const PLAYER_COLORS = ['#d4a04a', '#4a8fd4', '#d45a4a', '#7a4ad4', '#4ad49a'];
+
+export const RESOURCE_LABELS = {
+  food: 'Food',
+  wood: 'Wood',
+  stone: 'Stone',
+  ore: 'Ore',
+};

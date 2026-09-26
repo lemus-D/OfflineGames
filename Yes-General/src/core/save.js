@@ -10,6 +10,7 @@ const DEFAULT_PROFILE = () => ({
   bestScore: 0,
   lastMode: 'standard',
   lastDifficulty: 'normal',
+  tutorialDone: false,
 });
 
 function migrate(raw) {

@@ -1,4 +1,4 @@
-/* Boot, menu, HUD, input → match actions. */
+/* Boot, menu, HUD, tutorial, tooltips, input → match actions. */
 
 import { Save } from './core/save.js';
 import { MODES, DIFFICULTIES } from './data/content.js';
@@ -11,6 +11,7 @@ import {
   tryMove,
   scoreCiv,
   tileSummary,
+  actionPreview,
   hexKey,
   hexNeighbors,
 } from './game/match.js';
@@ -32,22 +33,26 @@ let selectedMode = profile.lastMode in MODES ? profile.lastMode : 'standard';
 let selectedDiff = profile.lastDifficulty in DIFFICULTIES ? profile.lastDifficulty : 'normal';
 /** From-hex for attack/move when clicking a second hex. */
 let orderFrom = null;
+let pendingStart = false;
 
 const els = {
   menu: document.getElementById('menu'),
   hud: document.getElementById('hud'),
   side: document.getElementById('side'),
   summary: document.getElementById('summary'),
+  tutorial: document.getElementById('tutorial'),
+  tooltip: document.getElementById('tooltip'),
   modeSelect: document.getElementById('modeSelect'),
   diffSelect: document.getElementById('diffSelect'),
   btnPlay: document.getElementById('btnPlay'),
   btnAgain: document.getElementById('btnAgain'),
   btnMenu: document.getElementById('btnMenu'),
   btnGather: document.getElementById('btnGather'),
-  btnRoad: document.getElementById('btnRoad'),
   btnRecruit: document.getElementById('btnRecruit'),
   btnWonder: document.getElementById('btnWonder'),
   btnEnd: document.getElementById('btnEnd'),
+  btnTutorialGo: document.getElementById('btnTutorialGo'),
+  btnTutorialSkip: document.getElementById('btnTutorialSkip'),
   turnVal: document.getElementById('turnVal'),
   stockVal: document.getElementById('stockVal'),
   scoreVal: document.getElementById('scoreVal'),
@@ -75,6 +80,11 @@ function show(el) {
 }
 function hide(el) {
   el.classList.add('hidden');
+}
+
+function setDisabled(btn, off) {
+  btn.classList.toggle('is-disabled', off);
+  btn.setAttribute('aria-disabled', off ? 'true' : 'false');
 }
 
 function refreshMenuChoices() {
@@ -105,7 +115,7 @@ function refreshMenuChoices() {
   els.recordVal.textContent = `${profile.wins}–${profile.losses}`;
 }
 
-function startMatch() {
+function beginMatch() {
   profile.lastMode = selectedMode;
   profile.lastDifficulty = selectedDiff;
   Save.writeProfile(profile);
@@ -117,10 +127,33 @@ function startMatch() {
   state = 'playing';
   hide(els.menu);
   hide(els.summary);
+  hide(els.tutorial);
   show(els.hud);
   show(els.side);
   refreshHud();
   refreshTilePanel();
+}
+
+function requestStart() {
+  if (!profile.tutorialDone) {
+    pendingStart = true;
+    hide(els.menu);
+    show(els.tutorial);
+    return;
+  }
+  beginMatch();
+}
+
+function finishTutorial(skip) {
+  profile.tutorialDone = true;
+  Save.writeProfile(profile);
+  hide(els.tutorial);
+  if (pendingStart || skip) {
+    pendingStart = false;
+    beginMatch();
+  } else {
+    show(els.menu);
+  }
 }
 
 function finishIfEnded() {
@@ -136,6 +169,7 @@ function finishIfEnded() {
   state = 'summary';
   hide(els.hud);
   hide(els.side);
+  hideTooltip();
   const reason =
     match.winReason === 'wonder'
       ? 'Ancient Wonder completed.'
@@ -179,20 +213,70 @@ function refreshTilePanel() {
   }
   const owner = info.owner ? info.owner.name : 'Neutral';
   els.tileTitle.textContent = info.isCapital ? `Capital · ${info.resource.name}` : info.resource.name;
-  els.tileBody.textContent = `${owner} · troops ${info.troops} · ${
-    info.hasRoad ? 'road' : 'no road'
-  } · ${info.connected ? 'linked' : 'cut off'}${
+  els.tileBody.textContent = `${owner} · troops ${info.troops}${
     info.buildingId ? ` · ${info.buildingId}` : ''
   }${orderFrom ? ` · order from ${orderFrom}` : ''}`;
 
-  const mine = info.owner?.isPlayer;
-  els.btnGather.disabled = !mine || !info.gatherBuilding || !!info.buildingId || info.isCapital;
-  els.btnRoad.disabled = !mine || info.hasRoad;
-  els.btnRecruit.disabled = !mine;
-  els.btnWonder.disabled = !mine || !info.isCapital;
-  els.btnGather.textContent = info.gatherBuilding
-    ? `Build ${info.gatherBuilding}`
-    : 'Build gather';
+  const gPrev = actionPreview(match, 'player', match.selectedKey, 'gather');
+  const rPrev = actionPreview(match, 'player', match.selectedKey, 'recruit');
+  const wPrev = actionPreview(match, 'player', match.selectedKey, 'wonder');
+  setDisabled(els.btnGather, !gPrev.ok);
+  setDisabled(els.btnRecruit, !rPrev.ok);
+  setDisabled(els.btnWonder, !wPrev.ok);
+  setDisabled(els.btnEnd, false);
+  els.btnGather.textContent = gPrev.title || 'Build gather';
+}
+
+function hideTooltip() {
+  hide(els.tooltip);
+}
+
+function showTooltipFor(btn, clientX, clientY) {
+  if (!match || state !== 'playing') {
+    hideTooltip();
+    return;
+  }
+  const action = btn.dataset.action;
+  if (!action) {
+    hideTooltip();
+    return;
+  }
+  const prev = actionPreview(match, 'player', match.selectedKey, action);
+  const needOrBlock = prev.ok
+    ? ''
+    : prev.need || (prev.blockers.length ? prev.blockers.join(' ') : '');
+  els.tooltip.innerHTML = `
+    <div class="tt-title">${prev.title}</div>
+    <div class="tt-line">${prev.effect}</div>
+    <div class="tt-line">Cost: ${prev.cost}</div>
+    <div class="${prev.ok ? 'tt-ok' : 'tt-bad'}">${
+      prev.ok ? 'Ready' : needOrBlock || 'Unavailable'
+    }</div>
+  `;
+  show(els.tooltip);
+  const pad = 12;
+  const tw = els.tooltip.offsetWidth;
+  const th = els.tooltip.offsetHeight;
+  let left = clientX + 14;
+  let top = clientY + 14;
+  if (left + tw > innerWidth - pad) left = clientX - tw - 10;
+  if (top + th > innerHeight - pad) top = clientY - th - 10;
+  els.tooltip.style.left = `${Math.max(pad, left)}px`;
+  els.tooltip.style.top = `${Math.max(pad, top)}px`;
+}
+
+function bindActionButton(btn, action, handler) {
+  btn.addEventListener('click', (ev) => {
+    if (btn.classList.contains('is-disabled')) {
+      showTooltipFor(btn, ev.clientX, ev.clientY);
+      return;
+    }
+    handler();
+  });
+  btn.addEventListener('pointerenter', (ev) => showTooltipFor(btn, ev.clientX, ev.clientY));
+  btn.addEventListener('pointermove', (ev) => showTooltipFor(btn, ev.clientX, ev.clientY));
+  btn.addEventListener('pointerleave', hideTooltip);
+  btn.dataset.action = action;
 }
 
 function onCanvasClick(ev) {
@@ -206,7 +290,6 @@ function onCanvasClick(ev) {
   const tile = match.tiles.get(key);
   const player = match.civs.find((c) => c.isPlayer);
 
-  // Second click: attack or move.
   if (orderFrom && orderFrom !== key) {
     const from = match.tiles.get(orderFrom);
     const adj = hexNeighbors(from.q, from.r).some((n) => hexKey(n.q, n.r) === key);
@@ -235,7 +318,6 @@ function frame() {
   if (match && (state === 'playing' || state === 'summary')) {
     drawMatch(g, W, H, match, cam);
   } else {
-    // Idle backdrop: empty warm field.
     g.clearRect(0, 0, W, H);
     const bg = g.createLinearGradient(0, 0, W, H);
     bg.addColorStop(0, '#2a2118');
@@ -246,8 +328,8 @@ function frame() {
   requestAnimationFrame(frame);
 }
 
-els.btnPlay.addEventListener('click', startMatch);
-els.btnAgain.addEventListener('click', startMatch);
+els.btnPlay.addEventListener('click', requestStart);
+els.btnAgain.addEventListener('click', requestStart);
 els.btnMenu.addEventListener('click', () => {
   hide(els.summary);
   show(els.menu);
@@ -256,7 +338,10 @@ els.btnMenu.addEventListener('click', () => {
   refreshMenuChoices();
 });
 
-els.btnGather.addEventListener('click', () => {
+els.btnTutorialGo.addEventListener('click', () => finishTutorial(false));
+els.btnTutorialSkip.addEventListener('click', () => finishTutorial(true));
+
+bindActionButton(els.btnGather, 'gather', () => {
   if (!match) return;
   const info = tileSummary(match, match.selectedKey);
   if (!info?.gatherBuilding) return;
@@ -266,21 +351,14 @@ els.btnGather.addEventListener('click', () => {
   finishIfEnded();
 });
 
-els.btnRoad.addEventListener('click', () => {
-  if (!match) return;
-  tryBuild(match, 'player', match.selectedKey, 'road');
-  refreshHud();
-  refreshTilePanel();
-});
-
-els.btnRecruit.addEventListener('click', () => {
+bindActionButton(els.btnRecruit, 'recruit', () => {
   if (!match) return;
   tryRecruit(match, 'player', match.selectedKey);
   refreshHud();
   refreshTilePanel();
 });
 
-els.btnWonder.addEventListener('click', () => {
+bindActionButton(els.btnWonder, 'wonder', () => {
   if (!match) return;
   tryBuild(match, 'player', match.selectedKey, 'wonder');
   refreshHud();
@@ -288,7 +366,7 @@ els.btnWonder.addEventListener('click', () => {
   finishIfEnded();
 });
 
-els.btnEnd.addEventListener('click', () => {
+bindActionButton(els.btnEnd, 'end', () => {
   if (!match || match.phase !== 'play') return;
   endTurn(match);
   orderFrom = null;
@@ -309,4 +387,6 @@ show(els.menu);
 hide(els.hud);
 hide(els.side);
 hide(els.summary);
+hide(els.tutorial);
+hideTooltip();
 requestAnimationFrame(frame);

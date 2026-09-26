@@ -1,7 +1,7 @@
-/* Axial hex math + seeded map generation. */
+/* Axial hex math, seeded map generation, Voronoi nation partitions. */
 
 import { makeRNG, pickWeighted } from '../core/rng.js';
-import { RESOURCE_SPAWN_WEIGHTS, RESOURCES } from '../data/content.js';
+import { RESOURCE_SPAWN_WEIGHTS, RESOURCES, START_CLAIM_RADIUS } from '../data/content.js';
 
 /** Flat-top axial neighbors (q, r). */
 export const HEX_DIRS = [
@@ -43,29 +43,9 @@ export function hexToPixel(q, r, size) {
   return { x, y };
 }
 
-/** Inverse of hexToPixel (approx → nearest axial). */
-export function pixelToHex(x, y, size) {
-  const q = ((2 / 3) * x) / size;
-  const r = ((-1 / 3) * x + (Math.sqrt(3) / 3) * y) / size;
-  return hexRound(q, r);
-}
-
-function hexRound(q, r) {
-  const s = -q - r;
-  let rq = Math.round(q);
-  let rr = Math.round(r);
-  let rs = Math.round(s);
-  const qDiff = Math.abs(rq - q);
-  const rDiff = Math.abs(rr - r);
-  const sDiff = Math.abs(rs - s);
-  if (qDiff > rDiff && qDiff > sDiff) rq = -rr - rs;
-  else if (rDiff > sDiff) rr = -rq - rs;
-  return { q: rq, r: rr };
-}
-
 /**
  * Generate a hex disk of given radius.
- * @returns {Map<string, HexTile>}
+ * @returns {Map<string, object>}
  */
 export function generateMap(seed, radius) {
   const rng = makeRNG(seed);
@@ -86,41 +66,107 @@ export function generateMap(seed, radius) {
         resourceId: resId,
         ownerId: null,
         buildingId: null,
-        hasRoad: false,
         isCapital: false,
         troops: 0,
         landValue: res.landValue,
+        regionId: -1,
       });
     }
   }
   return tiles;
 }
 
-/** Pick N distinct tiles far from each other for capitals. */
-export function placeCapitals(tiles, count, rng) {
+/**
+ * Farthest-point sample `count` seeds, Voronoi-partition the map, place a
+ * capital in each region, and claim a ~5-tile-wide (radius 2) starting blob.
+ * @returns {string[]} capital keys in civ order
+ */
+export function partitionAndPlace(tiles, count, rng) {
   const keys = [...tiles.keys()];
-  const picks = [];
-  const minDist = Math.max(2, Math.floor(Math.sqrt(keys.length) / count));
+  if (!keys.length || count < 1) return [];
 
-  for (let n = 0; n < count; n++) {
+  const coords = keys.map((k) => {
+    const t = tiles.get(k);
+    return { key: k, q: t.q, r: t.r };
+  });
+
+  // Prefer edge-ish first seed, then maximize distance from chosen seeds.
+  let first = coords[0];
+  let firstScore = -1;
+  for (let t = 0; t < Math.min(80, coords.length); t++) {
+    const c = coords[(rng() * coords.length) | 0];
+    const edge = Math.abs(c.q) + Math.abs(c.r) + Math.abs(-c.q - c.r);
+    if (edge > firstScore) {
+      firstScore = edge;
+      first = c;
+    }
+  }
+
+  /** @type {{key:string,q:number,r:number}[]} */
+  const seeds = [first];
+  while (seeds.length < count) {
     let best = null;
-    let bestScore = -1;
-    // Sample candidates.
-    for (let t = 0; t < 40; t++) {
-      const key = keys[(rng() * keys.length) | 0];
-      const tile = tiles.get(key);
-      if (picks.some((p) => hexDistance(tile, parseKey(p)) < minDist)) continue;
-      const edge =
-        Math.abs(tile.q) + Math.abs(tile.r) + Math.abs(-tile.q - tile.r);
-      if (edge > bestScore) {
-        bestScore = edge;
-        best = key;
+    let bestMin = -1;
+    for (let t = 0; t < Math.min(120, coords.length); t++) {
+      const c = coords[(rng() * coords.length) | 0];
+      if (seeds.some((s) => s.key === c.key)) continue;
+      let minD = Infinity;
+      for (const s of seeds) minD = Math.min(minD, hexDistance(c, s));
+      if (minD > bestMin) {
+        bestMin = minD;
+        best = c;
       }
     }
     if (!best) {
-      best = keys.find((k) => !picks.includes(k)) || keys[0];
+      best = coords.find((c) => !seeds.some((s) => s.key === c.key));
     }
-    picks.push(best);
+    if (!best) break;
+    seeds.push(best);
   }
-  return picks;
+
+  // Voronoi: nearest seed owns the region.
+  for (const tile of tiles.values()) {
+    let bestI = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < seeds.length; i++) {
+      const d = hexDistance(tile, seeds[i]);
+      if (d < bestD || (d === bestD && i < bestI)) {
+        bestD = d;
+        bestI = i;
+      }
+    }
+    tile.regionId = bestI;
+  }
+
+  // Capitals at seeds; claim START_CLAIM_RADIUS blob inside own region.
+  const capitalKeys = [];
+  for (let i = 0; i < seeds.length; i++) {
+    const seed = seeds[i];
+    let capKey = seed.key;
+    // Prefer a non-barren tile in-region near the seed.
+    let best = null;
+    let bestScore = -Infinity;
+    for (const tile of tiles.values()) {
+      if (tile.regionId !== i) continue;
+      const d = hexDistance(tile, seed);
+      if (d > 1) continue;
+      const score = (tile.resourceId === 'barren' ? -2 : 1) - d + rng() * 0.01;
+      if (score > bestScore) {
+        bestScore = score;
+        best = tile;
+      }
+    }
+    if (best) capKey = hexKey(best.q, best.r);
+    capitalKeys.push(capKey);
+
+    const cap = tiles.get(capKey);
+    for (const tile of tiles.values()) {
+      if (tile.regionId !== i) continue;
+      if (hexDistance(tile, cap) <= START_CLAIM_RADIUS) {
+        tile.ownerId = `__pending_${i}`;
+      }
+    }
+  }
+
+  return capitalKeys;
 }

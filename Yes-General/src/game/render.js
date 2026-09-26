@@ -1,12 +1,12 @@
-/* Canvas 2D hex map renderer. */
+/* Canvas 2D hex map renderer + tiny troop sprites. */
 
 import { hexToPixel, hexKey } from './hex.js';
-import { RESOURCES } from '../data/content.js';
+import { RESOURCES, PLAYER_COLORS } from '../data/content.js';
 
 const HEX_SIZE = 34;
 
 function hexCorner(cx, cy, size, i) {
-  const angle = ((Math.PI / 180) * 60 * i);
+  const angle = (Math.PI / 180) * 60 * i;
   return { x: cx + size * Math.cos(angle), y: cy + size * Math.sin(angle) };
 }
 
@@ -20,6 +20,73 @@ function drawHexPath(g, cx, cy, size) {
   g.closePath();
 }
 
+/** Little bronze-age spearman. */
+function drawTroopSprite(g, x, y, color, scale = 1) {
+  g.save();
+  g.translate(x, y);
+  g.scale(scale, scale);
+
+  // Shadow
+  g.fillStyle = 'rgba(0,0,0,0.35)';
+  g.beginPath();
+  g.ellipse(0, 7, 5, 2, 0, 0, Math.PI * 2);
+  g.fill();
+
+  // Legs
+  g.strokeStyle = color;
+  g.lineWidth = 1.4;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(-2, 6);
+  g.lineTo(0, 1);
+  g.lineTo(2.5, 6);
+  g.stroke();
+
+  // Body
+  g.beginPath();
+  g.moveTo(0, 1);
+  g.lineTo(0, -4);
+  g.stroke();
+
+  // Shield
+  g.fillStyle = '#c4a574';
+  g.beginPath();
+  g.ellipse(-3.2, -1, 2.2, 2.8, 0, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = '#5a3d1e';
+  g.lineWidth = 0.8;
+  g.stroke();
+
+  // Spear
+  g.strokeStyle = '#d8c8a0';
+  g.lineWidth = 1.1;
+  g.beginPath();
+  g.moveTo(2, 5);
+  g.lineTo(3.5, -8);
+  g.stroke();
+  g.fillStyle = '#b8b0a0';
+  g.beginPath();
+  g.moveTo(3.5, -8);
+  g.lineTo(2.2, -6.2);
+  g.lineTo(4.8, -6.2);
+  g.closePath();
+  g.fill();
+
+  // Head
+  g.fillStyle = '#e8c49a';
+  g.beginPath();
+  g.arc(0, -6.2, 2.1, 0, Math.PI * 2);
+  g.fill();
+  // Helm crest
+  g.fillStyle = color;
+  g.beginPath();
+  g.moveTo(-1.5, -7.2);
+  g.quadraticCurveTo(0, -10, 1.5, -7.2);
+  g.fill();
+
+  g.restore();
+}
+
 /**
  * @param {CanvasRenderingContext2D} g
  * @param {number} W
@@ -30,7 +97,6 @@ function drawHexPath(g, cx, cy, size) {
 export function drawMatch(g, W, H, match, cam) {
   g.clearRect(0, 0, W, H);
 
-  // Warm bronze-age ground.
   const bg = g.createLinearGradient(0, 0, W, H);
   bg.addColorStop(0, '#2a2118');
   bg.addColorStop(0.5, '#1a1410');
@@ -51,8 +117,16 @@ export function drawMatch(g, W, H, match, cam) {
     g.fillStyle = res?.color || '#555';
     g.fill();
 
+    // Soft region tint (home partitions).
+    if (tile.regionId >= 0) {
+      const rc = PLAYER_COLORS[tile.regionId % PLAYER_COLORS.length];
+      g.fillStyle = rc + '22';
+      drawHexPath(g, sx, sy, HEX_SIZE - 1);
+      g.fill();
+    }
+
     if (tile.ownerId) {
-      g.fillStyle = civColor(tile.ownerId) + '99';
+      g.fillStyle = civColor(tile.ownerId) + '88';
       drawHexPath(g, sx, sy, HEX_SIZE - 1);
       g.fill();
     }
@@ -63,44 +137,31 @@ export function drawMatch(g, W, H, match, cam) {
     drawHexPath(g, sx, sy, HEX_SIZE - 1);
     g.stroke();
 
-    // Road mark.
-    if (tile.hasRoad || tile.isCapital) {
-      g.strokeStyle = 'rgba(245, 220, 160, 0.75)';
-      g.lineWidth = 2;
-      g.beginPath();
-      g.moveTo(sx - 8, sy);
-      g.lineTo(sx + 8, sy);
-      g.moveTo(sx, sy - 8);
-      g.lineTo(sx, sy + 8);
-      g.stroke();
-    }
-
-    // Building dot.
     if (tile.buildingId) {
       g.fillStyle = '#f0e0c0';
       g.beginPath();
-      g.arc(sx, sy - 6, 3.5, 0, Math.PI * 2);
+      g.arc(sx - 8, sy - 8, 3.2, 0, Math.PI * 2);
       g.fill();
     }
 
-    // Capital ring.
     if (tile.isCapital) {
       g.strokeStyle = '#fff3c4';
       g.lineWidth = 2;
       g.beginPath();
-      g.arc(sx, sy, 10, 0, Math.PI * 2);
+      g.arc(sx, sy - 2, 11, 0, Math.PI * 2);
       g.stroke();
     }
 
-    // Troops.
     if (tile.troops > 0) {
-      g.fillStyle = 'rgba(15,10,6,0.75)';
-      g.fillRect(sx - 10, sy + 6, 20, 11);
+      const color = tile.ownerId ? civColor(tile.ownerId) : '#aaa';
+      drawTroopSprite(g, sx + 6, sy + 2, color, 1);
+      g.fillStyle = 'rgba(15,10,6,0.78)';
+      g.fillRect(sx - 14, sy + 10, 18, 10);
       g.fillStyle = '#f2e8d5';
       g.font = 'bold 9px Georgia, serif';
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      g.fillText(String(tile.troops), sx, sy + 11.5);
+      g.fillText(String(tile.troops), sx - 5, sy + 15);
     }
   }
 }
@@ -110,7 +171,6 @@ export function screenToHex(mx, my, W, H, cam) {
   const y = my - H / 2 + cam.y;
   const q = ((2 / 3) * x) / HEX_SIZE;
   const r = ((-1 / 3) * x + (Math.sqrt(3) / 3) * y) / HEX_SIZE;
-  // round
   const s = -q - r;
   let rq = Math.round(q);
   let rr = Math.round(r);

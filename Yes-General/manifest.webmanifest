@@ -1,7 +1,7 @@
 {
   "name": "Yes-General",
   "short_name": "Yes-General",
-  "description": "Bronze-age hex conquest. Build roads to your capital, gather, fight, raise a wonder.",
+  "description": "Bronze-age hex conquest. Gather, fight, raise a wonder.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#1a1410",
