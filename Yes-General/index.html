@@ -35,6 +35,8 @@
   }
 
   #stage {
+    position: relative;
+    z-index: 0;
     display: block;
     width: 100vw;
     height: 100vh;
@@ -46,10 +48,15 @@
 
   .overlay {
     position: fixed; inset: 0;
+    z-index: 10;
     display: flex;
     pointer-events: none;
   }
   .overlay > * { pointer-events: auto; }
+
+  #hud, #side {
+    z-index: 11;
+  }
 
   #menu .menu-panel {
     width: min(400px, 92vw);
