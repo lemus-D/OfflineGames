@@ -110,7 +110,8 @@ export const BUILDINGS = {
     name: 'Ancient Wonder',
     on: 'wonder',
     cost: { food: 30, wood: 30, stone: 55, ore: 20 },
-    effect: 'Win the game immediately when completed at your capital.',
+    effect:
+      'A victory monument at your capital — finish it to win the game immediately (like an ancient Wonder of the World).',
   },
 };
 
@@ -161,8 +162,8 @@ export const COMBAT = {
 
 export const STARTING_STOCK = { food: 8, wood: 6, stone: 8, ore: 0 };
 
-/** Troops cost food + stone (stone gear / spearheads). */
-export const TROOP_COST = { food: 2, wood: 0, stone: 1, ore: 0 };
+/** Troops cost food only. Stone is for buildings and walls. */
+export const TROOP_COST = { food: 2, wood: 0, stone: 0, ore: 0 };
 export const TROOPS_PER_RECRUIT = 5;
 export const STARTING_TROOPS = 12;
 export const TROOP_STAMINA_MAX = 3;

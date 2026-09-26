@@ -490,7 +490,7 @@ export function actionPreview(match, civId, tileKey, action) {
     return {
       ok: blockers.length === 0,
       title: 'Recruit',
-      effect: `Raise ${TROOPS_PER_RECRUIT} troops (stone tip spears).`,
+      effect: `Raise ${TROOPS_PER_RECRUIT} troops on this hex.`,
       cost: formatCost(cost),
       need: missing.length ? `Missing: ${missing.join(', ')}` : '',
       blockers,
