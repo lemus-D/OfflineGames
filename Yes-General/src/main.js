@@ -1,4 +1,4 @@
-/* Boot, menu, HUD, tutorial, army split menu, tooltips, input. */
+/* Boot, menu, HUD, tutorial, army move targeting, tooltips, input. */
 
 import { Save } from './core/save.js';
 import { MODES, DIFFICULTIES, TROOP_STAMINA_MAX } from './data/content.js';
@@ -9,8 +9,7 @@ import {
   tryRecruit,
   tryAttack,
   tryMarch,
-  reachableMoves,
-  adjacentAttackTargets,
+  moveTargets,
   scoreCiv,
   tileSummary,
   actionPreview,
@@ -31,7 +30,7 @@ let match = null;
 let cam = { x: 0, y: 0 };
 let selectedMode = profile.lastMode in MODES ? profile.lastMode : 'standard';
 let selectedDiff = profile.lastDifficulty in DIFFICULTIES ? profile.lastDifficulty : 'normal';
-/** @type {null|'move'|'attack'} */
+/** @type {null|'move'} */
 let targetMode = null;
 /** @type {Set<string>} */
 let highlightMove = new Set();
@@ -62,7 +61,6 @@ const els = {
   btnArmyHalf: document.getElementById('btnArmyHalf'),
   btnArmyAll: document.getElementById('btnArmyAll'),
   btnArmyMove: document.getElementById('btnArmyMove'),
-  btnArmyAttack: document.getElementById('btnArmyAttack'),
   btnArmyCancel: document.getElementById('btnArmyCancel'),
   armyHint: document.getElementById('armyHint'),
   armySlider: document.getElementById('armySlider'),
@@ -87,9 +85,10 @@ function clearTargetMode() {
   highlightMove = new Set();
   highlightAttack = new Set();
   if (els.btnArmyCancel) hide(els.btnArmyCancel);
+  if (els.btnArmyMove) show(els.btnArmyMove);
   if (els.armyHint) {
     els.armyHint.textContent =
-      'Set how many to send, then Move (within stamina) or Attack (adjacent enemy).';
+      'Move claims the shortest path through empty hexes. Adjacent enemies are fight targets.';
   }
 }
 
@@ -253,14 +252,11 @@ function refreshTilePanel() {
     return;
   }
   const owner = info.owner ? info.owner.name : 'Neutral';
-  const extras = [
-    info.buildingId || null,
-    info.hasWalls ? 'walls' : null,
-  ].filter(Boolean);
+  const extras = [info.buildingId || null, info.hasWalls ? 'walls' : null].filter(Boolean);
   els.tileTitle.textContent = info.isCapital ? `Capital · ${info.resource.name}` : info.resource.name;
   els.tileBody.textContent = `${owner} · troops ${info.troops}${
     extras.length ? ` · ${extras.join(' · ')}` : ''
-  }${targetMode ? ` · ${targetMode} targeting` : ''}`;
+  }${targetMode ? ' · pick a highlighted hex' : ''}`;
 
   const mineWithTroops = info.owner?.isPlayer && info.troops > 0;
   if (mineWithTroops) {
@@ -271,9 +267,13 @@ function refreshTilePanel() {
     els.stamVal.textContent = `${info.stamina} / ${TROOP_STAMINA_MAX}`;
     syncArmySlider(info.troops);
     setDisabled(els.btnArmyMove, info.stamina <= 0);
-    setDisabled(els.btnArmyAttack, info.stamina <= 0);
-    if (targetMode) show(els.btnArmyCancel);
-    else hide(els.btnArmyCancel);
+    if (targetMode) {
+      show(els.btnArmyCancel);
+      hide(els.btnArmyMove);
+    } else {
+      hide(els.btnArmyCancel);
+      show(els.btnArmyMove);
+    }
   } else {
     hide(els.army);
     if (targetMode) clearTargetMode();
@@ -349,34 +349,18 @@ function startMoveTargeting() {
   const fromKey = match.selectedKey;
   const info = tileSummary(match, fromKey);
   if (!info?.owner?.isPlayer || info.troops <= 0 || info.stamina <= 0) return;
-  const reach = reachableMoves(match, fromKey, 'player');
-  highlightMove = new Set(reach.keys());
-  highlightAttack = new Set();
+  const { moves, attacks } = moveTargets(match, fromKey, 'player');
+  highlightMove = new Set(moves.keys());
+  highlightAttack = new Set(attacks);
   targetMode = 'move';
   show(els.btnArmyCancel);
-  els.armyHint.textContent = highlightMove.size
-    ? `Click a green hex to march (up to ${info.stamina} steps). Other clicks just select.`
+  hide(els.btnArmyMove);
+  const n = highlightMove.size + highlightAttack.size;
+  els.armyHint.textContent = n
+    ? `Click green to march (claims path) or red to fight. Other clicks only select.`
     : 'No reachable hexes — blocked or out of stamina.';
-  if (!highlightMove.size) {
-    match.log.unshift('No tiles in range to move to.');
-    refreshHud();
-  }
-}
-
-function startAttackTargeting() {
-  if (!match) return;
-  const fromKey = match.selectedKey;
-  const info = tileSummary(match, fromKey);
-  if (!info?.owner?.isPlayer || info.troops <= 0 || info.stamina <= 0) return;
-  highlightAttack = new Set(adjacentAttackTargets(match, fromKey, 'player'));
-  highlightMove = new Set();
-  targetMode = 'attack';
-  show(els.btnArmyCancel);
-  els.armyHint.textContent = highlightAttack.size
-    ? 'Click a red enemy hex to attack with your detachment.'
-    : 'No adjacent enemies to attack.';
-  if (!highlightAttack.size) {
-    match.log.unshift('No adjacent enemies.');
+  if (!n) {
+    match.log.unshift('No tiles in range.');
     refreshHud();
   }
 }
@@ -406,7 +390,7 @@ function onCanvasClick(ev) {
     return;
   }
 
-  if (targetMode === 'attack' && highlightAttack.has(key)) {
+  if (targetMode === 'move' && highlightAttack.has(key)) {
     const from = match.tiles.get(fromKey);
     const amount = Math.max(1, Math.min(match.detachCount || from.troops, from.troops));
     tryAttack(match, 'player', fromKey, key, amount);
@@ -420,7 +404,6 @@ function onCanvasClick(ev) {
     return;
   }
 
-  // Plain select — does not issue orders (use Move / Attack).
   if (targetMode) clearTargetMode();
   match.selectedKey = key;
   if (tile.ownerId === 'player' && tile.troops > 0) match.detachCount = tile.troops;
@@ -481,11 +464,6 @@ els.btnArmyAll?.addEventListener('click', () => {
 els.btnArmyMove?.addEventListener('click', () => {
   if (els.btnArmyMove.classList.contains('is-disabled')) return;
   startMoveTargeting();
-});
-
-els.btnArmyAttack?.addEventListener('click', () => {
-  if (els.btnArmyAttack.classList.contains('is-disabled')) return;
-  startAttackTargeting();
 });
 
 els.btnArmyCancel?.addEventListener('click', () => {

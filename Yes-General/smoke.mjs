@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Headless smoke: stamina, split moves, partitions, no Math.random. */
+/* Headless smoke: stamina, path-claim marches, partitions, no Math.random. */
 import { readFileSync } from 'node:fs';
 import {
   createMatch,
@@ -8,6 +8,7 @@ import {
   tryAttack,
   tryMarch,
   reachableMoves,
+  moveTargets,
   scoreCiv,
 } from './src/game/match.js';
 import { resolveCombat } from './src/game/combat.js';
@@ -53,6 +54,34 @@ for (const file of [
   assert(walled.winChance < plain.winChance, 'walls lower attacker win chance');
 }
 
+{
+  // Path claim: march 2+ steps → every hex on the shortest path is owned after.
+  const m = createMatch('short', 'easy', 42);
+  const player = m.civs[0];
+  const capKey = hexKey(player.capital.q, player.capital.r);
+  const reach = reachableMoves(m, capKey, 'player');
+  const far = [...reach.entries()].find(([, cost]) => cost >= 2);
+  assert(far, 'path-claim fixture: has a 2+ step destination');
+  const [dest, cost] = far;
+  const send = Math.max(1, Math.floor(m.tiles.get(capKey).troops / 2));
+  const res = tryMarch(m, 'player', capKey, dest, send);
+  assert(res.ok && res.path?.length === cost + 1, 'path-claim: path length matches cost');
+  for (let i = 1; i < res.path.length; i++) {
+    assert(m.tiles.get(res.path[i]).ownerId === 'player', `path-claim: hex ${res.path[i]} owned`);
+  }
+  assert(m.tiles.get(dest).troops >= send, 'path-claim: troops at destination');
+  assert(typeof res.claimed === 'number', 'path-claim: claimed count reported');
+}
+
+{
+  const m = createMatch('short', 'easy', 1);
+  const player = m.civs[0];
+  const capKey = hexKey(player.capital.q, player.capital.r);
+  const { moves, attacks } = moveTargets(m, capKey, 'player');
+  assert(moves.size > 0, 'moveTargets: peaceful moves');
+  assert(Array.isArray(attacks), 'moveTargets: attacks array');
+}
+
 for (const seed of [1, 42, 99, 12345, 777777]) {
   const m = createMatch('short', 'easy', seed);
   assert(m.tiles.size > 20, `seed ${seed}: map has tiles (${m.tiles.size})`);
@@ -62,6 +91,18 @@ for (const seed of [1, 42, 99, 12345, 777777]) {
   const capKey = hexKey(player.capital.q, player.capital.r);
   const cap = m.tiles.get(capKey);
   assert(cap.stamina === TROOP_STAMINA_MAX, `seed ${seed}: starting stamina full`);
+
+  let claimed = 0;
+  for (const t of m.tiles.values()) {
+    if (t.ownerId === 'player') {
+      claimed += 1;
+      assert(
+        hexDistance(t, player.capital) <= START_CLAIM_RADIUS,
+        `seed ${seed}: claim radius`
+      );
+    }
+  }
+  assert(claimed >= 3, `seed ${seed}: start blob (${claimed})`);
 
   const reach = reachableMoves(m, capKey, 'player');
   assert(reach.size > 0, `seed ${seed}: has reachable move tiles (${reach.size})`);
@@ -77,6 +118,14 @@ for (const seed of [1, 42, 99, 12345, 777777]) {
     m.tiles.get(dest).stamina === TROOP_STAMINA_MAX - cost,
     `seed ${seed}: stamina spent by path cost`
   );
+  if (res.path) {
+    for (let i = 1; i < res.path.length; i++) {
+      assert(
+        m.tiles.get(res.path[i]).ownerId === 'player',
+        `seed ${seed}: path hex claimed`
+      );
+    }
+  }
 
   tryRecruit(m, 'player', capKey);
   assert(m.tiles.get(capKey).troops > 0, `seed ${seed}: recruit works`);
@@ -98,17 +147,6 @@ for (const seed of [1, 42, 99, 12345, 777777]) {
     hexDistance(player.capital, m.civs[1].capital) >= 3,
     `seed ${seed}: capitals separated`
   );
-  let claimed = 0;
-  for (const t of m.tiles.values()) {
-    if (t.ownerId === 'player') {
-      claimed += 1;
-      assert(
-        hexDistance(t, player.capital) <= START_CLAIM_RADIUS,
-        `seed ${seed}: claim radius`
-      );
-    }
-  }
-  assert(claimed >= 3, `seed ${seed}: start blob (${claimed})`);
 
   if (m.phase === 'play') {
     const from = m.tiles.get(capKey);

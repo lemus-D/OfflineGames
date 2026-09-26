@@ -434,18 +434,21 @@ function isPassable(tile, civId) {
 }
 
 /**
- * BFS reachable destinations within stamina.
- * @returns {Map<string, number>} key → stamina cost (path length)
+ * BFS: shortest paths through own/empty hexes within stamina.
+ * @returns {{ dist: Map<string, number>, parent: Map<string, string|null> }}
  */
-export function reachableMoves(match, fromKey, civId) {
-  const from = match.tiles.get(fromKey);
+function marchSearch(match, fromKey, civId) {
   /** @type {Map<string, number>} */
   const dist = new Map();
-  if (!from || from.ownerId !== civId || from.stamina <= 0) return dist;
+  /** @type {Map<string, string|null>} */
+  const parent = new Map();
+  const from = match.tiles.get(fromKey);
+  if (!from || from.ownerId !== civId || from.stamina <= 0) return { dist, parent };
 
   const max = from.stamina;
   const queue = [fromKey];
   dist.set(fromKey, 0);
+  parent.set(fromKey, null);
   while (queue.length) {
     const key = queue.shift();
     const d = dist.get(key);
@@ -457,29 +460,58 @@ export function reachableMoves(match, fromKey, civId) {
       const nt = match.tiles.get(nk);
       if (!isPassable(nt, civId)) continue;
       dist.set(nk, d + 1);
+      parent.set(nk, key);
       queue.push(nk);
     }
   }
-  dist.delete(fromKey); // destination only — not the origin
-  return dist;
+  return { dist, parent };
 }
 
-/** Adjacent enemy hexes you can attack from here (costs 1 stamina). */
-export function adjacentAttackTargets(match, fromKey, civId) {
-  const from = match.tiles.get(fromKey);
-  const keys = [];
-  if (!from || from.ownerId !== civId || from.stamina <= 0) return keys;
-  for (const n of hexNeighbors(from.q, from.r)) {
-    const nk = hexKey(n.q, n.r);
-    const nt = match.tiles.get(nk);
-    if (nt && nt.ownerId && nt.ownerId !== civId) keys.push(nk);
+/** Reconstruct path from origin to dest (inclusive), shortest BFS path. */
+function reconstructPath(parent, fromKey, toKey) {
+  const path = [];
+  let cur = toKey;
+  while (cur != null) {
+    path.push(cur);
+    if (cur === fromKey) break;
+    cur = parent.get(cur);
+    if (cur === undefined) return null;
   }
-  return keys;
+  path.reverse();
+  return path[0] === fromKey ? path : null;
 }
 
 /**
- * March `amount` troops along a path to toKey (own or empty), spending
- * path-length stamina. Joins if destination is already yours.
+ * Reachable peaceful destinations (own/empty) within stamina.
+ * @returns {Map<string, number>} key → stamina cost
+ */
+export function reachableMoves(match, fromKey, civId) {
+  const { dist } = marchSearch(match, fromKey, civId);
+  dist.delete(fromKey);
+  return dist;
+}
+
+/**
+ * Move targets: peaceful hexes in range, plus adjacent enemies (fight).
+ * @returns {{ moves: Map<string, number>, attacks: string[] }}
+ */
+export function moveTargets(match, fromKey, civId) {
+  const moves = reachableMoves(match, fromKey, civId);
+  const attacks = [];
+  const from = match.tiles.get(fromKey);
+  if (from && from.ownerId === civId && from.stamina > 0) {
+    for (const n of hexNeighbors(from.q, from.r)) {
+      const nk = hexKey(n.q, n.r);
+      const nt = match.tiles.get(nk);
+      if (nt && nt.ownerId && nt.ownerId !== civId) attacks.push(nk);
+    }
+  }
+  return { moves, attacks };
+}
+
+/**
+ * March along the shortest path. Claims every empty hex on that path;
+ * troops end on the destination (join if already yours).
  */
 export function tryMarch(match, civId, fromKey, toKey, amount) {
   if (match.phase !== 'play') return { ok: false, reason: 'ended' };
@@ -490,9 +522,12 @@ export function tryMarch(match, civId, fromKey, toKey, amount) {
   if (!isPassable(to, civId)) return { ok: false, reason: 'blocked' };
   if (fromKey === toKey) return { ok: false, reason: 'same' };
 
-  const reach = reachableMoves(match, fromKey, civId);
-  const cost = reach.get(toKey);
+  const { dist, parent } = marchSearch(match, fromKey, civId);
+  const cost = dist.get(toKey);
   if (cost == null || cost > from.stamina) return { ok: false, reason: 'out-of-range' };
+
+  const path = reconstructPath(parent, fromKey, toKey);
+  if (!path || path.length < 2) return { ok: false, reason: 'no-path' };
 
   const n = Math.min(Math.max(1, amount | 0), from.troops);
   if (n <= 0) return { ok: false, reason: 'no-troops' };
@@ -501,26 +536,48 @@ export function tryMarch(match, civId, fromKey, toKey, amount) {
   from.troops -= n;
   if (from.troops <= 0) from.stamina = 0;
 
-  // Claiming empty land along the way isn't done — only the destination stack moves.
-  if (to.ownerId === null) {
+  // Claim every empty hex on the shortest path (not the origin).
+  let claimed = 0;
+  for (let i = 1; i < path.length; i++) {
+    const t = match.tiles.get(path[i]);
+    if (t.ownerId === null) {
+      t.ownerId = civId;
+      t.isCapital = false;
+      if (path[i] !== toKey) {
+        t.troops = 0;
+        t.stamina = 0;
+      }
+      claimed += 1;
+    }
+  }
+
+  if (to.troops > 0 && to.ownerId === civId) {
+    to.stamina = Math.min(to.stamina, moveStam);
+    to.troops += n;
+  } else {
     to.ownerId = civId;
     to.troops = n;
     to.stamina = moveStam;
     to.isCapital = false;
-    pushLog(match, `${civById(match, civId).name} marched ${n} to (${to.q},${to.r}) (−${cost} stam).`);
-    checkConquest(match);
-    return { ok: true, moved: n, cost, claimed: true };
   }
 
-  if (to.troops > 0) to.stamina = Math.min(to.stamina, moveStam);
-  else to.stamina = moveStam;
-  to.troops += n;
-  pushLog(match, `${civById(match, civId).name} marched ${n} to (${to.q},${to.r}) (−${cost} stam).`);
-  return { ok: true, moved: n, cost, joined: true };
+  const civ = civById(match, civId);
+  pushLog(
+    match,
+    `${civ.name} marched ${n} to (${to.q},${to.r}) (−${cost} stam${
+      claimed ? `, claimed ${claimed}` : ''
+    }).`
+  );
+  checkConquest(match);
+  return { ok: true, moved: n, cost, claimed, path };
 }
 
-/** Adjacent move helper (AI); prefers tryMarch for multi-hex. */
+/** AI helper — march or adjacent attack. */
 export function tryMove(match, civId, fromKey, toKey, amount) {
+  const to = match.tiles.get(toKey);
+  if (to && to.ownerId && to.ownerId !== civId) {
+    return tryAttack(match, civId, fromKey, toKey, amount);
+  }
   return tryMarch(match, civId, fromKey, toKey, amount);
 }
 
