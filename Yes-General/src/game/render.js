@@ -4,6 +4,8 @@ import { hexToPixel, hexKey } from './hex.js';
 import { RESOURCES, PLAYER_COLORS, TROOP_STAMINA_MAX } from '../data/content.js';
 
 const HEX_SIZE = 34;
+const ICON_SCALE = 1.85;
+const TROOP_SCALE = 1.35;
 
 function hexCorner(cx, cy, size, i) {
   const angle = (Math.PI / 180) * 60 * i;
@@ -23,6 +25,7 @@ function drawHexPath(g, cx, cy, size) {
 function drawResourceIcon(g, x, y, resourceId) {
   g.save();
   g.translate(x, y);
+  g.scale(ICON_SCALE, ICON_SCALE);
   if (resourceId === 'food') {
     g.fillStyle = '#e8d070';
     g.beginPath();
