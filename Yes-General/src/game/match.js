@@ -79,7 +79,7 @@ export function createMatch(modeId, difficultyId, seed) {
     phase: 'play',
     winnerId: null,
     winReason: null,
-    log: ['Claim land, build gatherers, recruit, attack — spend freely until End turn.'],
+    log: ['Claim land, build gatherers, recruit, move — spend freely until End turn.'],
     selectedKey: capitalKeys[0],
     /** How many troops the player will send on the next move/attack. */
     detachCount: STARTING_TROOPS,
