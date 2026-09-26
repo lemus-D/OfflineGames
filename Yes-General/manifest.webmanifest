@@ -1,0 +1,18 @@
+{
+  "name": "Yes-General",
+  "short_name": "Yes-General",
+  "description": "Bronze-age hex conquest. Build roads to your capital, gather, fight, raise a wonder.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a1410",
+  "theme_color": "#3d2b1f",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'><rect width='128' height='128' fill='%233d2b1f'/><path fill='%23c4a574' d='M64 16 L104 40 L104 88 L64 112 L24 88 L24 40 Z'/><circle cx='64' cy='64' r='14' fill='%238b5a2b'/></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
