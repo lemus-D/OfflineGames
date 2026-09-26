@@ -66,8 +66,10 @@ export function generateMap(seed, radius) {
         resourceId: resId,
         ownerId: null,
         buildingId: null,
+        hasWalls: false,
         isCapital: false,
         troops: 0,
+        stamina: 0,
         landValue: res.landValue,
         regionId: -1,
       });

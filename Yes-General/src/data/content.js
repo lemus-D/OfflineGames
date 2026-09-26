@@ -4,8 +4,7 @@
 /** @typedef {{ id: string, name: string, turns: number, mapRadius: number }} ModeDef */
 /** @typedef {{ id: string, name: string, aiCount: number, aiSkill: number, eventChance: number }} DifficultyDef */
 /** @typedef {{ id: string, name: string, color: string, landValue: number, needsBuilding: string|null, yieldPerTurn: number }} ResourceDef */
-/** @typedef {{ id: string, name: string, cost: Record<string, number>, on: 'gather'|'wonder', effect: string }} BuildingDef */
-/** @typedef {{ id: string, name: string, weight: number, kind: string, turns?: number, yieldMul?: number, troopLoss?: number, territoryRisk?: number }} EventDef */
+/** @typedef {{ id: string, name: string, cost: Record<string, number>, on: 'gather'|'wonder'|'walls', effect: string }} BuildingDef */
 
 export const MODES = {
   short: { id: 'short', name: 'Short', turns: 24, mapRadius: 4 },
@@ -19,7 +18,6 @@ export const DIFFICULTIES = {
   hard: { id: 'hard', name: 'Hard', aiCount: 3, aiSkill: 0.75, eventChance: 0.22 },
 };
 
-/** Resources that can appear on hexes. */
 export const RESOURCES = {
   food: {
     id: 'food',
@@ -63,7 +61,6 @@ export const RESOURCES = {
   },
 };
 
-/** Weights for map generation (barren fills the rest). */
 export const RESOURCE_SPAWN_WEIGHTS = [
   { id: 'food', weight: 3 },
   { id: 'wood', weight: 3 },
@@ -77,14 +74,14 @@ export const BUILDINGS = {
     id: 'farm',
     name: 'Farm',
     on: 'gather',
-    cost: { food: 0, wood: 4, stone: 0, ore: 0 },
+    cost: { food: 0, wood: 2, stone: 3, ore: 0 },
     effect: 'Harvests food from this hex each turn.',
   },
   camp: {
     id: 'camp',
     name: 'Lumber Camp',
     on: 'gather',
-    cost: { food: 2, wood: 2, stone: 0, ore: 0 },
+    cost: { food: 1, wood: 2, stone: 2, ore: 0 },
     effect: 'Harvests wood from this hex each turn.',
   },
   quarry: {
@@ -98,19 +95,25 @@ export const BUILDINGS = {
     id: 'mine',
     name: 'Mine',
     on: 'gather',
-    cost: { food: 3, wood: 4, stone: 2, ore: 0 },
+    cost: { food: 2, wood: 3, stone: 5, ore: 0 },
     effect: 'Harvests ore from this hex each turn.',
+  },
+  walls: {
+    id: 'walls',
+    name: 'Stone Walls',
+    on: 'walls',
+    cost: { food: 0, wood: 2, stone: 6, ore: 0 },
+    effect: 'Defenders on this hex fight at 1.5× strength.',
   },
   wonder: {
     id: 'wonder',
     name: 'Ancient Wonder',
     on: 'wonder',
-    cost: { food: 40, wood: 40, stone: 40, ore: 20 },
+    cost: { food: 30, wood: 30, stone: 55, ore: 20 },
     effect: 'Win the game immediately when completed at your capital.',
   },
 };
 
-/** Map gather building id → resource id that needs it. */
 export const GATHER_FOR_RESOURCE = {
   food: 'farm',
   wood: 'camp',
@@ -145,7 +148,6 @@ export const EVENTS = {
   },
 };
 
-/** Combat: P(attacker wins) from troop ratio. Seeded roll decides. */
 export const COMBAT = {
   minWinChance: 0.08,
   maxWinChance: 0.92,
@@ -153,21 +155,21 @@ export const COMBAT = {
   loseLossFrac: 0.55,
   defWinLossFrac: 0.6,
   defLoseLossFrac: 0.15,
+  /** Multiplier applied to defender troop count when stone walls present. */
+  wallsDefenseMul: 1.5,
 };
 
-/** Starting stockpile for every civ. */
-export const STARTING_STOCK = { food: 8, wood: 8, stone: 4, ore: 0 };
+export const STARTING_STOCK = { food: 8, wood: 6, stone: 8, ore: 0 };
 
-/** Troops raised per spend. */
-export const TROOP_COST = { food: 2, wood: 0, stone: 0, ore: 0 };
+/** Troops cost food + stone (stone gear / spearheads). */
+export const TROOP_COST = { food: 2, wood: 0, stone: 1, ore: 0 };
 export const TROOPS_PER_RECRUIT = 5;
 export const STARTING_TROOPS = 12;
+export const TROOP_STAMINA_MAX = 3;
 
-/** Starting claim blob diameter ≈ 5 hexes → radius 2. */
 export const START_CLAIM_RADIUS = 2;
 
-/** Points per unit of stockpiled resource (timed victory). */
-export const RESOURCE_SCORE = { food: 1, wood: 1, stone: 2, ore: 4 };
+export const RESOURCE_SCORE = { food: 1, wood: 1, stone: 3, ore: 4 };
 
 export const PLAYER_COLORS = ['#d4a04a', '#4a8fd4', '#d45a4a', '#7a4ad4', '#4ad49a'];
 

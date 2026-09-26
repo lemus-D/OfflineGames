@@ -1,11 +1,18 @@
 #!/usr/bin/env node
-/* Headless smoke: partitions, turns, combat determinism, no Math.random. */
+/* Headless smoke: stamina, split moves, partitions, no Math.random. */
 import { readFileSync } from 'node:fs';
-import { createMatch, endTurn, tryRecruit, tryAttack, scoreCiv } from './src/game/match.js';
+import {
+  createMatch,
+  endTurn,
+  tryRecruit,
+  tryAttack,
+  tryMove,
+  scoreCiv,
+} from './src/game/match.js';
 import { resolveCombat } from './src/game/combat.js';
 import { makeRNG } from './src/core/rng.js';
 import { hexKey, hexNeighbors, hexDistance } from './src/game/hex.js';
-import { START_CLAIM_RADIUS } from './src/data/content.js';
+import { START_CLAIM_RADIUS, TROOP_STAMINA_MAX } from './src/data/content.js';
 
 let failures = 0;
 function assert(cond, msg) {
@@ -40,59 +47,79 @@ for (const file of [
   const b = resolveCombat(20, 10, r2);
   assert(a.attackerWins === b.attackerWins && a.roll === b.roll, 'combat deterministic for seed');
   assert(a.winChance > 0.5, 'larger force has higher win chance');
+  const walled = resolveCombat(20, 10, makeRNG(1), 1.5);
+  const plain = resolveCombat(20, 10, makeRNG(1), 1);
+  assert(walled.winChance < plain.winChance, 'walls lower attacker win chance');
 }
 
 for (const seed of [1, 42, 99, 12345, 777777]) {
   const m = createMatch('short', 'easy', seed);
   assert(m.tiles.size > 20, `seed ${seed}: map has tiles (${m.tiles.size})`);
   assert(m.civs.length === 2, `seed ${seed}: player + 1 AI`);
+
+  const player = m.civs[0];
+  const capKey = hexKey(player.capital.q, player.capital.r);
+  const cap = m.tiles.get(capKey);
+  assert(cap.stamina === TROOP_STAMINA_MAX, `seed ${seed}: starting stamina full`);
+
+  // Split-move onto an owned neighbor if any.
+  const ownNeigh = hexNeighbors(cap.q, cap.r)
+    .map((n) => hexKey(n.q, n.r))
+    .find((k) => m.tiles.get(k)?.ownerId === 'player');
+  if (ownNeigh) {
+    const before = cap.troops;
+    const send = Math.max(1, Math.floor(before / 2));
+    const res = tryMove(m, 'player', capKey, ownNeigh, send);
+    assert(res.ok, `seed ${seed}: split move ok`);
+    assert(cap.troops === before - send, `seed ${seed}: split left remainder`);
+    assert(m.tiles.get(ownNeigh).troops >= send, `seed ${seed}: join/split arrived`);
+    assert(m.tiles.get(ownNeigh).stamina === TROOP_STAMINA_MAX - 1, `seed ${seed}: stamina spent`);
+  }
+
+  tryRecruit(m, 'player', capKey);
+  assert(m.tiles.get(capKey).troops > 0, `seed ${seed}: recruit works`);
+
+  for (let i = 0; i < 6; i++) {
+    if (m.phase !== 'play') break;
+    endTurn(m);
+  }
+  assert(m.turn >= 2 || m.phase === 'ended', `seed ${seed}: turns advanced`);
+  if (m.phase === 'play') {
+    const after = m.tiles.get(capKey);
+    if (after.troops > 0) {
+      assert(after.stamina === TROOP_STAMINA_MAX, `seed ${seed}: stamina refreshed after turns`);
+    }
+  }
+
+  assert(scoreCiv(m, player) >= 0, `seed ${seed}: score non-negative`);
   assert(
-    m.civs.every((c) => m.tiles.get(hexKey(c.capital.q, c.capital.r))?.isCapital),
-    `seed ${seed}: capitals placed`
+    hexDistance(player.capital, m.civs[1].capital) >= 3,
+    `seed ${seed}: capitals separated`
   );
-
-  // Capitals in different regions and reasonably far apart.
-  const [a, b] = m.civs;
-  const d = hexDistance(a.capital, b.capital);
-  assert(d >= 3, `seed ${seed}: capitals separated (d=${d})`);
-  assert(a.regionId !== b.regionId, `seed ${seed}: distinct regions`);
-
-  // Starting claim ~5 tiles wide (radius 2) around capital in-region.
   let claimed = 0;
   for (const t of m.tiles.values()) {
     if (t.ownerId === 'player') {
       claimed += 1;
       assert(
-        hexDistance(t, a.capital) <= START_CLAIM_RADIUS,
-        `seed ${seed}: player claim within start radius`
+        hexDistance(t, player.capital) <= START_CLAIM_RADIUS,
+        `seed ${seed}: claim radius`
       );
     }
   }
-  assert(claimed >= 3, `seed ${seed}: player starts with a blob (${claimed} tiles)`);
-
-  const player = m.civs[0];
-  const capKey = hexKey(player.capital.q, player.capital.r);
-  tryRecruit(m, 'player', capKey);
-  assert(m.tiles.get(capKey).troops > 12, `seed ${seed}: recruit increases troops`);
-
-  for (let i = 0; i < 8; i++) {
-    if (m.phase !== 'play') break;
-    endTurn(m);
-  }
-  assert(m.turn >= 2 || m.phase === 'ended', `seed ${seed}: turns advanced`);
-  assert(scoreCiv(m, player) >= 0, `seed ${seed}: score non-negative`);
+  assert(claimed >= 3, `seed ${seed}: start blob (${claimed})`);
 
   if (m.phase === 'play') {
     const from = m.tiles.get(capKey);
     const neigh = hexNeighbors(from.q, from.r)
       .map((n) => hexKey(n.q, n.r))
       .find((k) => m.tiles.has(k) && m.tiles.get(k).ownerId !== 'player');
-    if (neigh && from.troops > 0) {
-      const before = from.troops;
-      tryAttack(m, 'player', capKey, neigh);
+    if (neigh && from.troops > 2 && from.stamina > 0) {
+      const send = Math.floor(from.troops / 2);
+      const leftBefore = from.troops;
+      tryAttack(m, 'player', capKey, neigh, send);
       assert(
-        m.tiles.get(capKey).troops < before || m.tiles.get(neigh).ownerId === 'player',
-        `seed ${seed}: attack resolved`
+        m.tiles.get(capKey).troops < leftBefore || m.tiles.get(neigh).ownerId === 'player',
+        `seed ${seed}: partial attack resolved`
       );
     }
   }

@@ -12,9 +12,11 @@ import {
   TROOP_COST,
   TROOPS_PER_RECRUIT,
   STARTING_TROOPS,
+  TROOP_STAMINA_MAX,
   RESOURCE_SCORE,
   PLAYER_COLORS,
   RESOURCE_LABELS,
+  COMBAT,
 } from '../data/content.js';
 import { generateMap, partitionAndPlace, hexKey, hexNeighbors, parseKey } from './hex.js';
 import { resolveCombat } from './combat.js';
@@ -48,6 +50,7 @@ export function createMatch(modeId, difficultyId, seed) {
     cap.ownerId = id;
     cap.isCapital = true;
     cap.troops = STARTING_TROOPS;
+    cap.stamina = TROOP_STAMINA_MAX;
     if (cap.resourceId === 'barren') cap.resourceId = 'food';
 
     civs.push({
@@ -78,9 +81,19 @@ export function createMatch(modeId, difficultyId, seed) {
     winReason: null,
     log: ['Claim land, build gatherers, recruit, attack — spend freely until End turn.'],
     selectedKey: capitalKeys[0],
+    /** How many troops the player will send on the next move/attack. */
+    detachCount: STARTING_TROOPS,
     rng,
     lastEvent: null,
   };
+}
+
+/** Restore full stamina for every stack owned by a civ. */
+export function refreshStamina(match, civId) {
+  for (const t of match.tiles.values()) {
+    if (t.ownerId === civId && t.troops > 0) t.stamina = TROOP_STAMINA_MAX;
+    if (t.ownerId === civId && t.troops <= 0) t.stamina = 0;
+  }
 }
 
 function civById(match, id) {
@@ -194,7 +207,9 @@ function applyEvent(match, civ) {
         const t = candidates[(match.rng() * candidates.length) | 0];
         t.ownerId = null;
         t.buildingId = null;
+        t.hasWalls = false;
         t.troops = 0;
+        t.stamina = 0;
         pushLog(match, `${ev.name}: lost territory at (${t.q},${t.r}).`);
       }
     }
@@ -273,7 +288,7 @@ function checkTimed(match) {
   return false;
 }
 
-/** Build gather / wonder on selected owned hex. */
+/** Build gather / wonder / walls on selected owned hex. */
 export function tryBuild(match, civId, tileKey, buildingId) {
   if (match.phase !== 'play') return { ok: false, reason: 'ended' };
   const civ = civById(match, civId);
@@ -290,6 +305,14 @@ export function tryBuild(match, civId, tileKey, buildingId) {
     tile.buildingId = 'wonder';
     pushLog(match, `${civ.name} raised the Ancient Wonder!`);
     checkWonder(match, civ);
+    return { ok: true };
+  }
+
+  if (def.on === 'walls') {
+    if (tile.hasWalls) return { ok: false, reason: 'has-walls' };
+    pay(civ.stock, def.cost);
+    tile.hasWalls = true;
+    pushLog(match, `${civ.name} raised stone walls at (${tile.q},${tile.r}).`);
     return { ok: true };
   }
 
@@ -314,41 +337,48 @@ export function tryRecruit(match, civId, tileKey) {
   if (!civ?.alive || !tile || tile.ownerId !== civId) return { ok: false, reason: 'bad' };
   if (!canAfford(civ.stock, TROOP_COST)) return { ok: false, reason: 'cost' };
   pay(civ.stock, TROOP_COST);
+  const wasEmpty = tile.troops <= 0;
   tile.troops += TROOPS_PER_RECRUIT;
+  if (wasEmpty) tile.stamina = TROOP_STAMINA_MAX;
   return { ok: true };
 }
 
 /**
- * Attack from owned hex into adjacent enemy/neutral hex.
- * Moves all troops from fromKey into the fight.
+ * Attack from owned hex into adjacent enemy/neutral hex with `amount` troops.
  */
-export function tryAttack(match, civId, fromKey, toKey) {
+export function tryAttack(match, civId, fromKey, toKey, amount) {
   if (match.phase !== 'play') return { ok: false, reason: 'ended' };
   const civ = civById(match, civId);
   const from = match.tiles.get(fromKey);
   const to = match.tiles.get(toKey);
   if (!civ?.alive || !from || !to) return { ok: false, reason: 'bad' };
   if (from.ownerId !== civId || from.troops <= 0) return { ok: false, reason: 'no-troops' };
+  if (from.stamina <= 0) return { ok: false, reason: 'no-stamina' };
   if (to.ownerId === civId) return { ok: false, reason: 'own' };
 
   const adj = hexNeighbors(from.q, from.r).some((n) => hexKey(n.q, n.r) === toKey);
   if (!adj) return { ok: false, reason: 'not-adjacent' };
 
-  const atk = from.troops;
+  const atk = Math.min(Math.max(1, amount | 0), from.troops);
   const def = to.troops;
-  from.troops = 0;
+  const moveStam = from.stamina - 1;
+  from.troops -= atk;
+  if (from.troops <= 0) from.stamina = 0;
 
   if (!to.ownerId && def <= 0) {
     to.ownerId = civId;
     to.troops = atk;
+    to.stamina = moveStam;
     to.buildingId = null;
+    to.hasWalls = false;
     to.isCapital = false;
-    pushLog(match, `${civ.name} claimed (${to.q},${to.r}).`);
+    pushLog(match, `${civ.name} claimed (${to.q},${to.r}) with ${atk}.`);
     checkConquest(match);
     return { ok: true, claimed: true };
   }
 
-  const result = resolveCombat(atk, def, match.rng);
+  const defMul = to.hasWalls ? COMBAT.wallsDefenseMul : 1;
+  const result = resolveCombat(atk, def, match.rng, defMul);
   if (result.attackerWins) {
     const loser = to.ownerId ? civById(match, to.ownerId) : null;
     if (to.isCapital && loser) {
@@ -357,31 +387,40 @@ export function tryAttack(match, civId, fromKey, toKey) {
         if (t.ownerId === loser.id && t !== to) {
           t.ownerId = null;
           t.buildingId = null;
+          t.hasWalls = false;
           t.isCapital = false;
           t.troops = 0;
+          t.stamina = 0;
         }
       }
       to.ownerId = civId;
       to.troops = result.atkLeft;
+      to.stamina = result.atkLeft > 0 ? moveStam : 0;
       to.buildingId = null;
+      to.hasWalls = false;
       to.isCapital = false;
       pushLog(match, `${civ.name} sacked ${loser.name}'s capital!`);
     } else {
       to.ownerId = civId;
       to.troops = result.atkLeft;
+      to.stamina = result.atkLeft > 0 ? moveStam : 0;
       to.buildingId = null;
+      to.hasWalls = false;
       to.isCapital = false;
       pushLog(
         match,
-        `${civ.name} took (${to.q},${to.r}) (${Math.round(result.winChance * 100)}% odds).`
+        `${civ.name} took (${to.q},${to.r}) with ${atk} (${Math.round(result.winChance * 100)}%).`
       );
     }
   } else {
     to.troops = result.defLeft;
-    from.troops = result.atkLeft;
+    if (result.atkLeft > 0) {
+      from.troops += result.atkLeft;
+      from.stamina = Math.min(from.stamina || moveStam, moveStam);
+    }
     pushLog(
       match,
-      `${civ.name} failed at (${to.q},${to.r}) (${Math.round(result.winChance * 100)}% odds).`
+      `${civ.name} failed at (${to.q},${to.r}) (${Math.round(result.winChance * 100)}%).`
     );
   }
 
@@ -389,7 +428,7 @@ export function tryAttack(match, civId, fromKey, toKey) {
   return { ok: true, ...result };
 }
 
-/** Move troops between adjacent owned hexes. */
+/** Move `amount` troops between adjacent owned hexes (join merges stacks). */
 export function tryMove(match, civId, fromKey, toKey, amount) {
   if (match.phase !== 'play') return { ok: false, reason: 'ended' };
   const from = match.tiles.get(fromKey);
@@ -397,18 +436,29 @@ export function tryMove(match, civId, fromKey, toKey, amount) {
   if (!from || !to || from.ownerId !== civId || to.ownerId !== civId) {
     return { ok: false, reason: 'bad' };
   }
+  if (from.stamina <= 0) return { ok: false, reason: 'no-stamina' };
   const adj = hexNeighbors(from.q, from.r).some((n) => hexKey(n.q, n.r) === toKey);
   if (!adj) return { ok: false, reason: 'not-adjacent' };
-  const n = Math.min(amount, from.troops);
+  const n = Math.min(Math.max(1, amount | 0), from.troops);
   if (n <= 0) return { ok: false, reason: 'no-troops' };
+
+  const moveStam = from.stamina - 1;
   from.troops -= n;
+  if (from.troops <= 0) from.stamina = 0;
+
+  if (to.troops > 0) {
+    // Join: merged stack keeps the lower stamina.
+    to.stamina = Math.min(to.stamina, moveStam);
+  } else {
+    to.stamina = moveStam;
+  }
   to.troops += n;
-  return { ok: true };
+  return { ok: true, moved: n, joined: true };
 }
 
 /**
  * Preview an action for tooltips.
- * @param {'gather'|'recruit'|'wonder'|'end'} action
+ * @param {'gather'|'recruit'|'wonder'|'walls'|'end'} action
  */
 export function actionPreview(match, civId, tileKey, action) {
   const civ = civById(match, civId);
@@ -420,7 +470,7 @@ export function actionPreview(match, civId, tileKey, action) {
       ok: true,
       title: 'End turn',
       effect:
-        'Collect yields from your gather buildings and capital, roll events, then rivals act.',
+        'Collect yields, roll events, rivals act. Your armies restore 3 stamina next turn.',
       cost: 'Free',
       need: '',
       blockers: [],
@@ -440,7 +490,7 @@ export function actionPreview(match, civId, tileKey, action) {
     return {
       ok: blockers.length === 0,
       title: 'Recruit',
-      effect: `Raise ${TROOPS_PER_RECRUIT} troops on this hex.`,
+      effect: `Raise ${TROOPS_PER_RECRUIT} troops (stone tip spears).`,
       cost: formatCost(cost),
       need: missing.length ? `Missing: ${missing.join(', ')}` : '',
       blockers,
@@ -471,6 +521,23 @@ export function actionPreview(match, civId, tileKey, action) {
       ok: blockers.length === 0,
       title: `Build ${def.name}`,
       effect: `${def.effect} (+${res.yieldPerTurn} ${res.name}/turn).`,
+      cost: formatCost(def.cost),
+      need: missing.length ? `Missing: ${missing.join(', ')}` : '',
+      blockers,
+    };
+  }
+
+  if (action === 'walls') {
+    const def = BUILDINGS.walls;
+    const missing = missingCost(civ.stock, def.cost);
+    const blockers = [];
+    if (tile.ownerId !== civId) blockers.push('Must own this hex.');
+    if (tile.hasWalls) blockers.push('Walls already stand here.');
+    if (missing.length) blockers.push(`Need ${missing.join(', ')}.`);
+    return {
+      ok: blockers.length === 0,
+      title: def.name,
+      effect: def.effect,
       cost: formatCost(def.cost),
       need: missing.length ? `Missing: ${missing.join(', ')}` : '',
       blockers,
@@ -513,9 +580,10 @@ export function endTurn(match) {
   }
   if (checkConquest(match)) return;
 
-  const aiApi = { tryBuild, tryRecruit, tryAttack };
+  const aiApi = { tryBuild, tryRecruit, tryAttack, tryMove };
   for (const civ of match.civs) {
     if (civ.isPlayer || !civ.alive) continue;
+    refreshStamina(match, civ.id);
     aiTakeTurn(match, civ, aiApi);
     if (match.phase !== 'play') return;
     collectYields(match, civ);
@@ -526,6 +594,7 @@ export function endTurn(match) {
   }
 
   match.turn += 1;
+  if (player?.alive) refreshStamina(match, player.id);
   if (checkTimed(match)) return;
 }
 
@@ -545,11 +614,23 @@ export function tileSummary(match, key) {
     resource: res,
     owner,
     buildingId: tile.buildingId,
+    hasWalls: !!tile.hasWalls,
     isCapital: tile.isCapital,
     troops: tile.troops,
+    stamina: tile.stamina || 0,
+    staminaMax: TROOP_STAMINA_MAX,
     regionId: tile.regionId,
     gatherBuilding: gatherBuildingForTile(tile),
   };
 }
 
-export { parseKey, hexKey, hexNeighbors, BUILDINGS, RESOURCES, TROOP_COST, TROOPS_PER_RECRUIT };
+export {
+  parseKey,
+  hexKey,
+  hexNeighbors,
+  BUILDINGS,
+  RESOURCES,
+  TROOP_COST,
+  TROOPS_PER_RECRUIT,
+  TROOP_STAMINA_MAX,
+};

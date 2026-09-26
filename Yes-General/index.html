@@ -252,6 +252,60 @@
   #tooltip .tt-ok { color: #9dca7a; }
   #tooltip .tt-bad { color: #e08a6a; }
   #tooltip .tt-line { margin-top: 3px; color: var(--muted); }
+
+  #army {
+    margin: 8px 0 10px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    background: rgba(0,0,0,0.28);
+  }
+  #army .army-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-family: var(--font-display);
+    color: var(--sand);
+    font-size: 0.95rem;
+  }
+  .stam-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .stam-track {
+    flex: 1;
+    height: 8px;
+    background: rgba(0,0,0,0.45);
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  #stamFill {
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, #6ecf7a, #b6e87a);
+  }
+  #stamFill.low { background: linear-gradient(90deg, #a04030, #e0b050); }
+  #army label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  #armySlider {
+    width: 100%;
+    accent-color: var(--gold);
+  }
+  #army .army-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--sand);
+    margin-top: 4px;
+  }
 </style>
 </head>
 <body>
@@ -269,7 +323,7 @@
     <div class="choice-row" id="diffSelect"></div>
 
     <button class="btn primary" id="btnPlay" type="button">Begin campaign</button>
-    <p class="hint">Hover actions for costs · click a troop hex then a neighbor to move or attack</p>
+    <p class="hint">Hover actions for costs · set army size, then click a neighbor to move or attack (3 stamina)</p>
     <p class="meta">Record <b id="recordVal">0–0</b></p>
   </div>
 </div>
@@ -291,12 +345,38 @@
 <div id="side" class="hidden">
   <h3 id="tileTitle">Hex</h3>
   <p id="tileBody">Select a hex.</p>
+
+  <div id="army" class="hidden">
+    <div class="army-head">
+      <span>Army</span>
+      <span id="stamVal">3 / 3</span>
+    </div>
+    <div class="stam-row">
+      <span>Stamina</span>
+      <div class="stam-track"><div id="stamFill"></div></div>
+    </div>
+    <label for="armySlider">Troops to move / fight</label>
+    <input id="armySlider" type="range" min="1" max="12" value="12" />
+    <div class="army-meta">
+      <span>Send <b id="armyCount">12</b></span>
+      <span>Leave <b id="armyLeave">0</b></span>
+    </div>
+    <div class="btn-row">
+      <button class="btn ghost" id="btnArmyHalf" type="button">Half</button>
+      <button class="btn ghost" id="btnArmyAll" type="button">All</button>
+    </div>
+    <p class="hint" style="margin-top:8px">Click an adjacent hex to move (yours — joins) or attack. Costs 1 stamina.</p>
+  </div>
+
   <div class="btn-row">
     <button class="btn ghost" id="btnGather" type="button" data-action="gather">Build gather</button>
     <button class="btn ghost" id="btnRecruit" type="button" data-action="recruit">Recruit</button>
   </div>
   <div class="btn-row">
+    <button class="btn ghost" id="btnWalls" type="button" data-action="walls">Walls</button>
     <button class="btn ghost" id="btnWonder" type="button" data-action="wonder">Wonder</button>
+  </div>
+  <div class="btn-row">
     <button class="btn primary" id="btnEnd" type="button" data-action="end" style="flex:1">End turn</button>
   </div>
   <div id="log"></div>
@@ -309,7 +389,7 @@
       <li><b>Homelands.</b> The map is split into equal regions. You start with a capital and a small claimed area.</li>
       <li><b>Spend freely.</b> Build, recruit, move, and attack as much as your stockpile allows — then hit End turn.</li>
       <li><b>Gather.</b> Build the right structure on a resource hex so it yields each turn.</li>
-      <li><b>Fight.</b> Select a hex with troops, then click an adjacent hex to move (yours) or attack (enemy/neutral).</li>
+      <li><b>Armies.</b> Select troops, set how many to send, then click a neighbor. Each stack has 3 stamina per turn. Moving onto your own hex joins stacks.</li>
       <li><b>Win</b> by conquering the map, finishing an Ancient Wonder, or leading on score when turns end.</li>
     </ol>
     <div class="btn-row">

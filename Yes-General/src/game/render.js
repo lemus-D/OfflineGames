@@ -1,7 +1,7 @@
-/* Canvas 2D hex map renderer + tiny troop sprites. */
+/* Canvas 2D hex map: ownership, resource/building icons, troops + stamina. */
 
 import { hexToPixel, hexKey } from './hex.js';
-import { RESOURCES, PLAYER_COLORS } from '../data/content.js';
+import { RESOURCES, PLAYER_COLORS, TROOP_STAMINA_MAX } from '../data/content.js';
 
 const HEX_SIZE = 34;
 
@@ -20,19 +20,154 @@ function drawHexPath(g, cx, cy, size) {
   g.closePath();
 }
 
-/** Little bronze-age spearman. */
+function drawResourceIcon(g, x, y, resourceId) {
+  g.save();
+  g.translate(x, y);
+  if (resourceId === 'food') {
+    g.fillStyle = '#e8d070';
+    g.beginPath();
+    g.moveTo(0, -5);
+    g.quadraticCurveTo(4, -1, 0, 5);
+    g.quadraticCurveTo(-4, -1, 0, -5);
+    g.fill();
+    g.strokeStyle = '#6a5020';
+    g.lineWidth = 0.8;
+    g.beginPath();
+    g.moveTo(0, -5);
+    g.lineTo(0, 5);
+    g.stroke();
+  } else if (resourceId === 'wood') {
+    g.fillStyle = '#3d6b2e';
+    g.beginPath();
+    g.moveTo(0, -6);
+    g.lineTo(5, 2);
+    g.lineTo(-5, 2);
+    g.closePath();
+    g.fill();
+    g.fillStyle = '#6b4423';
+    g.fillRect(-1.2, 2, 2.4, 4);
+  } else if (resourceId === 'stone') {
+    g.fillStyle = '#b0aaa4';
+    g.beginPath();
+    g.moveTo(-5, 2);
+    g.lineTo(-2, -4);
+    g.lineTo(3, -5);
+    g.lineTo(5, 1);
+    g.lineTo(1, 5);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = '#5a5550';
+    g.lineWidth = 0.7;
+    g.stroke();
+  } else if (resourceId === 'ore') {
+    g.fillStyle = '#8a6230';
+    g.beginPath();
+    g.moveTo(0, -5);
+    g.lineTo(5, 0);
+    g.lineTo(0, 5);
+    g.lineTo(-5, 0);
+    g.closePath();
+    g.fill();
+    g.fillStyle = '#d4a04a';
+    g.beginPath();
+    g.arc(0, 0, 1.8, 0, Math.PI * 2);
+    g.fill();
+  } else {
+    g.strokeStyle = '#8a7a6a';
+    g.lineWidth = 1.2;
+    g.beginPath();
+    g.moveTo(-4, -4);
+    g.lineTo(4, 4);
+    g.moveTo(4, -4);
+    g.lineTo(-4, 4);
+    g.stroke();
+  }
+  g.restore();
+}
+
+function drawBuildingIcon(g, x, y, buildingId) {
+  g.save();
+  g.translate(x, y);
+  if (buildingId === 'farm') {
+    g.fillStyle = '#c4a060';
+    g.fillRect(-5, -1, 10, 6);
+    g.fillStyle = '#a04030';
+    g.beginPath();
+    g.moveTo(-6, -1);
+    g.lineTo(0, -6);
+    g.lineTo(6, -1);
+    g.closePath();
+    g.fill();
+  } else if (buildingId === 'camp') {
+    g.fillStyle = '#6b4423';
+    g.fillRect(-1, -2, 2, 7);
+    g.strokeStyle = '#8a6230';
+    g.lineWidth = 1.4;
+    g.beginPath();
+    g.moveTo(-5, 2);
+    g.lineTo(0, -5);
+    g.lineTo(5, 2);
+    g.stroke();
+  } else if (buildingId === 'quarry') {
+    g.fillStyle = '#9a9590';
+    g.fillRect(-5, 0, 10, 5);
+    g.fillStyle = '#6a6560';
+    g.fillRect(-3, -4, 3, 4);
+    g.fillRect(1, -6, 3, 6);
+  } else if (buildingId === 'mine') {
+    g.fillStyle = '#3a3028';
+    g.beginPath();
+    g.moveTo(-6, 4);
+    g.lineTo(-3, -4);
+    g.lineTo(3, -4);
+    g.lineTo(6, 4);
+    g.closePath();
+    g.fill();
+    g.fillStyle = '#1a1410';
+    g.beginPath();
+    g.arc(0, 1, 2.5, Math.PI, 0);
+    g.fill();
+  } else if (buildingId === 'wonder') {
+    g.fillStyle = '#e8d4a8';
+    g.fillRect(-2, -2, 4, 8);
+    g.beginPath();
+    g.moveTo(-5, -2);
+    g.lineTo(0, -8);
+    g.lineTo(5, -2);
+    g.closePath();
+    g.fill();
+  } else {
+    g.fillStyle = '#f0e0c0';
+    g.beginPath();
+    g.arc(0, 0, 3, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.restore();
+}
+
+function drawWallsIcon(g, x, y) {
+  g.save();
+  g.translate(x, y);
+  g.fillStyle = '#9a9590';
+  g.fillRect(-6, -1, 3.5, 6);
+  g.fillRect(-1.5, -3, 3.5, 8);
+  g.fillRect(3, -1, 3.5, 6);
+  g.strokeStyle = '#5a5550';
+  g.lineWidth = 0.6;
+  g.strokeRect(-6, -1, 3.5, 6);
+  g.strokeRect(-1.5, -3, 3.5, 8);
+  g.strokeRect(3, -1, 3.5, 6);
+  g.restore();
+}
+
 function drawTroopSprite(g, x, y, color, scale = 1) {
   g.save();
   g.translate(x, y);
   g.scale(scale, scale);
-
-  // Shadow
   g.fillStyle = 'rgba(0,0,0,0.35)';
   g.beginPath();
   g.ellipse(0, 7, 5, 2, 0, 0, Math.PI * 2);
   g.fill();
-
-  // Legs
   g.strokeStyle = color;
   g.lineWidth = 1.4;
   g.lineCap = 'round';
@@ -41,23 +176,14 @@ function drawTroopSprite(g, x, y, color, scale = 1) {
   g.lineTo(0, 1);
   g.lineTo(2.5, 6);
   g.stroke();
-
-  // Body
   g.beginPath();
   g.moveTo(0, 1);
   g.lineTo(0, -4);
   g.stroke();
-
-  // Shield
   g.fillStyle = '#c4a574';
   g.beginPath();
   g.ellipse(-3.2, -1, 2.2, 2.8, 0, 0, Math.PI * 2);
   g.fill();
-  g.strokeStyle = '#5a3d1e';
-  g.lineWidth = 0.8;
-  g.stroke();
-
-  // Spear
   g.strokeStyle = '#d8c8a0';
   g.lineWidth = 1.1;
   g.beginPath();
@@ -71,20 +197,36 @@ function drawTroopSprite(g, x, y, color, scale = 1) {
   g.lineTo(4.8, -6.2);
   g.closePath();
   g.fill();
-
-  // Head
   g.fillStyle = '#e8c49a';
   g.beginPath();
   g.arc(0, -6.2, 2.1, 0, Math.PI * 2);
   g.fill();
-  // Helm crest
   g.fillStyle = color;
   g.beginPath();
   g.moveTo(-1.5, -7.2);
   g.quadraticCurveTo(0, -10, 1.5, -7.2);
   g.fill();
-
   g.restore();
+}
+
+function drawStaminaBar(g, x, y, stamina, max) {
+  const w = 16;
+  const h = 3;
+  g.fillStyle = 'rgba(0,0,0,0.55)';
+  g.fillRect(x - w / 2, y, w, h);
+  const fill = Math.max(0, Math.min(1, stamina / max));
+  g.fillStyle = fill > 0.34 ? '#6ecf7a' : fill > 0 ? '#e0b050' : '#a04030';
+  g.fillRect(x - w / 2, y, w * fill, h);
+  // pip marks
+  g.strokeStyle = 'rgba(255,255,255,0.35)';
+  g.lineWidth = 0.6;
+  for (let i = 1; i < max; i++) {
+    const px = x - w / 2 + (w * i) / max;
+    g.beginPath();
+    g.moveTo(px, y);
+    g.lineTo(px, y + h);
+    g.stroke();
+  }
 }
 
 /**
@@ -105,6 +247,7 @@ export function drawMatch(g, W, H, match, cam) {
   g.fillRect(0, 0, W, H);
 
   const civColor = (id) => match.civs.find((c) => c.id === id)?.color || '#888';
+  const playerId = 'player';
 
   for (const tile of match.tiles.values()) {
     const { x, y } = hexToPixel(tile.q, tile.r, HEX_SIZE);
@@ -117,51 +260,58 @@ export function drawMatch(g, W, H, match, cam) {
     g.fillStyle = res?.color || '#555';
     g.fill();
 
-    // Soft region tint (home partitions).
-    if (tile.regionId >= 0) {
+    if (tile.regionId >= 0 && !tile.ownerId) {
       const rc = PLAYER_COLORS[tile.regionId % PLAYER_COLORS.length];
-      g.fillStyle = rc + '22';
+      g.fillStyle = rc + '18';
       drawHexPath(g, sx, sy, HEX_SIZE - 1);
       g.fill();
     }
 
     if (tile.ownerId) {
-      g.fillStyle = civColor(tile.ownerId) + '88';
+      const col = civColor(tile.ownerId);
+      const strong = tile.ownerId === playerId;
+      g.fillStyle = col + (strong ? 'aa' : '77');
       drawHexPath(g, sx, sy, HEX_SIZE - 1);
       g.fill();
+      // Ownership ring — thicker for you.
+      g.strokeStyle = col;
+      g.lineWidth = strong ? 3.2 : 2.2;
+      drawHexPath(g, sx, sy, HEX_SIZE - 3);
+      g.stroke();
     }
 
     const selected = match.selectedKey === hexKey(tile.q, tile.r);
-    g.strokeStyle = selected ? '#f5e6c8' : 'rgba(20,14,10,0.55)';
-    g.lineWidth = selected ? 2.5 : 1;
+    g.strokeStyle = selected ? '#fff3c4' : 'rgba(20,14,10,0.5)';
+    g.lineWidth = selected ? 2.6 : 1;
     drawHexPath(g, sx, sy, HEX_SIZE - 1);
     g.stroke();
 
-    if (tile.buildingId) {
-      g.fillStyle = '#f0e0c0';
-      g.beginPath();
-      g.arc(sx - 8, sy - 8, 3.2, 0, Math.PI * 2);
-      g.fill();
-    }
+    // Resource icon (top-left).
+    drawResourceIcon(g, sx - 10, sy - 10, tile.resourceId);
+
+    // Structure icons (top-right).
+    if (tile.buildingId) drawBuildingIcon(g, sx + 10, sy - 10, tile.buildingId);
+    if (tile.hasWalls) drawWallsIcon(g, sx + (tile.buildingId ? 10 : 10), sy + (tile.buildingId ? 2 : -10));
 
     if (tile.isCapital) {
       g.strokeStyle = '#fff3c4';
       g.lineWidth = 2;
       g.beginPath();
-      g.arc(sx, sy - 2, 11, 0, Math.PI * 2);
+      g.arc(sx, sy - 1, 12, 0, Math.PI * 2);
       g.stroke();
     }
 
     if (tile.troops > 0) {
       const color = tile.ownerId ? civColor(tile.ownerId) : '#aaa';
-      drawTroopSprite(g, sx + 6, sy + 2, color, 1);
-      g.fillStyle = 'rgba(15,10,6,0.78)';
-      g.fillRect(sx - 14, sy + 10, 18, 10);
+      drawTroopSprite(g, sx + 7, sy + 3, color, 1);
+      g.fillStyle = 'rgba(15,10,6,0.8)';
+      g.fillRect(sx - 15, sy + 11, 18, 10);
       g.fillStyle = '#f2e8d5';
       g.font = 'bold 9px Georgia, serif';
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      g.fillText(String(tile.troops), sx - 5, sy + 15);
+      g.fillText(String(tile.troops), sx - 6, sy + 16);
+      drawStaminaBar(g, sx - 6, sy + 22, tile.stamina || 0, TROOP_STAMINA_MAX);
     }
   }
 }

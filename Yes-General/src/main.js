@@ -1,7 +1,7 @@
-/* Boot, menu, HUD, tutorial, tooltips, input → match actions. */
+/* Boot, menu, HUD, tutorial, army split menu, tooltips, input. */
 
 import { Save } from './core/save.js';
-import { MODES, DIFFICULTIES } from './data/content.js';
+import { MODES, DIFFICULTIES, TROOP_STAMINA_MAX } from './data/content.js';
 import {
   createMatch,
   endTurn,
@@ -31,7 +31,6 @@ let match = null;
 let cam = { x: 0, y: 0 };
 let selectedMode = profile.lastMode in MODES ? profile.lastMode : 'standard';
 let selectedDiff = profile.lastDifficulty in DIFFICULTIES ? profile.lastDifficulty : 'normal';
-/** From-hex for attack/move when clicking a second hex. */
 let orderFrom = null;
 let pendingStart = false;
 
@@ -42,6 +41,7 @@ const els = {
   summary: document.getElementById('summary'),
   tutorial: document.getElementById('tutorial'),
   tooltip: document.getElementById('tooltip'),
+  army: document.getElementById('army'),
   modeSelect: document.getElementById('modeSelect'),
   diffSelect: document.getElementById('diffSelect'),
   btnPlay: document.getElementById('btnPlay'),
@@ -49,10 +49,18 @@ const els = {
   btnMenu: document.getElementById('btnMenu'),
   btnGather: document.getElementById('btnGather'),
   btnRecruit: document.getElementById('btnRecruit'),
+  btnWalls: document.getElementById('btnWalls'),
   btnWonder: document.getElementById('btnWonder'),
   btnEnd: document.getElementById('btnEnd'),
   btnTutorialGo: document.getElementById('btnTutorialGo'),
   btnTutorialSkip: document.getElementById('btnTutorialSkip'),
+  btnArmyHalf: document.getElementById('btnArmyHalf'),
+  btnArmyAll: document.getElementById('btnArmyAll'),
+  armySlider: document.getElementById('armySlider'),
+  armyCount: document.getElementById('armyCount'),
+  armyLeave: document.getElementById('armyLeave'),
+  stamFill: document.getElementById('stamFill'),
+  stamVal: document.getElementById('stamVal'),
   turnVal: document.getElementById('turnVal'),
   stockVal: document.getElementById('stockVal'),
   scoreVal: document.getElementById('scoreVal'),
@@ -83,6 +91,7 @@ function hide(el) {
 }
 
 function setDisabled(btn, off) {
+  if (!btn) return;
   btn.classList.toggle('is-disabled', off);
   btn.setAttribute('aria-disabled', off ? 'true' : 'false');
 }
@@ -203,26 +212,56 @@ function refreshHud() {
     .join('');
 }
 
+function syncArmySlider(troops) {
+  const max = Math.max(1, troops);
+  els.armySlider.max = String(max);
+  let v = match?.detachCount ?? max;
+  v = Math.max(1, Math.min(max, v));
+  match.detachCount = v;
+  els.armySlider.value = String(v);
+  els.armyCount.textContent = String(v);
+  els.armyLeave.textContent = String(Math.max(0, troops - v));
+}
+
 function refreshTilePanel() {
   if (!match) return;
   const info = tileSummary(match, match.selectedKey);
   if (!info) {
     els.tileTitle.textContent = 'Hex';
     els.tileBody.textContent = 'Select a hex.';
+    hide(els.army);
     return;
   }
   const owner = info.owner ? info.owner.name : 'Neutral';
+  const extras = [
+    info.buildingId || null,
+    info.hasWalls ? 'walls' : null,
+  ].filter(Boolean);
   els.tileTitle.textContent = info.isCapital ? `Capital · ${info.resource.name}` : info.resource.name;
   els.tileBody.textContent = `${owner} · troops ${info.troops}${
-    info.buildingId ? ` · ${info.buildingId}` : ''
-  }${orderFrom ? ` · order from ${orderFrom}` : ''}`;
+    extras.length ? ` · ${extras.join(' · ')}` : ''
+  }${orderFrom ? ` · ready to march` : ''}`;
+
+  const mineWithTroops = info.owner?.isPlayer && info.troops > 0;
+  if (mineWithTroops) {
+    show(els.army);
+    const pct = (info.stamina / TROOP_STAMINA_MAX) * 100;
+    els.stamFill.style.width = `${pct}%`;
+    els.stamFill.classList.toggle('low', info.stamina <= 1);
+    els.stamVal.textContent = `${info.stamina} / ${TROOP_STAMINA_MAX}`;
+    syncArmySlider(info.troops);
+  } else {
+    hide(els.army);
+  }
 
   const gPrev = actionPreview(match, 'player', match.selectedKey, 'gather');
   const rPrev = actionPreview(match, 'player', match.selectedKey, 'recruit');
   const wPrev = actionPreview(match, 'player', match.selectedKey, 'wonder');
+  const wallsPrev = actionPreview(match, 'player', match.selectedKey, 'walls');
   setDisabled(els.btnGather, !gPrev.ok);
   setDisabled(els.btnRecruit, !rPrev.ok);
   setDisabled(els.btnWonder, !wPrev.ok);
+  setDisabled(els.btnWalls, !wallsPrev.ok);
   setDisabled(els.btnEnd, false);
   els.btnGather.textContent = gPrev.title || 'Build gather';
 }
@@ -295,13 +334,24 @@ function onCanvasClick(ev) {
     const from = match.tiles.get(orderFrom);
     const adj = hexNeighbors(from.q, from.r).some((n) => hexKey(n.q, n.r) === key);
     if (adj && from.ownerId === 'player' && from.troops > 0) {
+      const amount = Math.max(1, Math.min(match.detachCount || from.troops, from.troops));
+      if (from.stamina <= 0) {
+        match.log.unshift('That army is out of stamina this turn.');
+        refreshHud();
+        return;
+      }
       if (tile.ownerId === 'player') {
-        tryMove(match, 'player', orderFrom, key, from.troops);
+        tryMove(match, 'player', orderFrom, key, amount);
       } else {
-        tryAttack(match, 'player', orderFrom, key);
+        tryAttack(match, 'player', orderFrom, key, amount);
       }
       orderFrom = null;
       match.selectedKey = key;
+      const next = match.tiles.get(key);
+      if (next?.ownerId === 'player' && next.troops > 0) {
+        orderFrom = key;
+        match.detachCount = next.troops;
+      }
       refreshHud();
       refreshTilePanel();
       finishIfEnded();
@@ -310,8 +360,12 @@ function onCanvasClick(ev) {
   }
 
   match.selectedKey = key;
-  if (tile.ownerId === player.id && tile.troops > 0) orderFrom = key;
-  else orderFrom = null;
+  if (tile.ownerId === player.id && tile.troops > 0) {
+    orderFrom = key;
+    match.detachCount = tile.troops;
+  } else {
+    orderFrom = null;
+  }
   refreshTilePanel();
 }
 
@@ -342,6 +396,30 @@ els.btnMenu.addEventListener('click', () => {
 els.btnTutorialGo?.addEventListener('click', () => finishTutorial(false));
 els.btnTutorialSkip?.addEventListener('click', () => finishTutorial(true));
 
+els.armySlider?.addEventListener('input', () => {
+  if (!match) return;
+  const info = tileSummary(match, match.selectedKey);
+  if (!info) return;
+  match.detachCount = Number(els.armySlider.value);
+  syncArmySlider(info.troops);
+});
+
+els.btnArmyHalf?.addEventListener('click', () => {
+  if (!match) return;
+  const info = tileSummary(match, match.selectedKey);
+  if (!info) return;
+  match.detachCount = Math.max(1, Math.floor(info.troops / 2));
+  syncArmySlider(info.troops);
+});
+
+els.btnArmyAll?.addEventListener('click', () => {
+  if (!match) return;
+  const info = tileSummary(match, match.selectedKey);
+  if (!info) return;
+  match.detachCount = info.troops;
+  syncArmySlider(info.troops);
+});
+
 bindActionButton(els.btnGather, 'gather', () => {
   if (!match) return;
   const info = tileSummary(match, match.selectedKey);
@@ -355,6 +433,13 @@ bindActionButton(els.btnGather, 'gather', () => {
 bindActionButton(els.btnRecruit, 'recruit', () => {
   if (!match) return;
   tryRecruit(match, 'player', match.selectedKey);
+  refreshHud();
+  refreshTilePanel();
+});
+
+bindActionButton(els.btnWalls, 'walls', () => {
+  if (!match) return;
+  tryBuild(match, 'player', match.selectedKey, 'walls');
   refreshHud();
   refreshTilePanel();
 });
