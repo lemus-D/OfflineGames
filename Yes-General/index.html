@@ -323,7 +323,7 @@
     <div class="choice-row" id="diffSelect"></div>
 
     <button class="btn primary" id="btnPlay" type="button">Begin campaign</button>
-    <p class="hint">Hover actions for costs · set army size, then click a neighbor to move or attack (3 stamina)</p>
+    <p class="hint">Select an army, set size, press Move / Attack, then click a highlighted hex</p>
     <p class="meta">Record <b id="recordVal">0–0</b></p>
   </div>
 </div>
@@ -365,7 +365,12 @@
       <button class="btn ghost" id="btnArmyHalf" type="button">Half</button>
       <button class="btn ghost" id="btnArmyAll" type="button">All</button>
     </div>
-    <p class="hint" style="margin-top:8px">Click an adjacent hex to move (yours — joins) or attack. Costs 1 stamina.</p>
+    <div class="btn-row">
+      <button class="btn primary" id="btnArmyMove" type="button" style="flex:1">Move</button>
+      <button class="btn ghost" id="btnArmyAttack" type="button" style="flex:1">Attack</button>
+    </div>
+    <button class="btn ghost hidden" id="btnArmyCancel" type="button" style="width:100%;margin-top:6px">Cancel targeting</button>
+    <p class="hint" id="armyHint" style="margin-top:8px">Set how many to send, then Move (within stamina) or Attack (adjacent enemy).</p>
   </div>
 
   <div class="btn-row">
@@ -389,7 +394,7 @@
       <li><b>Homelands.</b> The map is split into equal regions. You start with a capital and a small claimed area.</li>
       <li><b>Spend freely.</b> Build, recruit, move, and attack as much as your stockpile allows — then hit End turn.</li>
       <li><b>Gather.</b> Build the right structure on a resource hex so it yields each turn.</li>
-      <li><b>Armies.</b> Select troops, set how many to send, then click a neighbor. Each stack has 3 stamina per turn. Moving onto your own hex joins stacks.</li>
+      <li><b>Armies.</b> Select troops, set how many to send, press <b>Move</b> (green hexes within stamina) or <b>Attack</b> (adjacent enemies). Clicking other tiles only selects them.</li>
       <li><b>Win</b> three ways: conquer the map, lead on score when turns end, or finish an <b>Ancient Wonder</b> at your capital — a huge stone monument that ends the game the moment it is built.</li>
     </ol>
     <div class="btn-row">

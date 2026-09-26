@@ -6,7 +6,8 @@ import {
   endTurn,
   tryRecruit,
   tryAttack,
-  tryMove,
+  tryMarch,
+  reachableMoves,
   scoreCiv,
 } from './src/game/match.js';
 import { resolveCombat } from './src/game/combat.js';
@@ -62,19 +63,20 @@ for (const seed of [1, 42, 99, 12345, 777777]) {
   const cap = m.tiles.get(capKey);
   assert(cap.stamina === TROOP_STAMINA_MAX, `seed ${seed}: starting stamina full`);
 
-  // Split-move onto an owned neighbor if any.
-  const ownNeigh = hexNeighbors(cap.q, cap.r)
-    .map((n) => hexKey(n.q, n.r))
-    .find((k) => m.tiles.get(k)?.ownerId === 'player');
-  if (ownNeigh) {
-    const before = cap.troops;
-    const send = Math.max(1, Math.floor(before / 2));
-    const res = tryMove(m, 'player', capKey, ownNeigh, send);
-    assert(res.ok, `seed ${seed}: split move ok`);
-    assert(cap.troops === before - send, `seed ${seed}: split left remainder`);
-    assert(m.tiles.get(ownNeigh).troops >= send, `seed ${seed}: join/split arrived`);
-    assert(m.tiles.get(ownNeigh).stamina === TROOP_STAMINA_MAX - 1, `seed ${seed}: stamina spent`);
-  }
+  const reach = reachableMoves(m, capKey, 'player');
+  assert(reach.size > 0, `seed ${seed}: has reachable move tiles (${reach.size})`);
+  const dest = [...reach.keys()][0];
+  const cost = reach.get(dest);
+  const before = cap.troops;
+  const send = Math.max(1, Math.floor(before / 2));
+  const res = tryMarch(m, 'player', capKey, dest, send);
+  assert(res.ok, `seed ${seed}: march ok`);
+  assert(cap.troops === before - send, `seed ${seed}: split left remainder`);
+  assert(m.tiles.get(dest).troops >= send, `seed ${seed}: marched arrived`);
+  assert(
+    m.tiles.get(dest).stamina === TROOP_STAMINA_MAX - cost,
+    `seed ${seed}: stamina spent by path cost`
+  );
 
   tryRecruit(m, 'player', capKey);
   assert(m.tiles.get(capKey).troops > 0, `seed ${seed}: recruit works`);

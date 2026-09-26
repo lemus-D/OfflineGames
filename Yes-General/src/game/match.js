@@ -428,32 +428,100 @@ export function tryAttack(match, civId, fromKey, toKey, amount) {
   return { ok: true, ...result };
 }
 
-/** Move `amount` troops between adjacent owned hexes (join merges stacks). */
-export function tryMove(match, civId, fromKey, toKey, amount) {
+/** Passable for peaceful march: own land or empty hexes. */
+function isPassable(tile, civId) {
+  return !!tile && (tile.ownerId === civId || tile.ownerId === null);
+}
+
+/**
+ * BFS reachable destinations within stamina.
+ * @returns {Map<string, number>} key → stamina cost (path length)
+ */
+export function reachableMoves(match, fromKey, civId) {
+  const from = match.tiles.get(fromKey);
+  /** @type {Map<string, number>} */
+  const dist = new Map();
+  if (!from || from.ownerId !== civId || from.stamina <= 0) return dist;
+
+  const max = from.stamina;
+  const queue = [fromKey];
+  dist.set(fromKey, 0);
+  while (queue.length) {
+    const key = queue.shift();
+    const d = dist.get(key);
+    if (d >= max) continue;
+    const tile = match.tiles.get(key);
+    for (const n of hexNeighbors(tile.q, tile.r)) {
+      const nk = hexKey(n.q, n.r);
+      if (dist.has(nk)) continue;
+      const nt = match.tiles.get(nk);
+      if (!isPassable(nt, civId)) continue;
+      dist.set(nk, d + 1);
+      queue.push(nk);
+    }
+  }
+  dist.delete(fromKey); // destination only — not the origin
+  return dist;
+}
+
+/** Adjacent enemy hexes you can attack from here (costs 1 stamina). */
+export function adjacentAttackTargets(match, fromKey, civId) {
+  const from = match.tiles.get(fromKey);
+  const keys = [];
+  if (!from || from.ownerId !== civId || from.stamina <= 0) return keys;
+  for (const n of hexNeighbors(from.q, from.r)) {
+    const nk = hexKey(n.q, n.r);
+    const nt = match.tiles.get(nk);
+    if (nt && nt.ownerId && nt.ownerId !== civId) keys.push(nk);
+  }
+  return keys;
+}
+
+/**
+ * March `amount` troops along a path to toKey (own or empty), spending
+ * path-length stamina. Joins if destination is already yours.
+ */
+export function tryMarch(match, civId, fromKey, toKey, amount) {
   if (match.phase !== 'play') return { ok: false, reason: 'ended' };
   const from = match.tiles.get(fromKey);
   const to = match.tiles.get(toKey);
-  if (!from || !to || from.ownerId !== civId || to.ownerId !== civId) {
-    return { ok: false, reason: 'bad' };
-  }
+  if (!from || !to || from.ownerId !== civId) return { ok: false, reason: 'bad' };
   if (from.stamina <= 0) return { ok: false, reason: 'no-stamina' };
-  const adj = hexNeighbors(from.q, from.r).some((n) => hexKey(n.q, n.r) === toKey);
-  if (!adj) return { ok: false, reason: 'not-adjacent' };
+  if (!isPassable(to, civId)) return { ok: false, reason: 'blocked' };
+  if (fromKey === toKey) return { ok: false, reason: 'same' };
+
+  const reach = reachableMoves(match, fromKey, civId);
+  const cost = reach.get(toKey);
+  if (cost == null || cost > from.stamina) return { ok: false, reason: 'out-of-range' };
+
   const n = Math.min(Math.max(1, amount | 0), from.troops);
   if (n <= 0) return { ok: false, reason: 'no-troops' };
 
-  const moveStam = from.stamina - 1;
+  const moveStam = from.stamina - cost;
   from.troops -= n;
   if (from.troops <= 0) from.stamina = 0;
 
-  if (to.troops > 0) {
-    // Join: merged stack keeps the lower stamina.
-    to.stamina = Math.min(to.stamina, moveStam);
-  } else {
+  // Claiming empty land along the way isn't done — only the destination stack moves.
+  if (to.ownerId === null) {
+    to.ownerId = civId;
+    to.troops = n;
     to.stamina = moveStam;
+    to.isCapital = false;
+    pushLog(match, `${civById(match, civId).name} marched ${n} to (${to.q},${to.r}) (−${cost} stam).`);
+    checkConquest(match);
+    return { ok: true, moved: n, cost, claimed: true };
   }
+
+  if (to.troops > 0) to.stamina = Math.min(to.stamina, moveStam);
+  else to.stamina = moveStam;
   to.troops += n;
-  return { ok: true, moved: n, joined: true };
+  pushLog(match, `${civById(match, civId).name} marched ${n} to (${to.q},${to.r}) (−${cost} stam).`);
+  return { ok: true, moved: n, cost, joined: true };
+}
+
+/** Adjacent move helper (AI); prefers tryMarch for multi-hex. */
+export function tryMove(match, civId, fromKey, toKey, amount) {
+  return tryMarch(match, civId, fromKey, toKey, amount);
 }
 
 /**

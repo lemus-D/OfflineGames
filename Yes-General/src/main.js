@@ -8,12 +8,12 @@ import {
   tryBuild,
   tryRecruit,
   tryAttack,
-  tryMove,
+  tryMarch,
+  reachableMoves,
+  adjacentAttackTargets,
   scoreCiv,
   tileSummary,
   actionPreview,
-  hexKey,
-  hexNeighbors,
 } from './game/match.js';
 import { drawMatch, screenToHex, cameraForMap } from './game/render.js';
 
@@ -31,7 +31,12 @@ let match = null;
 let cam = { x: 0, y: 0 };
 let selectedMode = profile.lastMode in MODES ? profile.lastMode : 'standard';
 let selectedDiff = profile.lastDifficulty in DIFFICULTIES ? profile.lastDifficulty : 'normal';
-let orderFrom = null;
+/** @type {null|'move'|'attack'} */
+let targetMode = null;
+/** @type {Set<string>} */
+let highlightMove = new Set();
+/** @type {Set<string>} */
+let highlightAttack = new Set();
 let pendingStart = false;
 
 const els = {
@@ -56,6 +61,10 @@ const els = {
   btnTutorialSkip: document.getElementById('btnTutorialSkip'),
   btnArmyHalf: document.getElementById('btnArmyHalf'),
   btnArmyAll: document.getElementById('btnArmyAll'),
+  btnArmyMove: document.getElementById('btnArmyMove'),
+  btnArmyAttack: document.getElementById('btnArmyAttack'),
+  btnArmyCancel: document.getElementById('btnArmyCancel'),
+  armyHint: document.getElementById('armyHint'),
   armySlider: document.getElementById('armySlider'),
   armyCount: document.getElementById('armyCount'),
   armyLeave: document.getElementById('armyLeave'),
@@ -72,6 +81,17 @@ const els = {
   summaryBody: document.getElementById('summaryBody'),
   recordVal: document.getElementById('recordVal'),
 };
+
+function clearTargetMode() {
+  targetMode = null;
+  highlightMove = new Set();
+  highlightAttack = new Set();
+  if (els.btnArmyCancel) hide(els.btnArmyCancel);
+  if (els.armyHint) {
+    els.armyHint.textContent =
+      'Set how many to send, then Move (within stamina) or Attack (adjacent enemy).';
+  }
+}
 
 function resize() {
   dpr = Math.min(devicePixelRatio || 1, 2);
@@ -132,7 +152,7 @@ function beginMatch() {
   const seed = (Date.now() ^ (performance.now() * 1000)) >>> 0;
   match = createMatch(selectedMode, selectedDiff, seed);
   cam = cameraForMap(match);
-  orderFrom = null;
+  clearTargetMode();
   state = 'playing';
   hide(els.menu);
   hide(els.summary);
@@ -240,7 +260,7 @@ function refreshTilePanel() {
   els.tileTitle.textContent = info.isCapital ? `Capital · ${info.resource.name}` : info.resource.name;
   els.tileBody.textContent = `${owner} · troops ${info.troops}${
     extras.length ? ` · ${extras.join(' · ')}` : ''
-  }${orderFrom ? ` · ready to march` : ''}`;
+  }${targetMode ? ` · ${targetMode} targeting` : ''}`;
 
   const mineWithTroops = info.owner?.isPlayer && info.troops > 0;
   if (mineWithTroops) {
@@ -250,8 +270,13 @@ function refreshTilePanel() {
     els.stamFill.classList.toggle('low', info.stamina <= 1);
     els.stamVal.textContent = `${info.stamina} / ${TROOP_STAMINA_MAX}`;
     syncArmySlider(info.troops);
+    setDisabled(els.btnArmyMove, info.stamina <= 0);
+    setDisabled(els.btnArmyAttack, info.stamina <= 0);
+    if (targetMode) show(els.btnArmyCancel);
+    else hide(els.btnArmyCancel);
   } else {
     hide(els.army);
+    if (targetMode) clearTargetMode();
   }
 
   const gPrev = actionPreview(match, 'player', match.selectedKey, 'gather');
@@ -319,6 +344,43 @@ function bindActionButton(btn, action, handler) {
   btn.dataset.action = action;
 }
 
+function startMoveTargeting() {
+  if (!match) return;
+  const fromKey = match.selectedKey;
+  const info = tileSummary(match, fromKey);
+  if (!info?.owner?.isPlayer || info.troops <= 0 || info.stamina <= 0) return;
+  const reach = reachableMoves(match, fromKey, 'player');
+  highlightMove = new Set(reach.keys());
+  highlightAttack = new Set();
+  targetMode = 'move';
+  show(els.btnArmyCancel);
+  els.armyHint.textContent = highlightMove.size
+    ? `Click a green hex to march (up to ${info.stamina} steps). Other clicks just select.`
+    : 'No reachable hexes — blocked or out of stamina.';
+  if (!highlightMove.size) {
+    match.log.unshift('No tiles in range to move to.');
+    refreshHud();
+  }
+}
+
+function startAttackTargeting() {
+  if (!match) return;
+  const fromKey = match.selectedKey;
+  const info = tileSummary(match, fromKey);
+  if (!info?.owner?.isPlayer || info.troops <= 0 || info.stamina <= 0) return;
+  highlightAttack = new Set(adjacentAttackTargets(match, fromKey, 'player'));
+  highlightMove = new Set();
+  targetMode = 'attack';
+  show(els.btnArmyCancel);
+  els.armyHint.textContent = highlightAttack.size
+    ? 'Click a red enemy hex to attack with your detachment.'
+    : 'No adjacent enemies to attack.';
+  if (!highlightAttack.size) {
+    match.log.unshift('No adjacent enemies.');
+    refreshHud();
+  }
+}
+
 function onCanvasClick(ev) {
   if (state !== 'playing' || !match) return;
   const rect = canvas.getBoundingClientRect();
@@ -328,50 +390,46 @@ function onCanvasClick(ev) {
   if (!match.tiles.has(key)) return;
 
   const tile = match.tiles.get(key);
-  const player = match.civs.find((c) => c.isPlayer);
+  const fromKey = match.selectedKey;
 
-  if (orderFrom && orderFrom !== key) {
-    const from = match.tiles.get(orderFrom);
-    const adj = hexNeighbors(from.q, from.r).some((n) => hexKey(n.q, n.r) === key);
-    if (adj && from.ownerId === 'player' && from.troops > 0) {
-      const amount = Math.max(1, Math.min(match.detachCount || from.troops, from.troops));
-      if (from.stamina <= 0) {
-        match.log.unshift('That army is out of stamina this turn.');
-        refreshHud();
-        return;
-      }
-      if (tile.ownerId === 'player') {
-        tryMove(match, 'player', orderFrom, key, amount);
-      } else {
-        tryAttack(match, 'player', orderFrom, key, amount);
-      }
-      orderFrom = null;
-      match.selectedKey = key;
-      const next = match.tiles.get(key);
-      if (next?.ownerId === 'player' && next.troops > 0) {
-        orderFrom = key;
-        match.detachCount = next.troops;
-      }
-      refreshHud();
-      refreshTilePanel();
-      finishIfEnded();
-      return;
-    }
+  if (targetMode === 'move' && highlightMove.has(key)) {
+    const from = match.tiles.get(fromKey);
+    const amount = Math.max(1, Math.min(match.detachCount || from.troops, from.troops));
+    tryMarch(match, 'player', fromKey, key, amount);
+    clearTargetMode();
+    match.selectedKey = key;
+    const next = match.tiles.get(key);
+    if (next?.ownerId === 'player' && next.troops > 0) match.detachCount = next.troops;
+    refreshHud();
+    refreshTilePanel();
+    finishIfEnded();
+    return;
   }
 
+  if (targetMode === 'attack' && highlightAttack.has(key)) {
+    const from = match.tiles.get(fromKey);
+    const amount = Math.max(1, Math.min(match.detachCount || from.troops, from.troops));
+    tryAttack(match, 'player', fromKey, key, amount);
+    clearTargetMode();
+    match.selectedKey = key;
+    const next = match.tiles.get(key);
+    if (next?.ownerId === 'player' && next.troops > 0) match.detachCount = next.troops;
+    refreshHud();
+    refreshTilePanel();
+    finishIfEnded();
+    return;
+  }
+
+  // Plain select — does not issue orders (use Move / Attack).
+  if (targetMode) clearTargetMode();
   match.selectedKey = key;
-  if (tile.ownerId === player.id && tile.troops > 0) {
-    orderFrom = key;
-    match.detachCount = tile.troops;
-  } else {
-    orderFrom = null;
-  }
+  if (tile.ownerId === 'player' && tile.troops > 0) match.detachCount = tile.troops;
   refreshTilePanel();
 }
 
 function frame() {
   if (match && (state === 'playing' || state === 'summary')) {
-    drawMatch(g, W, H, match, cam);
+    drawMatch(g, W, H, match, cam, { move: highlightMove, attack: highlightAttack });
   } else {
     g.clearRect(0, 0, W, H);
     const bg = g.createLinearGradient(0, 0, W, H);
@@ -420,6 +478,21 @@ els.btnArmyAll?.addEventListener('click', () => {
   syncArmySlider(info.troops);
 });
 
+els.btnArmyMove?.addEventListener('click', () => {
+  if (els.btnArmyMove.classList.contains('is-disabled')) return;
+  startMoveTargeting();
+});
+
+els.btnArmyAttack?.addEventListener('click', () => {
+  if (els.btnArmyAttack.classList.contains('is-disabled')) return;
+  startAttackTargeting();
+});
+
+els.btnArmyCancel?.addEventListener('click', () => {
+  clearTargetMode();
+  refreshTilePanel();
+});
+
 bindActionButton(els.btnGather, 'gather', () => {
   if (!match) return;
   const info = tileSummary(match, match.selectedKey);
@@ -455,7 +528,7 @@ bindActionButton(els.btnWonder, 'wonder', () => {
 bindActionButton(els.btnEnd, 'end', () => {
   if (!match || match.phase !== 'play') return;
   endTurn(match);
-  orderFrom = null;
+  clearTargetMode();
   refreshHud();
   refreshTilePanel();
   finishIfEnded();

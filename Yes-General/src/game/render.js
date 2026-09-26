@@ -91,6 +91,7 @@ function drawResourceIcon(g, x, y, resourceId) {
 function drawBuildingIcon(g, x, y, buildingId) {
   g.save();
   g.translate(x, y);
+  g.scale(ICON_SCALE, ICON_SCALE);
   if (buildingId === 'farm') {
     g.fillStyle = '#c4a060';
     g.fillRect(-5, -1, 10, 6);
@@ -151,6 +152,7 @@ function drawBuildingIcon(g, x, y, buildingId) {
 function drawWallsIcon(g, x, y) {
   g.save();
   g.translate(x, y);
+  g.scale(ICON_SCALE, ICON_SCALE);
   g.fillStyle = '#9a9590';
   g.fillRect(-6, -1, 3.5, 6);
   g.fillRect(-1.5, -3, 3.5, 8);
@@ -238,8 +240,9 @@ function drawStaminaBar(g, x, y, stamina, max) {
  * @param {number} H
  * @param {object} match
  * @param {{x:number,y:number}} cam
+ * @param {{ move?: Set<string>, attack?: Set<string> }} [highlights]
  */
-export function drawMatch(g, W, H, match, cam) {
+export function drawMatch(g, W, H, match, cam, highlights = {}) {
   g.clearRect(0, 0, W, H);
 
   const bg = g.createLinearGradient(0, 0, W, H);
@@ -283,18 +286,39 @@ export function drawMatch(g, W, H, match, cam) {
       g.stroke();
     }
 
-    const selected = match.selectedKey === hexKey(tile.q, tile.r);
-    g.strokeStyle = selected ? '#fff3c4' : 'rgba(20,14,10,0.5)';
-    g.lineWidth = selected ? 2.6 : 1;
+    const key = hexKey(tile.q, tile.r);
+    const selected = match.selectedKey === key;
+    const moveHl = highlights.move?.has(key);
+    const atkHl = highlights.attack?.has(key);
+    if (moveHl) {
+      g.fillStyle = 'rgba(120, 200, 120, 0.38)';
+      drawHexPath(g, sx, sy, HEX_SIZE - 1);
+      g.fill();
+    }
+    if (atkHl) {
+      g.fillStyle = 'rgba(220, 90, 60, 0.4)';
+      drawHexPath(g, sx, sy, HEX_SIZE - 1);
+      g.fill();
+    }
+    g.strokeStyle = selected
+      ? '#fff3c4'
+      : moveHl
+        ? '#8fd98f'
+        : atkHl
+          ? '#e07a5f'
+          : 'rgba(20,14,10,0.5)';
+    g.lineWidth = selected || moveHl || atkHl ? 2.6 : 1;
     drawHexPath(g, sx, sy, HEX_SIZE - 1);
     g.stroke();
 
     // Resource icon (top-left).
-    drawResourceIcon(g, sx - 10, sy - 10, tile.resourceId);
+    drawResourceIcon(g, sx - 11, sy - 9, tile.resourceId);
 
-    // Structure icons (top-right).
-    if (tile.buildingId) drawBuildingIcon(g, sx + 10, sy - 10, tile.buildingId);
-    if (tile.hasWalls) drawWallsIcon(g, sx + (tile.buildingId ? 10 : 10), sy + (tile.buildingId ? 2 : -10));
+    // Structure icons (top-right / below if both).
+    if (tile.buildingId) drawBuildingIcon(g, sx + 11, sy - 9, tile.buildingId);
+    if (tile.hasWalls) {
+      drawWallsIcon(g, sx + 11, sy + (tile.buildingId ? 8 : -9));
+    }
 
     if (tile.isCapital) {
       g.strokeStyle = '#fff3c4';
@@ -306,7 +330,7 @@ export function drawMatch(g, W, H, match, cam) {
 
     if (tile.troops > 0) {
       const color = tile.ownerId ? civColor(tile.ownerId) : '#aaa';
-      drawTroopSprite(g, sx + 7, sy + 3, color, 1);
+      drawTroopSprite(g, sx + 8, sy + 4, color, TROOP_SCALE);
       g.fillStyle = 'rgba(15,10,6,0.8)';
       g.fillRect(sx - 15, sy + 11, 18, 10);
       g.fillStyle = '#f2e8d5';
