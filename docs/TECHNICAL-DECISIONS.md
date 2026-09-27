@@ -217,8 +217,11 @@ spec is in [../Sharky/SHARKYPLAN.md](../Sharky/SHARKYPLAN.md).
 
 Not yet decided. Do not assume an answer.
 
-- **Yes-General** has had almost no design conversation. See
-  [../Yes-General/YES-GENERALPLAN.md](../Yes-General/YES-GENERALPLAN.md).
+- **Yes-General logistics** — road raids by players, action economy, and full AI
+  search/eval. Core loop is decided in
+  [../Yes-General/YES-GENERALPLAN.md](../Yes-General/YES-GENERALPLAN.md); a
+  basic structure is playable.
+
 - **The art direction for Sharky's animals** — how silly, how stylised. The body
   plan supports a wide range and the spike picks one arbitrarily.
 - **iOS storage eviction and whether `navigator.storage.persist()` is granted.**
