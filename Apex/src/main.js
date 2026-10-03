@@ -1,0 +1,187 @@
+/* Boot, menu, HUD, frame loop. */
+
+import { Input } from './core/input.js';
+import { Save } from './core/save.js';
+import { clamp } from './core/rng.js';
+import { PlaySession } from './game/play.js';
+import {
+  drawSky,
+  drawPickup,
+  drawRocket,
+  drawCollectFx,
+  drawHitFlash,
+  worldToScreen,
+} from './game/draw.js';
+
+const canvas = document.getElementById('stage');
+const g = canvas.getContext('2d');
+const input = new Input();
+
+let W = 0,
+  H = 0,
+  dpr = 1;
+let profile = Save.loadProfile();
+
+/** @type {'menu'|'playing'|'summary'} */
+let state = 'menu';
+/** @type {PlaySession|null} */
+let session = null;
+let animTime = 0;
+let lastTs = 0;
+let menuAltitude = 0;
+
+const els = {
+  menu: document.getElementById('menu'),
+  hud: document.getElementById('hud'),
+  summary: document.getElementById('summary'),
+  fuelFill: document.getElementById('fuelFill'),
+  score: document.getElementById('scoreVal'),
+  altitude: document.getElementById('altVal'),
+  coins: document.getElementById('coinVal'),
+  best: document.getElementById('bestVal'),
+  bestAlt: document.getElementById('bestAltVal'),
+  summaryBody: document.getElementById('summaryBody'),
+  btnPlay: document.getElementById('btnPlay'),
+  btnAgain: document.getElementById('btnAgain'),
+  btnMenu: document.getElementById('btnMenu'),
+};
+
+function resize() {
+  dpr = Math.min(devicePixelRatio || 1, 2);
+  W = canvas.clientWidth;
+  H = canvas.clientHeight;
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+addEventListener('resize', resize);
+
+function show(el) {
+  el.classList.remove('hidden');
+}
+function hide(el) {
+  el.classList.add('hidden');
+}
+
+function refreshMenuMeta() {
+  els.best.textContent = String(profile.bestScore);
+  els.bestAlt.textContent = String(profile.bestAltitude);
+}
+
+function startRun() {
+  const seed = (Date.now() ^ (performance.now() * 1000)) >>> 0;
+  session = new PlaySession(seed, {
+    onDeath() {
+      endRun();
+    },
+  });
+  state = 'playing';
+  hide(els.menu);
+  hide(els.summary);
+  show(els.hud);
+}
+
+function endRun() {
+  if (!session) return;
+  const sum = session.summary();
+  profile.runs += 1;
+  profile.totalCoins += sum.coins;
+  profile.bestScore = Math.max(profile.bestScore, sum.score);
+  profile.bestAltitude = Math.max(profile.bestAltitude, sum.altitude);
+  profile.bestCoins = Math.max(profile.bestCoins, sum.coins);
+  Save.writeProfile(profile);
+
+  state = 'summary';
+  hide(els.hud);
+  const reason =
+    sum.reason === 'meteor' ? 'A meteor drained your tanks dry.' : 'Out of fuel. Free fall.';
+  els.summaryBody.innerHTML = `
+    <p class="reason">${reason}</p>
+    <div class="stat-grid">
+      <div><span>Score</span><b>${sum.score}</b></div>
+      <div><span>Altitude</span><b>${sum.altitude}</b></div>
+      <div><span>Coins</span><b>${sum.coins}</b></div>
+      <div><span>Best</span><b>${profile.bestScore}</b></div>
+    </div>
+    <p class="muted">Runs: ${profile.runs} · Lifetime coins: ${profile.totalCoins}</p>
+  `;
+  show(els.summary);
+}
+
+function drawSession(dt, playing) {
+  const s = session;
+  const p = s.player;
+  const camY = p.y;
+
+  if (playing) s.step(dt, input.steer());
+
+  drawSky(g, W, H, p.y, animTime);
+
+  for (const u of s.pickups) {
+    const scr = worldToScreen(u.x, u.y, camY, W, H);
+    if (scr.y < -60 || scr.y > H + 60) continue;
+    drawPickup(g, u.kind, scr.x, scr.y, u.r * scr.scale * 0.085, u.spin, animTime);
+  }
+
+  for (const fx of s.collectFx) drawCollectFx(g, fx, camY, W, H, animTime);
+
+  const rocketScr = worldToScreen(p.x, p.y, camY, W, H);
+  drawRocket(g, rocketScr.x, rocketScr.y, rocketScr.scale * 0.1, p.tilt, animTime, p.alive);
+
+  drawHitFlash(g, W, H, s.flash);
+
+  if (playing) {
+    els.fuelFill.style.width = `${clamp(p.fuel, 0, 1) * 100}%`;
+    els.fuelFill.classList.toggle('low', p.fuel < 0.28);
+    els.score.textContent = String(s.score);
+    els.altitude.textContent = String(Math.floor(p.y));
+    els.coins.textContent = String(s.coins);
+  }
+}
+
+function drawMenuBackdrop(dt) {
+  menuAltitude += dt * 40;
+  drawSky(g, W, H, menuAltitude, animTime);
+  const x = W * 0.62 + Math.sin(animTime * 0.7) * 18;
+  const y = H * 0.52 + Math.sin(animTime * 1.1) * 10;
+  drawRocket(g, x, y, 2.4, Math.sin(animTime) * 0.25, animTime, true);
+  drawPickup(g, 'fuel', W * 0.78, H * 0.28, 18, animTime, animTime);
+  drawPickup(g, 'coin', W * 0.22, H * 0.38, 14, -animTime * 1.4, animTime);
+  drawPickup(g, 'meteor', W * 0.85, H * 0.68, 22, animTime * 0.8, animTime);
+}
+
+function frame(ts) {
+  if (!lastTs) lastTs = ts;
+  const dt = Math.min(0.05, (ts - lastTs) / 1000);
+  lastTs = ts;
+  animTime += dt;
+
+  if (state === 'menu' || state === 'summary') {
+    drawMenuBackdrop(dt);
+  } else if (session) {
+    drawSession(dt, state === 'playing');
+  }
+
+  input.endFrame();
+  requestAnimationFrame(frame);
+}
+
+els.btnPlay.addEventListener('click', startRun);
+els.btnAgain.addEventListener('click', startRun);
+els.btnMenu.addEventListener('click', () => {
+  hide(els.summary);
+  show(els.menu);
+  state = 'menu';
+  refreshMenuMeta();
+});
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+refreshMenuMeta();
+resize();
+show(els.menu);
+hide(els.hud);
+hide(els.summary);
+requestAnimationFrame(frame);
