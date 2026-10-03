@@ -4,7 +4,8 @@ import { clamp, lerp, hash2i } from '../core/rng.js';
 import { WORLD_HALF_W } from './content.js';
 
 export function worldToScreen(wx, wy, camY, W, H) {
-  const scale = Math.min(W, H) / (WORLD_HALF_W * 2.4);
+  // Larger scale = bigger rocket/pickups on screen (world half-width still clamps play).
+  const scale = Math.min(W, H) / (WORLD_HALF_W * 1.85);
   return {
     x: W * 0.5 + wx * scale,
     y: H * 0.62 - (wy - camY) * scale,
