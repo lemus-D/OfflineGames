@@ -229,7 +229,7 @@ export function drawCollectFx(g, fx, camY, W, H, time) {
     fx.kind === 'meteor' ? 'rgba(255,120,60,0.9)' : fx.kind === 'coin' ? '#ffd060' : '#6fecc0';
   g.lineWidth = 2;
   g.beginPath();
-  g.arc(scr.x, scr.y, (10 + u * 28) * scr.scale * 0.08, 0, 7);
+  g.arc(scr.x, scr.y, (8 + u * 22) * scr.scale, 0, 7);
   g.stroke();
   g.restore();
 }

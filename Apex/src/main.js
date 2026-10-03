@@ -119,14 +119,15 @@ function drawSession(dt, playing) {
 
   for (const u of s.pickups) {
     const scr = worldToScreen(u.x, u.y, camY, W, H);
-    if (scr.y < -60 || scr.y > H + 60) continue;
-    drawPickup(g, u.kind, scr.x, scr.y, u.r * scr.scale * 0.085, u.spin, animTime);
+    if (scr.y < -80 || scr.y > H + 80) continue;
+    drawPickup(g, u.kind, scr.x, scr.y, u.r * scr.scale, u.spin, animTime);
   }
 
   for (const fx of s.collectFx) drawCollectFx(g, fx, camY, W, H, animTime);
 
   const rocketScr = worldToScreen(p.x, p.y, camY, W, H);
-  drawRocket(g, rocketScr.x, rocketScr.y, rocketScr.scale * 0.1, p.tilt, animTime, p.alive);
+  // Rocket art is ~44 units tall at s=1; match collision radius (~14 world).
+  drawRocket(g, rocketScr.x, rocketScr.y, rocketScr.scale * 0.85, p.tilt, animTime, p.alive);
 
   drawHitFlash(g, W, H, s.flash);
 
