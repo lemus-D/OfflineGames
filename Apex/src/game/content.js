@@ -18,7 +18,7 @@ export const ROCKET = {
   /** Max lean from upright (radians). */
   maxTilt: 0.85,
   /** Slow return toward upright when not steering. */
-  tiltReturn: 1.1,
+  tiltReturn: 0.55,
   drag: 0.985, // light air drag on velocity
   radius: 16,
   startFuel: 1,

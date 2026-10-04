@@ -31,7 +31,7 @@ const P = {
 };
 
 /** Above this altitude the sky is one solid space color. */
-const SPACE_ALT = 420;
+const SPACE_ALT = 280;
 
 export function worldToScreen(wx, wy, camY, W, H) {
   const scale = Math.min(W, H) / (WORLD_HALF_W * 1.85);
@@ -66,52 +66,35 @@ function blit(g, x, y, px, rows, colors) {
 export function drawSky(g, W, H, altitude, time) {
   g.imageSmoothingEnabled = false;
 
-  // Once you're up, one solid space backdrop — no striped bands.
-  if (altitude >= SPACE_ALT) {
-    g.fillStyle = P.ink;
-    g.fillRect(0, 0, W, H);
-  } else {
-    // Low altitude only: sky + optional ground. Two tones max, not three stripes.
-    const fade = clamp(altitude / SPACE_ALT, 0, 1);
-    g.fillStyle = fade < 0.55 ? P.skyLo : P.skyMid;
-    g.fillRect(0, 0, W, H);
+  // One fill color for the whole screen. Near the pad it's sky blue;
+  // past SPACE_ALT it's solid night — never stacked color bands.
+  const inSpace = altitude >= SPACE_ALT;
+  g.fillStyle = inSpace ? P.ink : P.skyLo;
+  g.fillRect(0, 0, W, H);
 
-    // Soft top darkening as you climb (still one fill + overlay, not bands).
-    if (fade > 0.25) {
-      g.fillStyle = P.ink;
-      g.globalAlpha = (fade - 0.25) / 0.75;
-      g.fillRect(0, 0, W, H);
-      g.globalAlpha = 1;
-    }
-
-    // Ground strip near the pad.
-    if (altitude < 220) {
-      const gy = snap(H * 0.62 + altitude * (Math.min(W, H) / (WORLD_HALF_W * 1.85)));
-      if (gy < H) {
-        g.fillStyle = P.groundDk;
-        g.fillRect(0, gy, W, H - gy);
-        g.fillStyle = P.ground;
-        g.fillRect(0, gy, W, 8);
-        g.fillStyle = P.green;
-        for (let x = 0; x < W; x += 12) {
-          if (hash2i(x, 3, 2) > 0.55) g.fillRect(x, gy - 4, 4, 4);
-        }
+  // Ground only while still near the pad (below the space cutoff).
+  if (!inSpace && altitude < 200) {
+    const gy = snap(H * 0.62 + altitude * (Math.min(W, H) / (WORLD_HALF_W * 1.85)));
+    if (gy < H && gy > 0) {
+      g.fillStyle = P.groundDk;
+      g.fillRect(0, gy, W, H - gy);
+      g.fillStyle = P.ground;
+      g.fillRect(0, gy, W, 8);
+      g.fillStyle = P.green;
+      for (let x = 0; x < W; x += 12) {
+        if (hash2i(x, 3, 2) > 0.55) g.fillRect(x, gy - 4, 4, 4);
       }
     }
 
-    // Chunk clouds near ground
-    if (fade < 0.7) {
-      g.fillStyle = P.cloud;
-      g.globalAlpha = 0.3 * (1 - fade / 0.7);
-      for (let i = 0; i < 4; i++) {
-        const cx = snap((0.15 + i * 0.22) * W + Math.sin(time * 0.4 + i) * 8);
-        const cy = snap(H * (0.58 + i * 0.07));
-        g.fillRect(cx, cy, 48, 10);
-        g.fillRect(cx + 10, cy - 8, 28, 8);
-        g.fillRect(cx + 18, cy + 8, 22, 6);
-      }
-      g.globalAlpha = 1;
+    g.fillStyle = P.cloud;
+    g.globalAlpha = 0.28 * (1 - altitude / 200);
+    for (let i = 0; i < 3; i++) {
+      const cx = snap((0.2 + i * 0.25) * W + Math.sin(time * 0.4 + i) * 8);
+      const cy = snap(H * (0.55 + i * 0.08));
+      g.fillRect(cx, cy, 44, 10);
+      g.fillRect(cx + 10, cy - 8, 24, 8);
     }
+    g.globalAlpha = 1;
   }
 
   // Blocky stars — stronger in space
@@ -137,22 +120,25 @@ export function drawSky(g, W, H, altitude, time) {
   }
 }
 
-/** Longer, skinnier rocket (14 rows × 8 cols). */
+/** Long slim rocket (17 rows × 7 cols). */
 const ROCKET_SPRITE = [
-  '...rr...',
-  '..rrrr..',
-  '.wwyyww.',
-  '.wwyyww.',
-  '.wwyyww.',
-  '.wwbbww.',
-  '.wwbbww.',
-  '.wwyyww.',
-  '.wwyyww.',
-  '.wwyyww.',
-  '.wwyyww.',
-  'rwwwwwwr',
-  'rr....rr',
-  'r......r',
+  '...r...',
+  '..rrr..',
+  '.wwyww.',
+  '.wwyww.',
+  '.wwyww.',
+  '.wwyww.',
+  '.wbbyw.',
+  '.wbbyw.',
+  '.wwyww.',
+  '.wwyww.',
+  '.wwyww.',
+  '.wwyww.',
+  '.wwyww.',
+  '.wwyww.',
+  'rwwwwwr',
+  'rr...rr',
+  'r.....r',
 ];
 
 const ROCKET_COLORS = {
@@ -247,9 +233,9 @@ export function drawPickup(g, kind, x, y, r, spin, time) {
 
 export function drawRocket(g, x, y, scale, tilt, time, thrusting) {
   g.imageSmoothingEnabled = false;
-  const px = Math.max(2, Math.round(scale * 2.8));
+  const px = Math.max(2, Math.round(scale * 3.1));
   const rows = ROCKET_SPRITE.length;
-  const cols = 8;
+  const cols = 7;
   const bodyH = rows * px;
   const bodyW = cols * px;
 
@@ -260,7 +246,7 @@ export function drawRocket(g, x, y, scale, tilt, time, thrusting) {
 
   if (thrusting) {
     const flame = Math.floor(time * 12) % 2 === 0 ? FLAME_A : FLAME_B;
-    blit(g, -((5 * px) / 2), bodyH / 2 - px, px, flame, FLAME_COLORS);
+    blit(g, -((5 * px) / 2), bodyH / 2 - px * 2, px, flame, FLAME_COLORS);
   }
 
   blit(g, -bodyW / 2, -bodyH / 2, px, ROCKET_SPRITE, ROCKET_COLORS);
