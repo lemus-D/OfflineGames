@@ -2,7 +2,7 @@
    No asset files. Snapped pixels, flat palette. Sky color follows altitude. */
 
 import { clamp, hash2i } from '../core/rng.js';
-import { WORLD_HALF_W } from './content.js';
+import { WORLD_HALF_W, PAD } from './content.js';
 import { gameToKm, skyColorAtKm, bodiesNear } from './altitude.js';
 
 /** NES-ish palette */
@@ -216,6 +216,71 @@ export function drawFlybyBanner(g, W, H, text, age, life) {
   g.textBaseline = 'middle';
   g.fillText(text, W * 0.5, H * 0.18 + 18);
   g.restore();
+}
+
+/**
+ * 8-bit launch pad at world (PAD.x, 0) with a deck at PAD.deckY.
+ * Drawn when the camera is still near the ground.
+ */
+export function drawLaunchPad(g, W, H, camY) {
+  if (camY > 520) return;
+  g.imageSmoothingEnabled = false;
+
+  const deck = worldToScreen(PAD.x, PAD.deckY, camY, W, H);
+  const ground = worldToScreen(PAD.x, 0, camY, W, H);
+  const left = worldToScreen(PAD.x - PAD.halfW, PAD.deckY, camY, W, H);
+  const right = worldToScreen(PAD.x + PAD.halfW, PAD.deckY, camY, W, H);
+  const deckW = Math.max(8, right.x - left.x);
+  const deckH = Math.max(4, Math.round(6 * deck.scale * 0.08));
+  const legW = Math.max(3, Math.round(4 * deck.scale * 0.08));
+  const groundY = snap(ground.y);
+
+  // Concrete base on the dirt
+  g.fillStyle = '#5a5a6e';
+  g.fillRect(snap(left.x - 8), groundY - 4, snap(deckW + 16), 10);
+  g.fillStyle = '#3a3a4a';
+  g.fillRect(snap(left.x - 8), groundY + 2, snap(deckW + 16), 6);
+
+  // Support legs
+  const legInset = Math.round(deckW * 0.12);
+  g.fillStyle = '#8a93a8';
+  g.fillRect(snap(left.x + legInset), snap(deck.y), legW, Math.max(4, groundY - snap(deck.y)));
+  g.fillRect(snap(right.x - legInset - legW), snap(deck.y), legW, Math.max(4, groundY - snap(deck.y)));
+  // Cross brace
+  g.fillStyle = '#6a7388';
+  g.fillRect(snap(left.x + legInset), snap((deck.y + groundY) / 2), snap(deckW - legInset * 2), 3);
+
+  // Deck plate
+  g.fillStyle = '#c0cbdc';
+  g.fillRect(snap(left.x), snap(deck.y - deckH), snap(deckW), deckH + 2);
+  g.fillStyle = '#e8eef8';
+  g.fillRect(snap(left.x), snap(deck.y - deckH), snap(deckW), 3);
+  // Hazard stripes
+  g.fillStyle = '#fee761';
+  for (let x = snap(left.x) + 4; x < snap(right.x) - 6; x += 14) {
+    g.fillRect(x, snap(deck.y - deckH + 4), 8, Math.max(2, deckH - 4));
+  }
+  g.fillStyle = '#1a1c2c';
+  for (let x = snap(left.x) + 11; x < snap(right.x) - 6; x += 14) {
+    g.fillRect(x, snap(deck.y - deckH + 4), 3, Math.max(2, deckH - 4));
+  }
+
+  // Little tower / umbilical
+  const towerX = snap(right.x + 6);
+  g.fillStyle = '#8a93a8';
+  g.fillRect(towerX, snap(deck.y - 52 * deck.scale * 0.08), 5, Math.max(8, groundY - snap(deck.y - 52 * deck.scale * 0.08)));
+  g.fillStyle = '#fee761';
+  g.fillRect(towerX - 1, snap(deck.y - 52 * deck.scale * 0.08), 7, 4);
+  // Arm toward rocket
+  g.fillStyle = '#6a7388';
+  g.fillRect(snap(right.x - 4), snap(deck.y - 28 * deck.scale * 0.08), snap(towerX - right.x + 4), 3);
+
+  // "PAD" stencil
+  g.fillStyle = '#1a1c2c';
+  g.font = `bold ${Math.max(9, Math.round(11 * deck.scale * 0.08))}px Courier New, monospace`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('PAD-1', snap(deck.x), snap(deck.y - deckH / 2));
 }
 
 /** Long slim rocket (17 rows × 7 cols). */

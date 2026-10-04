@@ -4,7 +4,7 @@ import { Input } from './core/input.js';
 import { Save } from './core/save.js';
 import { clamp } from './core/rng.js';
 import { PlaySession } from './game/play.js';
-import { tiltDegrees } from './game/content.js';
+import { tiltDegrees, ROCKET } from './game/content.js';
 import {
   gameToKm,
   formatAltitudeKm,
@@ -19,6 +19,7 @@ import {
   drawHitFlash,
   drawCelestials,
   drawFlybyBanner,
+  drawLaunchPad,
   worldToScreen,
 } from './game/draw.js';
 
@@ -179,6 +180,7 @@ function drawSession(dt, playing) {
 
   g.imageSmoothingEnabled = false;
   drawSky(g, W, H, p.y, animTime);
+  drawLaunchPad(g, W, H, camY);
   drawCelestials(g, W, H, camY, animTime);
 
   for (const u of s.pickups) {
@@ -233,15 +235,23 @@ function updateGauges(s) {
 }
 
 function drawMenuBackdrop(dt) {
-  // Drift the menu backdrop up through the atmosphere layers.
-  menuAltitude = (menuAltitude + dt * 55) % 4000;
+  // Hold on the pad a moment, then drift up through the atmosphere.
+  menuAltitude += dt * 40;
+  if (menuAltitude > 3800) menuAltitude = 0;
   g.imageSmoothingEnabled = false;
-  drawSky(g, W, H, menuAltitude, animTime);
-  drawCelestials(g, W, H, menuAltitude, animTime);
-  const x = W * 0.62 + Math.sin(animTime * 0.7) * 18;
-  const y = H * 0.52 + Math.sin(animTime * 1.1) * 10;
-  const thrusting = Math.sin(animTime * 3) > -0.2;
-  drawRocket(g, x, y, 2.4, Math.sin(animTime) * 0.25, animTime, thrusting);
+  const cam = menuAltitude < 80 ? ROCKET_START_CAM : menuAltitude;
+  drawSky(g, W, H, cam, animTime);
+  drawLaunchPad(g, W, H, cam);
+  if (menuAltitude >= 80) drawCelestials(g, W, H, cam, animTime);
+  const padScr = worldToScreen(0, ROCKET_START_Y, cam, W, H);
+  const thrusting = menuAltitude > 40 && Math.sin(animTime * 3) > -0.2;
+  if (menuAltitude < 80) {
+    drawRocket(g, padScr.x, padScr.y, padScr.scale * 0.85, 0, animTime, thrusting);
+  } else {
+    const x = W * 0.62 + Math.sin(animTime * 0.7) * 18;
+    const y = H * 0.52 + Math.sin(animTime * 1.1) * 10;
+    drawRocket(g, x, y, 2.4, Math.sin(animTime) * 0.25, animTime, true);
+  }
   drawPickup(g, 'fuel', W * 0.78, H * 0.28, 22, animTime, animTime);
   drawPickup(g, 'coin', W * 0.22, H * 0.38, 16, -animTime * 1.4, animTime);
   drawPickup(g, 'meteor', W * 0.85, H * 0.68, 24, animTime * 0.8, animTime);

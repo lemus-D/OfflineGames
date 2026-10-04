@@ -5,6 +5,15 @@ export const FIXED_DT = 1 / 60;
 /** World half-width the rocket can travel in. */
 export const WORLD_HALF_W = 220;
 
+/** Launch pad in world space. Deck is the top surface; ground is y = 0. */
+export const PAD = {
+  x: 0,
+  /** World Y of the platform deck the rocket sits on. */
+  deckY: 28,
+  /** Half-width of the deck. */
+  halfW: 48,
+};
+
 export const ROCKET = {
   /** Accel along the rocket's nose while boosting (world units / sec²). */
   thrustAccel: 780,
@@ -22,8 +31,8 @@ export const ROCKET = {
   startFuel: 1,
   /** Fuel burned per second while boosting. */
   burnRate: 0.12,
-  /** Start height above the pad. */
-  startY: 48,
+  /** Sit on the pad deck (sprite center above the deck). */
+  startY: PAD.deckY + 18,
 };
 
 /** Pickup kinds as data rows. */
