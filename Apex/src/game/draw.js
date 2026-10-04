@@ -30,6 +30,25 @@ const P = {
   mars: '#c45a3a',
   marsDk: '#7a2e18',
   marsLt: '#e08050',
+  venus: '#e8d0a0',
+  venusDk: '#b09060',
+  sun: '#ffe08a',
+  sunCore: '#ffc040',
+  sunHot: '#ff6a20',
+  jupiter: '#d0a070',
+  jupiterBand: '#c07040',
+  jupiterLt: '#f0d0a8',
+  saturn: '#e0c888',
+  saturnDk: '#b09050',
+  ring: '#d8c8a0',
+  uranus: '#7ec8d0',
+  uranusDk: '#3a8898',
+  neptune: '#3a6ad0',
+  neptuneDk: '#1e3e90',
+  pluto: '#b0a090',
+  plutoDk: '#706050',
+  rock: '#8a7060',
+  rockLt: '#b09880',
 };
 
 export function worldToScreen(wx, wy, camY, W, H) {
@@ -66,8 +85,28 @@ function blit(g, x, y, px, rows, colors) {
   }
 }
 
+/** Pre-rasterize a sprite so rotation uses one drawImage (no fillRect smear). */
+const spriteCache = new Map();
+function spriteCanvas(key, rows, colors, px) {
+  const id = `${key}@${px}`;
+  let c = spriteCache.get(id);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = rows[0].length * px;
+  c.height = rows.length * px;
+  const cg = c.getContext('2d');
+  cg.imageSmoothingEnabled = false;
+  blit(cg, 0, 0, px, rows, colors);
+  spriteCache.set(id, c);
+  return c;
+}
+
 export function drawSky(g, W, H, altitude, time) {
   g.imageSmoothingEnabled = false;
+  // Hard clear — prevents motion trails / ghost rockets on some GPUs.
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = 'source-over';
+  g.clearRect(0, 0, W, H);
 
   const km = gameToKm(altitude);
   const col = skyColorAtKm(km);
@@ -147,7 +186,6 @@ const MOON_SPRITE = [
   '..mmmmmmmmmm..',
   '....mmmmmm....',
 ];
-
 const MOON_COLORS = { m: P.moon, d: P.moonDk };
 
 const MARS_SPRITE = [
@@ -165,32 +203,193 @@ const MARS_SPRITE = [
   '..rrrrrrrrrr..',
   '....rrrrrr....',
 ];
-
 const MARS_COLORS = { r: P.mars, R: P.marsLt, D: P.marsDk };
 
-/** Draw Moon / Mars when the camera is near their game altitude. */
+const VENUS_SPRITE = [
+  '....vvvvvv....',
+  '..vvvvvvvvvv..',
+  '.vvvvVvvvvvvv.',
+  '.vvvvvvvvvvvv.',
+  'vvvvvvvvvvvvvv',
+  'vvvVvvvvvvVvvv',
+  'vvvvvvvvvvvvvv',
+  'vvvvvvVvvvvvvv',
+  'vvvvvvvvvvvvvv',
+  '.vvvvvvvvvvvv.',
+  '.vvvvVvvvvvvv.',
+  '..vvvvvvvvvv..',
+  '....vvvvvv....',
+];
+const VENUS_COLORS = { v: P.venus, V: P.venusDk };
+
+const SUN_SPRITE = [
+  '......yy......',
+  '......yy......',
+  '..y..yyyy..y..',
+  '...yyyyyyyy...',
+  '..yyYYccYYyy..',
+  '.yyYccccccYyy.',
+  'yyYcccHHcccYyy',
+  'yyYccHHHHccYyy',
+  'yyYcccHHcccYyy',
+  '.yyYccccccYyy.',
+  '..yyYYccYYyy..',
+  '...yyyyyyyy...',
+  '..y..yyyy..y..',
+  '......yy......',
+  '......yy......',
+];
+const SUN_COLORS = { y: P.sun, Y: P.sunCore, c: P.sunCore, H: P.sunHot };
+
+const JUPITER_SPRITE = [
+  '....jjjjjj....',
+  '..jjJJjjJJjj..',
+  '.jjjjjjjjjjjj.',
+  '.jBBBBBBBBjjj.',
+  'jjjjjjjjjjjjjj',
+  'jjJjjjjjjjJjjj',
+  'jBBBBBBBBjjjjj',
+  'jjjjRRjjjjjjjj',
+  'jjjjjjjjjjjjjj',
+  '.jBBBBBBBBjjj.',
+  '.jjjjjjjjjjjj.',
+  '..jjjjjjjjjj..',
+  '....jjjjjj....',
+];
+const JUPITER_COLORS = { j: P.jupiter, J: P.jupiterLt, B: P.jupiterBand, R: P.red };
+
+const SATURN_SPRITE = [
+  '......ssss......',
+  '....ssssssss....',
+  '...ssSSssSSss...',
+  '..ssssssssssss..',
+  'rrrrrrssssrrrrrr',
+  'rrrrssssssssrrrr',
+  '..ssssDDssssss..',
+  '...ssssssssss...',
+  '....ssssssss....',
+  '......ssss......',
+];
+const SATURN_COLORS = { s: P.saturn, S: P.saturnDk, D: P.goldDk, r: P.ring };
+
+const URANUS_SPRITE = [
+  '....uuuuuu....',
+  '..uuuuuuuuuu..',
+  '.uuuuUuuuuuuu.',
+  '.uuuuuuuuuuuu.',
+  'uuuuuuuuuuuuuu',
+  'uuuUuuuuuuUuuu',
+  'uuuuuuuuuuuuuu',
+  'uuuuuuUuuuuuuu',
+  'uuuuuuuuuuuuuu',
+  '.uuuuuuuuuuuu.',
+  '.uuuuUuuuuuuu.',
+  '..uuuuuuuuuu..',
+  '....uuuuuu....',
+];
+const URANUS_COLORS = { u: P.uranus, U: P.uranusDk };
+
+const NEPTUNE_SPRITE = [
+  '....nnnnnn....',
+  '..nnnnnnnnnn..',
+  '.nnnnNnnnnnnn.',
+  '.nnnnnnnnnnnn.',
+  'nnnnnnnnnnnnnn',
+  'nnnNnnnnnnNnnn',
+  'nnnnnnDDnnnnnn',
+  'nnnnnnnnnnnnnn',
+  'nnnnnnnnnnnnnn',
+  '.nnnnnnnnnnnn.',
+  '.nnnnNnnnnnnn.',
+  '..nnnnnnnnnn..',
+  '....nnnnnn....',
+];
+const NEPTUNE_COLORS = { n: P.neptune, N: P.neptuneDk, D: P.white };
+
+const PLUTO_SPRITE = [
+  '...pppp...',
+  '..ppPPpp..',
+  '.pppppppp.',
+  '.ppPpppPp.',
+  'ppppdppppp',
+  'pppPpppppp',
+  'pppppppppp',
+  '.ppppPppp.',
+  '.pppppppp.',
+  '..pppppp..',
+  '...pppp...',
+];
+const PLUTO_COLORS = { p: P.pluto, P: P.rockLt, d: P.plutoDk };
+
+const BODY_ART = {
+  moon: { rows: MOON_SPRITE, colors: MOON_COLORS, halo: P.moon },
+  mars: { rows: MARS_SPRITE, colors: MARS_COLORS, halo: P.mars },
+  venus: { rows: VENUS_SPRITE, colors: VENUS_COLORS, halo: P.venus },
+  sun: { rows: SUN_SPRITE, colors: SUN_COLORS, halo: P.sun },
+  jupiter: { rows: JUPITER_SPRITE, colors: JUPITER_COLORS, halo: P.jupiter },
+  saturn: { rows: SATURN_SPRITE, colors: SATURN_COLORS, halo: P.saturn },
+  uranus: { rows: URANUS_SPRITE, colors: URANUS_COLORS, halo: P.uranus },
+  neptune: { rows: NEPTUNE_SPRITE, colors: NEPTUNE_COLORS, halo: P.neptune },
+  pluto: { rows: PLUTO_SPRITE, colors: PLUTO_COLORS, halo: P.pluto },
+};
+
+function drawAsteroidBelt(g, body, camY, W, H, time, near) {
+  const count = 14;
+  for (let i = 0; i < count; i++) {
+    const n = hash2i(i, 7, 3);
+    const ox = (n * 2 - 1) * 200;
+    const oy = (hash2i(i, 11, 5) - 0.5) * 80;
+    const scr = worldToScreen(body.x + ox, body.gameY + oy, camY, W, H);
+    const px = Math.max(2, Math.round(2 + near * 3 + n * 2));
+    const bob = Math.sin(time * 1.2 + i) * 2;
+    g.fillStyle = n > 0.55 ? P.rockLt : P.rock;
+    g.fillRect(snap(scr.x - px), snap(scr.y - px + bob), px * 2, px * 2);
+    if (n > 0.7) {
+      g.fillStyle = P.brownDk;
+      g.fillRect(snap(scr.x), snap(scr.y + bob), px, px);
+    }
+  }
+}
+
+/** Draw solar-system bodies when the camera is near their game altitude. */
 export function drawCelestials(g, W, H, camY, time) {
   g.imageSmoothingEnabled = false;
-  for (const body of bodiesNear(camY, 1100)) {
-    const scr = worldToScreen(body.x, body.gameY, camY, W, H);
+  for (const body of bodiesNear(camY, 1400)) {
     const dist = Math.abs(body.gameY - camY);
-    const near = 1 - clamp(dist / 1100, 0, 1);
-    const px = Math.max(3, Math.round(4 + near * 5));
-    const sprite = body.id === 'moon' ? MOON_SPRITE : MARS_SPRITE;
-    const colors = body.id === 'moon' ? MOON_COLORS : MARS_COLORS;
-    const w = sprite[0].length * px;
-    const h = sprite.length * px;
+    const near = 1 - clamp(dist / 1400, 0, 1);
+
+    if (body.art === 'belt') {
+      drawAsteroidBelt(g, body, camY, W, H, time, near);
+      if (near > 0.45) {
+        g.fillStyle = '#e8eef8';
+        g.font = 'bold 12px Courier New, monospace';
+        g.textAlign = 'center';
+        const scr = worldToScreen(body.x, body.gameY, camY, W, H);
+        g.fillText(body.name.toUpperCase(), snap(scr.x), snap(scr.y + 40));
+      }
+      continue;
+    }
+
+    const art = BODY_ART[body.art] || BODY_ART.moon;
+    const scr = worldToScreen(body.x, body.gameY, camY, W, H);
+    const px = Math.max(3, Math.round(4 + near * 5 + (body.art === 'sun' || body.art === 'jupiter' ? 1 : 0)));
+    const sheet = spriteCanvas(body.art, art.rows, art.colors, px);
+    const w = sheet.width;
+    const h = sheet.height;
     if (scr.y < -h || scr.y > H + h) continue;
 
-    // Soft halo
-    g.globalAlpha = 0.15 + near * 0.2;
-    g.fillStyle = body.id === 'moon' ? P.moon : P.mars;
+    g.globalAlpha = 0.12 + near * 0.22;
+    g.fillStyle = art.halo;
     g.fillRect(snap(scr.x - w * 0.55), snap(scr.y - h * 0.55), snap(w * 1.1), snap(h * 1.1));
     g.globalAlpha = 1;
 
-    blit(g, scr.x - w / 2, scr.y - h / 2 + Math.sin(time + body.gameY) * 2, px, sprite, colors);
+    g.imageSmoothingEnabled = false;
+    g.drawImage(
+      sheet,
+      snap(scr.x - w / 2),
+      snap(scr.y - h / 2 + Math.sin(time * 0.6 + body.gameY) * 2)
+    );
 
-    // Tiny nameplate when close
     if (near > 0.45) {
       g.fillStyle = '#e8eef8';
       g.font = 'bold 12px Courier New, monospace';
@@ -235,27 +434,22 @@ export function drawLaunchPad(g, W, H, camY) {
   const legW = Math.max(3, Math.round(4 * deck.scale * 0.08));
   const groundY = snap(ground.y);
 
-  // Concrete base on the dirt
   g.fillStyle = '#5a5a6e';
   g.fillRect(snap(left.x - 8), groundY - 4, snap(deckW + 16), 10);
   g.fillStyle = '#3a3a4a';
   g.fillRect(snap(left.x - 8), groundY + 2, snap(deckW + 16), 6);
 
-  // Support legs
   const legInset = Math.round(deckW * 0.12);
   g.fillStyle = '#8a93a8';
   g.fillRect(snap(left.x + legInset), snap(deck.y), legW, Math.max(4, groundY - snap(deck.y)));
   g.fillRect(snap(right.x - legInset - legW), snap(deck.y), legW, Math.max(4, groundY - snap(deck.y)));
-  // Cross brace
   g.fillStyle = '#6a7388';
   g.fillRect(snap(left.x + legInset), snap((deck.y + groundY) / 2), snap(deckW - legInset * 2), 3);
 
-  // Deck plate
   g.fillStyle = '#c0cbdc';
   g.fillRect(snap(left.x), snap(deck.y - deckH), snap(deckW), deckH + 2);
   g.fillStyle = '#e8eef8';
   g.fillRect(snap(left.x), snap(deck.y - deckH), snap(deckW), 3);
-  // Hazard stripes
   g.fillStyle = '#fee761';
   for (let x = snap(left.x) + 4; x < snap(right.x) - 6; x += 14) {
     g.fillRect(x, snap(deck.y - deckH + 4), 8, Math.max(2, deckH - 4));
@@ -265,17 +459,14 @@ export function drawLaunchPad(g, W, H, camY) {
     g.fillRect(x, snap(deck.y - deckH + 4), 3, Math.max(2, deckH - 4));
   }
 
-  // Little tower / umbilical
   const towerX = snap(right.x + 6);
   g.fillStyle = '#8a93a8';
   g.fillRect(towerX, snap(deck.y - 52 * deck.scale * 0.08), 5, Math.max(8, groundY - snap(deck.y - 52 * deck.scale * 0.08)));
   g.fillStyle = '#fee761';
   g.fillRect(towerX - 1, snap(deck.y - 52 * deck.scale * 0.08), 7, 4);
-  // Arm toward rocket
   g.fillStyle = '#6a7388';
   g.fillRect(snap(right.x - 4), snap(deck.y - 28 * deck.scale * 0.08), snap(towerX - right.x + 4), 3);
 
-  // "PAD" stencil
   g.fillStyle = '#1a1c2c';
   g.font = `bold ${Math.max(9, Math.round(11 * deck.scale * 0.08))}px Courier New, monospace`;
   g.textAlign = 'center';
@@ -394,25 +585,35 @@ export function drawPickup(g, kind, x, y, r, spin, time) {
   }
 }
 
+/**
+ * Draw rocket as one cached bitmap + discrete tilt steps.
+ * Avoids fillRect-under-rotation smear that looked like ghost rockets.
+ */
 export function drawRocket(g, x, y, scale, tilt, time, thrusting) {
   g.imageSmoothingEnabled = false;
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = 'source-over';
+
   const px = Math.max(2, Math.round(scale * 3.1));
-  const rows = ROCKET_SPRITE.length;
-  const cols = 7;
-  const bodyH = rows * px;
-  const bodyW = cols * px;
+  const sheet = spriteCanvas('rocket', ROCKET_SPRITE, ROCKET_COLORS, px);
+  const bodyW = sheet.width;
+  const bodyH = sheet.height;
+
+  // Quantize attitude so consecutive frames don't AA-smear across angles.
+  const step = Math.PI / 24; // 7.5°
+  const t = Math.round(tilt / step) * step;
 
   g.save();
   g.translate(snap(x), snap(y));
-  // tilt is radians from upright; positive = nose right.
-  g.rotate(tilt);
+  g.rotate(t);
 
   if (thrusting) {
-    const flame = Math.floor(time * 12) % 2 === 0 ? FLAME_A : FLAME_B;
-    blit(g, -((5 * px) / 2), bodyH / 2 - px * 2, px, flame, FLAME_COLORS);
+    const flame = Math.floor(time * 10) % 2 === 0 ? FLAME_A : FLAME_B;
+    const flameSheet = spriteCanvas(flame === FLAME_A ? 'flameA' : 'flameB', flame, FLAME_COLORS, px);
+    g.drawImage(flameSheet, snap(-flameSheet.width / 2), snap(bodyH / 2 - px * 2));
   }
 
-  blit(g, -bodyW / 2, -bodyH / 2, px, ROCKET_SPRITE, ROCKET_COLORS);
+  g.drawImage(sheet, snap(-bodyW / 2), snap(-bodyH / 2));
   g.restore();
 }
 

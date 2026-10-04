@@ -1,6 +1,6 @@
-/* Real-ish altitude: atmosphere layers + Moon / Mars flybys.
+/* Real-ish altitude: atmosphere layers + solar-system flybys.
    Game Y is compressed so atmosphere plays out early; deep space
-   stretches so the Moon and Mars are ambitious Easter eggs. */
+   stretches so the outer planets are ambitious Easter eggs. */
 
 import { clamp, lerp } from '../core/rng.js';
 
@@ -18,7 +18,7 @@ export const ATMO_LAYERS = [
     name: 'Troposphere',
     km0: 0,
     km1: 12,
-    color: [90, 150, 220], // bright day blue
+    color: [90, 150, 220],
   },
   {
     id: 'stratosphere',
@@ -56,33 +56,120 @@ export const ATMO_LAYERS = [
     color: [6, 8, 14],
   },
   {
-    id: 'interplanetary',
-    name: 'Deep space',
+    id: 'inner_system',
+    name: 'Inner system',
     km0: 384400,
-    km1: 54600000,
-    color: [4, 5, 10],
+    km1: 250000000,
+    color: [5, 6, 12],
+  },
+  {
+    id: 'outer_system',
+    name: 'Outer system',
+    km0: 250000000,
+    km1: 6000000000,
+    color: [3, 4, 8],
   },
 ];
 
-/** Easter-egg bodies. realKm = average Moon / closest Mars approach. */
+/**
+ * Easter-egg bodies ordered by climb altitude (gameY ↑).
+ * realKm ≈ typical / closest-approach distance from Earth.
+ * `art` selects the procedural sprite in draw.js.
+ */
 export const CELESTIAL = [
   {
     id: 'moon',
     name: 'Moon',
+    art: 'moon',
     realKm: 384400,
     gameY: 14000,
     x: 140,
     label: 'MOON FLYBY',
   },
   {
+    id: 'venus',
+    name: 'Venus',
+    art: 'venus',
+    realKm: 38000000,
+    gameY: 28000,
+    x: -150,
+    label: 'VENUS FLYBY',
+  },
+  {
     id: 'mars',
     name: 'Mars',
-    realKm: 54600000, // closest approach ~54.6M km
-    gameY: 52000,
-    x: -160,
+    art: 'mars',
+    realKm: 54600000,
+    gameY: 42000,
+    x: 155,
     label: 'MARS FLYBY',
   },
+  {
+    id: 'sun',
+    name: 'Sun',
+    art: 'sun',
+    realKm: 149600000,
+    gameY: 60000,
+    x: -40,
+    label: 'SOLAR APPROACH',
+  },
+  {
+    id: 'belt',
+    name: 'Asteroid Belt',
+    art: 'belt',
+    realKm: 250000000,
+    gameY: 82000,
+    x: 0,
+    label: 'ASTEROID BELT',
+  },
+  {
+    id: 'jupiter',
+    name: 'Jupiter',
+    art: 'jupiter',
+    realKm: 588000000,
+    gameY: 110000,
+    x: 170,
+    label: 'JUPITER FLYBY',
+  },
+  {
+    id: 'saturn',
+    name: 'Saturn',
+    art: 'saturn',
+    realKm: 1200000000,
+    gameY: 145000,
+    x: -175,
+    label: 'SATURN FLYBY',
+  },
+  {
+    id: 'uranus',
+    name: 'Uranus',
+    art: 'uranus',
+    realKm: 2600000000,
+    gameY: 185000,
+    x: 130,
+    label: 'URANUS FLYBY',
+  },
+  {
+    id: 'neptune',
+    name: 'Neptune',
+    art: 'neptune',
+    realKm: 4300000000,
+    gameY: 230000,
+    x: -140,
+    label: 'NEPTUNE FLYBY',
+  },
+  {
+    id: 'pluto',
+    name: 'Pluto',
+    art: 'pluto',
+    realKm: 5000000000,
+    gameY: 280000,
+    x: 90,
+    label: 'PLUTO FLYBY',
+  },
 ];
+
+export const CELESTIAL_IDS = CELESTIAL.map((c) => c.id);
 
 const KM_POINTS = [
   { g: 0, km: 0.001 },
@@ -148,6 +235,19 @@ export function skyColorAtKm(km) {
   return stops[stops.length - 1].color.slice();
 }
 
-export function bodiesNear(camY, margin = 900) {
+export function bodiesNear(camY, margin = 1400) {
   return CELESTIAL.filter((b) => Math.abs(b.gameY - camY) < margin);
+}
+
+/** Normalize persisted flyby flags; fold legacy passedMoon / passedMars. */
+export function normalizeFlybys(raw, legacy = {}) {
+  const out = {};
+  if (raw && typeof raw === 'object') {
+    for (const id of CELESTIAL_IDS) {
+      if (raw[id]) out[id] = true;
+    }
+  }
+  if (legacy.passedMoon) out.moon = true;
+  if (legacy.passedMars) out.mars = true;
+  return out;
 }

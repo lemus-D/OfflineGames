@@ -253,6 +253,43 @@
     );
   }
 
+  /* Velocity bar */
+  .vel-meter {
+    width: 72px;
+    height: 14px;
+    margin: 0 auto;
+    background: #05070c;
+    border: 2px solid #8a93a8;
+    position: relative;
+    overflow: hidden;
+  }
+  #velFill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 0%;
+    background: repeating-linear-gradient(
+      90deg,
+      #5ab0e0 0 3px,
+      #2e6e98 3px 6px
+    );
+    transition: width 0.06s linear;
+  }
+  .gauge.falling #velFill {
+    background: repeating-linear-gradient(
+      90deg,
+      #e07040 0 3px,
+      #a84820 3px 6px
+    );
+  }
+  .vel-dir {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-align: center;
+    color: #8a93a8;
+    margin-top: 2px;
+    min-height: 1em;
+  }
+
   /* Altitude tape */
   .alt-tape {
     width: 52px;
@@ -364,7 +401,7 @@
   .hud-right b:last-child { margin-bottom: 0; }
 
   @media (max-width: 520px) {
-    .gauge-stack { left: 6px; gap: 8px; transform: translateY(-50%) scale(0.88); transform-origin: left center; }
+    .gauge-stack { left: 6px; gap: 6px; transform: translateY(-50%) scale(0.78); transform-origin: left center; }
     .hud-right { right: 6px; top: 8px; padding: 8px 10px; min-width: 96px; }
     .hud-right b { font-size: 1.1rem; }
   }
@@ -452,6 +489,12 @@
         <div class="wing"></div>
       </div>
       <div class="g-val" id="tiltVal">0°</div>
+    </div>
+    <div class="gauge" id="velGauge">
+      <div class="g-label">VEL</div>
+      <div class="vel-meter"><div id="velFill"></div></div>
+      <div class="g-val" id="velVal">0</div>
+      <div class="vel-dir" id="velDir">—</div>
     </div>
   </div>
   <div class="hud-right">

@@ -47,9 +47,22 @@ assert(Math.abs(gameToKm(ATM_GAME_UNITS) - ATM_KM) < 0.01, 'atm top maps to 100 
 assert(layerAtKm(5).id === 'troposphere', '5 km is troposphere');
 assert(layerAtKm(30).id === 'stratosphere', '30 km is stratosphere');
 assert(layerAtKm(70).id === 'mesosphere', '70 km is mesosphere');
+assert(CELESTIAL[0].id === 'moon', 'first celestial is moon');
 assert(gameToKm(CELESTIAL[0].gameY) > 1e5, 'moon altitude is lunar-scale km');
-assert(CELESTIAL[0].gameY < CELESTIAL[1].gameY, 'moon before mars in game space');
+assert(
+  CELESTIAL.every((c, i) => i === 0 || c.gameY > CELESTIAL[i - 1].gameY),
+  'celestials ordered by ascending gameY'
+);
+assert(
+  CELESTIAL.every((c, i) => i === 0 || c.realKm > CELESTIAL[i - 1].realKm),
+  'celestials ordered by ascending realKm'
+);
+const ids = new Set(CELESTIAL.map((c) => c.id));
+for (const need of ['moon', 'venus', 'mars', 'sun', 'belt', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto']) {
+  assert(ids.has(need), `celestial catalog includes ${need}`);
+}
 assert(gameToKm(100) < gameToKm(1000), 'gameToKm monotonic');
+assert(gameToKm(CELESTIAL[0].gameY) < gameToKm(CELESTIAL[CELESTIAL.length - 1].gameY), 'moon km < pluto km');
 
 // No thrust: stay on the pad.
 {

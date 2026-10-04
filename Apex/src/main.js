@@ -64,6 +64,10 @@ const els = {
   altTicks: document.getElementById('altTicks'),
   tiltHorizon: document.getElementById('tiltHorizon'),
   tiltVal: document.getElementById('tiltVal'),
+  velFill: document.getElementById('velFill'),
+  velVal: document.getElementById('velVal'),
+  velDir: document.getElementById('velDir'),
+  velGauge: document.getElementById('velGauge'),
   coins: document.getElementById('coinVal'),
   peak: document.getElementById('peakVal'),
   best: document.getElementById('bestVal'),
@@ -76,6 +80,14 @@ const els = {
   btnAgain: document.getElementById('btnAgain'),
   btnMenu: document.getElementById('btnMenu'),
 };
+
+function flybyNames() {
+  const names = [];
+  for (const body of CELESTIAL) {
+    if (profile.flybys?.[body.id]) names.push(body.name);
+  }
+  return names;
+}
 
 function resize() {
   dpr = Math.min(devicePixelRatio || 1, 2);
@@ -138,10 +150,10 @@ function refreshMenuMeta() {
   if (els.bestAlt) els.bestAlt.textContent = peakKm;
   if (els.bank) els.bank.textContent = String(Number(profile.bankCoins) || 0);
   if (els.flybyMeta) {
-    const bits = [];
-    if (profile.passedMoon) bits.push('Moon ✓');
-    if (profile.passedMars) bits.push('Mars ✓');
-    els.flybyMeta.textContent = bits.length ? `Flybys: ${bits.join(' · ')}` : '';
+    const bits = flybyNames();
+    els.flybyMeta.textContent = bits.length
+      ? `Flybys: ${bits.map((n) => `${n} ✓`).join(' · ')}`
+      : '';
   }
   refreshShop();
 }
@@ -187,9 +199,7 @@ function endRun() {
         : 'Slammed into the ground.';
   const peakKm = formatAltitudeKm(gameToKm(sum.altitude));
   const layer = layerAtKm(gameToKm(sum.altitude)).name;
-  const eggs = [];
-  if (profile.passedMoon) eggs.push('Moon');
-  if (profile.passedMars) eggs.push('Mars');
+  const eggs = flybyNames();
   els.summaryBody.innerHTML = `
     <p class="reason">${reason}</p>
     <div class="stat-grid">
@@ -207,13 +217,13 @@ function endRun() {
 
 function checkFlybys(s, dt) {
   const y = s.player.peakY;
+  profile.flybys = profile.flybys || {};
   for (const body of CELESTIAL) {
     if (flybySeen.has(body.id)) continue;
     if (y >= body.gameY) {
       flybySeen.add(body.id);
       flyby = { text: body.label, age: 0, life: 2.8 };
-      if (body.id === 'moon') profile.passedMoon = true;
-      if (body.id === 'mars') profile.passedMars = true;
+      profile.flybys[body.id] = true;
       Save.writeProfile(profile);
     }
   }
@@ -234,6 +244,7 @@ function drawSession(dt, playing) {
   }
 
   g.imageSmoothingEnabled = false;
+  g.clearRect(0, 0, W, H);
   drawSky(g, W, H, p.y, animTime);
   drawLaunchPad(g, W, H, camY);
   drawCelestials(g, W, H, camY, animTime);
@@ -284,6 +295,19 @@ function updateGauges(s) {
   if (els.tiltVal) els.tiltVal.textContent = `${deg}°`;
   if (els.tiltHorizon) els.tiltHorizon.style.transform = `rotate(${-p.tilt}rad)`;
 
+  const speed = Math.hypot(p.vx, p.vy);
+  const maxSpd = ROCKET.maxSpeed * (s.stats?.maxSpeedMul || 1);
+  const velPct = clamp(speed / Math.max(1, maxSpd), 0, 1);
+  if (els.velFill) els.velFill.style.width = `${velPct * 100}%`;
+  if (els.velVal) els.velVal.textContent = String(Math.round(speed));
+  if (els.velDir) {
+    if (!p.airborne || speed < 8) els.velDir.textContent = 'PAD';
+    else if (p.vy > 12) els.velDir.textContent = 'CLIMB ↑';
+    else if (p.vy < -12) els.velDir.textContent = 'FALL ↓';
+    else els.velDir.textContent = 'COAST';
+  }
+  if (els.velGauge) els.velGauge.classList.toggle('falling', p.vy < -12);
+
   if (els.score) els.score.textContent = String(s.score);
   if (els.coins) els.coins.textContent = String(s.coins);
   if (!els.peak) els.peak = document.getElementById('peakVal');
@@ -295,6 +319,7 @@ function drawMenuBackdrop(dt) {
   menuAltitude += dt * 40;
   if (menuAltitude > 3800) menuAltitude = 0;
   g.imageSmoothingEnabled = false;
+  g.clearRect(0, 0, W, H);
   const onPad = menuAltitude < 90;
   const cam = onPad ? ROCKET.startY : menuAltitude;
   drawSky(g, W, H, cam, animTime);
