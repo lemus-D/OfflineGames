@@ -1,5 +1,5 @@
 /* Apex service worker — precache, versioned cache name. */
-const CACHE = 'apex-v8';
+const CACHE = 'apex-v9';
 const PRECACHE = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const PRECACHE = [
   './src/core/input.js',
   './src/core/save.js',
   './src/game/content.js',
+  './src/game/altitude.js',
   './src/game/play.js',
   './src/game/draw.js',
 ];

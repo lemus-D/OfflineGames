@@ -358,11 +358,12 @@
 <div id="menu" class="overlay">
   <div class="menu-panel">
     <h1 class="brand">Apex</h1>
-    <p class="tag">Hold ↑ to boost. Scoop gas cans. Bank coins. Dodge meteors.</p>
+    <p class="tag">Climb the atmosphere. Scoop gas cans. Maybe wave at the Moon.</p>
 
     <button class="btn primary" id="btnPlay">Launch</button>
     <p class="hint">↑ / W boost · ← → or A / D spin (full 360°) · scoop fuel on the way down too</p>
     <p class="meta">Best score <b id="bestVal">0</b> · Best altitude <b id="bestAltVal">0</b></p>
+    <p class="meta" id="flybyMeta"></p>
   </div>
 </div>
 
@@ -379,7 +380,8 @@
         <div class="ticks" id="altTicks"></div>
         <div class="needle"></div>
       </div>
-      <div class="g-val" id="altVal">0</div>
+      <div class="g-val" id="altVal">0 km</div>
+      <div class="g-label" id="layerVal" style="margin-top:4px;letter-spacing:0.06em">Troposphere</div>
     </div>
     <div class="gauge">
       <div class="g-label">ATT</div>

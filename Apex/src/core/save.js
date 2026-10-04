@@ -10,6 +10,8 @@ const DEFAULT_PROFILE = () => ({
   bestCoins: 0,
   runs: 0,
   totalCoins: 0,
+  passedMoon: false,
+  passedMars: false,
 });
 
 function migrate(raw) {

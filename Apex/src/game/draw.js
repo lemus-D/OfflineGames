@@ -1,15 +1,13 @@
 /* 8-bit procedural art: sky, stars, rocket, gas cans, coins, meteors.
-   No asset files. Snapped pixels, flat palette, no gradients. */
+   No asset files. Snapped pixels, flat palette. Sky color follows altitude. */
 
 import { clamp, hash2i } from '../core/rng.js';
 import { WORLD_HALF_W } from './content.js';
+import { gameToKm, skyColorAtKm, bodiesNear } from './altitude.js';
 
 /** NES-ish palette */
 const P = {
   ink: '#0f1020',
-  skyLo: '#3d5c94',
-  skyMid: '#29366f',
-  skyHi: '#141628',
   ground: '#c46c2e',
   groundDk: '#8a3e18',
   cloud: '#c0cbdc',
@@ -24,14 +22,15 @@ const P = {
   gold: '#e8b020',
   goldDk: '#a86a12',
   blue: '#3ca0d0',
-  blueDk: '#1e5c8c',
   brown: '#6b3e26',
   brownDk: '#3e2414',
   green: '#33a05b',
+  moon: '#c8c8d0',
+  moonDk: '#787888',
+  mars: '#c45a3a',
+  marsDk: '#7a2e18',
+  marsLt: '#e08050',
 };
-
-/** Above this altitude the sky is one solid space color. */
-const SPACE_ALT = 280;
 
 export function worldToScreen(wx, wy, camY, W, H) {
   const scale = Math.min(W, H) / (WORLD_HALF_W * 1.85);
@@ -44,6 +43,10 @@ export function worldToScreen(wx, wy, camY, W, H) {
 
 function snap(v) {
   return Math.round(v);
+}
+
+function rgb([r, g, b]) {
+  return `rgb(${r},${g},${b})`;
 }
 
 /** Draw a pixel sprite from a string grid. `.` = empty. */
@@ -66,14 +69,24 @@ function blit(g, x, y, px, rows, colors) {
 export function drawSky(g, W, H, altitude, time) {
   g.imageSmoothingEnabled = false;
 
-  // One fill color for the whole screen. Near the pad it's sky blue;
-  // past SPACE_ALT it's solid night — never stacked color bands.
-  const inSpace = altitude >= SPACE_ALT;
-  g.fillStyle = inSpace ? P.ink : P.skyLo;
+  const km = gameToKm(altitude);
+  const col = skyColorAtKm(km);
+  g.fillStyle = rgb(col);
   g.fillRect(0, 0, W, H);
 
-  // Ground only while still near the pad (below the space cutoff).
-  if (!inSpace && altitude < 200) {
+  // Thermosphere aurora shimmer (very subtle).
+  if (km > 85 && km < 600) {
+    const a = clamp((km - 85) / 200, 0, 0.12) * (1 - clamp((km - 400) / 200, 0, 1));
+    g.globalAlpha = a * (0.7 + Math.sin(time * 2) * 0.3);
+    g.fillStyle = '#3dcea0';
+    g.fillRect(0, 0, W, snap(H * 0.35));
+    g.fillStyle = '#c45a9a';
+    g.fillRect(0, snap(H * 0.2), W, snap(H * 0.25));
+    g.globalAlpha = 1;
+  }
+
+  // Ground + clouds only in low troposphere.
+  if (km < 8) {
     const gy = snap(H * 0.62 + altitude * (Math.min(W, H) / (WORLD_HALF_W * 1.85)));
     if (gy < H && gy > 0) {
       g.fillStyle = P.groundDk;
@@ -85,9 +98,8 @@ export function drawSky(g, W, H, altitude, time) {
         if (hash2i(x, 3, 2) > 0.55) g.fillRect(x, gy - 4, 4, 4);
       }
     }
-
     g.fillStyle = P.cloud;
-    g.globalAlpha = 0.28 * (1 - altitude / 200);
+    g.globalAlpha = 0.3 * (1 - km / 8);
     for (let i = 0; i < 3; i++) {
       const cx = snap((0.2 + i * 0.25) * W + Math.sin(time * 0.4 + i) * 8);
       const cy = snap(H * (0.55 + i * 0.08));
@@ -97,10 +109,9 @@ export function drawSky(g, W, H, altitude, time) {
     g.globalAlpha = 1;
   }
 
-  // Blocky stars — stronger in space
-  const starAlpha =
-    altitude >= SPACE_ALT ? 1 : clamp((altitude - 180) / (SPACE_ALT - 180), 0, 0.85);
-  if (starAlpha > 0.05) {
+  // Stars fade in through mesosphere / thermosphere.
+  const starAlpha = clamp((km - 40) / 80, 0, 1);
+  if (starAlpha > 0.04) {
     g.globalAlpha = starAlpha;
     g.fillStyle = P.star;
     const cols = 16;
@@ -118,6 +129,93 @@ export function drawSky(g, W, H, altitude, time) {
     }
     g.globalAlpha = 1;
   }
+}
+
+const MOON_SPRITE = [
+  '....mmmmmm....',
+  '..mmmmmmmmmm..',
+  '.mmmmdmmmmmmm.',
+  '.mmmmmmmmmdmm.',
+  'mmmdmmmmmmmmmm',
+  'mmmmmmmmdmmmmm',
+  'mmmmmmmmmmmmmm',
+  'mmmmdmmmmmmmmm',
+  'mmmmmmmmmdmmmm',
+  'mmmmmmmmmmmmmm',
+  '.mmmmmdmmmmm.',
+  '.mmmmmmmmmmm.',
+  '..mmmmmmmmmm..',
+  '....mmmmmm....',
+];
+
+const MOON_COLORS = { m: P.moon, d: P.moonDk };
+
+const MARS_SPRITE = [
+  '....rrrrrr....',
+  '..rrRRrrRRrr..',
+  '.rrrrrrrrrrrr.',
+  '.rrRrrrrrrrRr.',
+  'rrrrrrDrrrrrrr',
+  'rrrRrrrrrrRrrr',
+  'rrrrrrrrrrrrrr',
+  'rrRrrrDrrrrRrr',
+  'rrrrrrrrrrrrrr',
+  '.rrrrRrrrrrrr.',
+  '.rrrrrrrrrrrr.',
+  '..rrrrrrrrrr..',
+  '....rrrrrr....',
+];
+
+const MARS_COLORS = { r: P.mars, R: P.marsLt, D: P.marsDk };
+
+/** Draw Moon / Mars when the camera is near their game altitude. */
+export function drawCelestials(g, W, H, camY, time) {
+  g.imageSmoothingEnabled = false;
+  for (const body of bodiesNear(camY, 1100)) {
+    const scr = worldToScreen(body.x, body.gameY, camY, W, H);
+    const dist = Math.abs(body.gameY - camY);
+    const near = 1 - clamp(dist / 1100, 0, 1);
+    const px = Math.max(3, Math.round(4 + near * 5));
+    const sprite = body.id === 'moon' ? MOON_SPRITE : MARS_SPRITE;
+    const colors = body.id === 'moon' ? MOON_COLORS : MARS_COLORS;
+    const w = sprite[0].length * px;
+    const h = sprite.length * px;
+    if (scr.y < -h || scr.y > H + h) continue;
+
+    // Soft halo
+    g.globalAlpha = 0.15 + near * 0.2;
+    g.fillStyle = body.id === 'moon' ? P.moon : P.mars;
+    g.fillRect(snap(scr.x - w * 0.55), snap(scr.y - h * 0.55), snap(w * 1.1), snap(h * 1.1));
+    g.globalAlpha = 1;
+
+    blit(g, scr.x - w / 2, scr.y - h / 2 + Math.sin(time + body.gameY) * 2, px, sprite, colors);
+
+    // Tiny nameplate when close
+    if (near > 0.45) {
+      g.fillStyle = '#e8eef8';
+      g.font = 'bold 12px Courier New, monospace';
+      g.textAlign = 'center';
+      g.fillText(body.name.toUpperCase(), snap(scr.x), snap(scr.y + h / 2 + 16));
+    }
+  }
+}
+
+export function drawFlybyBanner(g, W, H, text, age, life) {
+  if (!text || age >= life) return;
+  const u = age / life;
+  g.save();
+  g.globalAlpha = u < 0.15 ? u / 0.15 : u > 0.75 ? (1 - u) / 0.25 : 1;
+  g.fillStyle = '#05070c';
+  g.fillRect(W * 0.5 - 120, H * 0.18, 240, 36);
+  g.strokeStyle = '#fee761';
+  g.lineWidth = 2;
+  g.strokeRect(W * 0.5 - 120, H * 0.18, 240, 36);
+  g.fillStyle = '#fee761';
+  g.font = 'bold 16px Courier New, monospace';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, W * 0.5, H * 0.18 + 18);
+  g.restore();
 }
 
 /** Long slim rocket (17 rows × 7 cols). */

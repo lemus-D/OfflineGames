@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { PlaySession } from './src/game/play.js';
 import { ROCKET, wrapAngle, tiltDegrees } from './src/game/content.js';
+import { gameToKm, CELESTIAL, ATM_GAME_UNITS, ATM_KM, layerAtKm } from './src/game/altitude.js';
 
 let failures = 0;
 function assert(cond, msg) {
@@ -21,6 +22,7 @@ for (const file of [
   'src/game/play.js',
   'src/game/content.js',
   'src/game/draw.js',
+  'src/game/altitude.js',
   'src/core/rng.js',
 ]) {
   const src = readFileSync(new URL(file, import.meta.url), 'utf8')
@@ -32,6 +34,15 @@ for (const file of [
 assert(tiltDegrees(0) === 0, 'tiltDegrees upright is 0');
 assert(tiltDegrees(Math.PI) === 180, 'tiltDegrees π is 180');
 assert(Math.abs(wrapAngle(Math.PI * 3) - Math.PI) < 1e-9, 'wrapAngle wraps');
+
+assert(Math.abs(gameToKm(0)) < 0.01, 'sea level ~0 km');
+assert(Math.abs(gameToKm(ATM_GAME_UNITS) - ATM_KM) < 0.01, 'atm top maps to 100 km');
+assert(layerAtKm(5).id === 'troposphere', '5 km is troposphere');
+assert(layerAtKm(30).id === 'stratosphere', '30 km is stratosphere');
+assert(layerAtKm(70).id === 'mesosphere', '70 km is mesosphere');
+assert(gameToKm(CELESTIAL[0].gameY) > 1e5, 'moon altitude is lunar-scale km');
+assert(CELESTIAL[0].gameY < CELESTIAL[1].gameY, 'moon before mars in game space');
+assert(gameToKm(100) < gameToKm(1000), 'gameToKm monotonic');
 
 // No thrust: stay on the pad.
 {

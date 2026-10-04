@@ -6,11 +6,19 @@ import { clamp } from './core/rng.js';
 import { PlaySession } from './game/play.js';
 import { tiltDegrees } from './game/content.js';
 import {
+  gameToKm,
+  formatAltitudeKm,
+  layerAtKm,
+  CELESTIAL,
+} from './game/altitude.js';
+import {
   drawSky,
   drawPickup,
   drawRocket,
   drawCollectFx,
   drawHitFlash,
+  drawCelestials,
+  drawFlybyBanner,
   worldToScreen,
 } from './game/draw.js';
 
@@ -31,6 +39,10 @@ let animTime = 0;
 let lastTs = 0;
 let menuAltitude = 0;
 
+/** @type {{ text: string, age: number, life: number }|null} */
+let flyby = null;
+const flybySeen = new Set();
+
 const els = {
   menu: document.getElementById('menu'),
   hud: document.getElementById('hud'),
@@ -40,6 +52,7 @@ const els = {
   fuelGauge: document.getElementById('fuelGauge'),
   score: document.getElementById('scoreVal'),
   altitude: document.getElementById('altVal'),
+  layerVal: document.getElementById('layerVal'),
   altTicks: document.getElementById('altTicks'),
   tiltHorizon: document.getElementById('tiltHorizon'),
   tiltVal: document.getElementById('tiltVal'),
@@ -47,6 +60,7 @@ const els = {
   peak: document.getElementById('peakVal'),
   best: document.getElementById('bestVal'),
   bestAlt: document.getElementById('bestAltVal'),
+  flybyMeta: document.getElementById('flybyMeta'),
   summaryBody: document.getElementById('summaryBody'),
   btnPlay: document.getElementById('btnPlay'),
   btnAgain: document.getElementById('btnAgain'),
@@ -71,8 +85,15 @@ function hide(el) {
 }
 
 function refreshMenuMeta() {
+  const peakKm = formatAltitudeKm(gameToKm(profile.bestAltitude || 0));
   els.best.textContent = String(profile.bestScore);
-  els.bestAlt.textContent = String(profile.bestAltitude);
+  els.bestAlt.textContent = peakKm;
+  if (els.flybyMeta) {
+    const bits = [];
+    if (profile.passedMoon) bits.push('Moon ✓');
+    if (profile.passedMars) bits.push('Mars ✓');
+    els.flybyMeta.textContent = bits.length ? `Flybys: ${bits.join(' · ')}` : '';
+  }
 }
 
 function startRun() {
@@ -82,6 +103,8 @@ function startRun() {
       endRun();
     },
   });
+  flyby = null;
+  flybySeen.clear();
   state = 'playing';
   hide(els.menu);
   hide(els.summary);
@@ -106,17 +129,42 @@ function endRun() {
       : sum.reason === 'fuel'
         ? 'Out of fuel. Free fall.'
         : 'Slammed into the ground.';
+  const peakKm = formatAltitudeKm(gameToKm(sum.altitude));
+  const layer = layerAtKm(gameToKm(sum.altitude)).name;
+  const eggs = [];
+  if (profile.passedMoon) eggs.push('Moon');
+  if (profile.passedMars) eggs.push('Mars');
   els.summaryBody.innerHTML = `
     <p class="reason">${reason}</p>
     <div class="stat-grid">
       <div><span>Score</span><b>${sum.score}</b></div>
-      <div><span>Altitude</span><b>${sum.altitude}</b></div>
+      <div><span>Peak</span><b>${peakKm}</b></div>
       <div><span>Coins</span><b>${sum.coins}</b></div>
-      <div><span>Best</span><b>${profile.bestScore}</b></div>
+      <div><span>Layer</span><b style="font-size:1rem">${layer}</b></div>
     </div>
-    <p class="muted">Runs: ${profile.runs} · Lifetime coins: ${profile.totalCoins}</p>
+    <p class="muted">Runs: ${profile.runs} · Lifetime coins: ${profile.totalCoins}${
+      eggs.length ? ` · Flybys: ${eggs.join(', ')}` : ''
+    }</p>
   `;
   show(els.summary);
+}
+
+function checkFlybys(s, dt) {
+  const y = s.player.peakY;
+  for (const body of CELESTIAL) {
+    if (flybySeen.has(body.id)) continue;
+    if (y >= body.gameY) {
+      flybySeen.add(body.id);
+      flyby = { text: body.label, age: 0, life: 2.8 };
+      if (body.id === 'moon') profile.passedMoon = true;
+      if (body.id === 'mars') profile.passedMars = true;
+      Save.writeProfile(profile);
+    }
+  }
+  if (flyby) {
+    flyby.age += dt;
+    if (flyby.age >= flyby.life) flyby = null;
+  }
 }
 
 function drawSession(dt, playing) {
@@ -124,10 +172,14 @@ function drawSession(dt, playing) {
   const p = s.player;
   const camY = p.y;
 
-  if (playing) s.step(dt, input.controls());
+  if (playing) {
+    s.step(dt, input.controls());
+    checkFlybys(s, dt);
+  }
 
   g.imageSmoothingEnabled = false;
   drawSky(g, W, H, p.y, animTime);
+  drawCelestials(g, W, H, camY, animTime);
 
   for (const u of s.pickups) {
     const scr = worldToScreen(u.x, u.y, camY, W, H);
@@ -149,6 +201,7 @@ function drawSession(dt, playing) {
   );
 
   drawHitFlash(g, W, H, s.flash);
+  if (flyby) drawFlybyBanner(g, W, H, flyby.text, flyby.age, flyby.life);
 
   if (playing) updateGauges(s);
 }
@@ -160,29 +213,31 @@ function updateGauges(s) {
   if (els.fuelVal) els.fuelVal.textContent = `${Math.round(fuelPct * 100)}%`;
   if (els.fuelGauge) els.fuelGauge.classList.toggle('low', fuelPct < 0.28);
 
-  const alt = Math.max(0, Math.floor(p.y));
-  if (els.altitude) els.altitude.textContent = String(alt);
-  // Scroll the tape so current altitude sits on the yellow needle.
+  const km = gameToKm(Math.max(0, p.y));
+  const peakKm = gameToKm(Math.max(0, p.peakY));
+  if (els.altitude) els.altitude.textContent = formatAltitudeKm(km);
+  if (els.layerVal) els.layerVal.textContent = layerAtKm(km).name;
   if (els.altTicks) {
     const pxPerUnit = 0.12;
-    els.altTicks.style.transform = `translateY(${-((alt * pxPerUnit) % 10)}px)`;
+    els.altTicks.style.transform = `translateY(${-((Math.floor(p.y) * pxPerUnit) % 10)}px)`;
   }
 
   const deg = tiltDegrees(p.tilt);
   if (els.tiltVal) els.tiltVal.textContent = `${deg}°`;
-  // Horizon rolls opposite the rocket so the wing mark reads as attitude.
   if (els.tiltHorizon) els.tiltHorizon.style.transform = `rotate(${-p.tilt}rad)`;
 
   if (els.score) els.score.textContent = String(s.score);
   if (els.coins) els.coins.textContent = String(s.coins);
   if (!els.peak) els.peak = document.getElementById('peakVal');
-  if (els.peak) els.peak.textContent = String(Math.floor(p.peakY));
+  if (els.peak) els.peak.textContent = formatAltitudeKm(peakKm);
 }
 
 function drawMenuBackdrop(dt) {
-  menuAltitude += dt * 40;
+  // Drift the menu backdrop up through the atmosphere layers.
+  menuAltitude = (menuAltitude + dt * 55) % 4000;
   g.imageSmoothingEnabled = false;
   drawSky(g, W, H, menuAltitude, animTime);
+  drawCelestials(g, W, H, menuAltitude, animTime);
   const x = W * 0.62 + Math.sin(animTime * 0.7) * 18;
   const y = H * 0.52 + Math.sin(animTime * 1.1) * 10;
   const thrusting = Math.sin(animTime * 3) > -0.2;
