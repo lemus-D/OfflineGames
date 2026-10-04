@@ -156,24 +156,27 @@ function drawSession(dt, playing) {
 function updateGauges(s) {
   const p = s.player;
   const fuelPct = clamp(p.fuel, 0, 1);
-  els.fuelFill.style.height = `${fuelPct * 100}%`;
-  els.fuelVal.textContent = `${Math.round(fuelPct * 100)}%`;
-  els.fuelGauge.classList.toggle('low', fuelPct < 0.28);
+  if (els.fuelFill) els.fuelFill.style.height = `${fuelPct * 100}%`;
+  if (els.fuelVal) els.fuelVal.textContent = `${Math.round(fuelPct * 100)}%`;
+  if (els.fuelGauge) els.fuelGauge.classList.toggle('low', fuelPct < 0.28);
 
   const alt = Math.max(0, Math.floor(p.y));
-  els.altitude.textContent = String(alt);
+  if (els.altitude) els.altitude.textContent = String(alt);
   // Scroll the tape so current altitude sits on the yellow needle.
-  const pxPerUnit = 0.12;
-  els.altTicks.style.transform = `translateY(${-((alt * pxPerUnit) % 10)}px)`;
+  if (els.altTicks) {
+    const pxPerUnit = 0.12;
+    els.altTicks.style.transform = `translateY(${-((alt * pxPerUnit) % 10)}px)`;
+  }
 
   const deg = tiltDegrees(p.tilt);
-  els.tiltVal.textContent = `${deg}°`;
+  if (els.tiltVal) els.tiltVal.textContent = `${deg}°`;
   // Horizon rolls opposite the rocket so the wing mark reads as attitude.
-  els.tiltHorizon.style.transform = `rotate(${-p.tilt}rad)`;
+  if (els.tiltHorizon) els.tiltHorizon.style.transform = `rotate(${-p.tilt}rad)`;
 
-  els.score.textContent = String(s.score);
-  els.coins.textContent = String(s.coins);
-  els.peak.textContent = String(Math.floor(p.peakY));
+  if (els.score) els.score.textContent = String(s.score);
+  if (els.coins) els.coins.textContent = String(s.coins);
+  if (!els.peak) els.peak = document.getElementById('peakVal');
+  if (els.peak) els.peak.textContent = String(Math.floor(p.peakY));
 }
 
 function drawMenuBackdrop(dt) {
