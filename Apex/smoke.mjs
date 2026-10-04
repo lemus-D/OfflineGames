@@ -65,9 +65,31 @@ assert(
   'celestials ordered by ascending realKm'
 );
 const ids = new Set(CELESTIAL.map((c) => c.id));
-for (const need of ['moon', 'venus', 'mars', 'sun', 'belt', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto']) {
+for (const need of [
+  'moon',
+  'venus',
+  'mars',
+  'mercury',
+  'sun',
+  'belt',
+  'jupiter',
+  'saturn',
+  'uranus',
+  'neptune',
+  'pluto',
+]) {
   assert(ids.has(need), `celestial catalog includes ${need}`);
 }
+assert(
+  CELESTIAL.find((c) => c.id === 'venus').realKm <
+    CELESTIAL.find((c) => c.id === 'mercury').realKm,
+  'Venus closer than Mercury at closest approach'
+);
+assert(
+  CELESTIAL.find((c) => c.id === 'mars').gameY <
+    CELESTIAL.find((c) => c.id === 'mercury').gameY,
+  'Mars before Mercury in climb order'
+);
 assert(gameToKm(100) < gameToKm(1000), 'gameToKm monotonic');
 assert(gameToKm(CELESTIAL[0].gameY) < gameToKm(CELESTIAL[CELESTIAL.length - 1].gameY), 'moon km < pluto km');
 
@@ -210,7 +232,7 @@ assert(
     slow.step(1 / 60, boost);
     fast.step(1 / 60, boost);
   }
-  assert(fast.player.y > slow.player.y + 20, `thrust upgrade climbs higher (${fast.player.y.toFixed(0)} > ${slow.player.y.toFixed(0)})`);
+  assert(fast.player.y > slow.player.y + 8, `thrust upgrade climbs higher (${fast.player.y.toFixed(0)} > ${slow.player.y.toFixed(0)})`);
 
   // Scoop: fuel pickup yields more absolute fuel.
   const scoopStats = foldStats({ scoop: 5 });

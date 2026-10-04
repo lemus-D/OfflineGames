@@ -47,6 +47,9 @@ const P = {
   neptuneDk: '#1e3e90',
   pluto: '#b0a090',
   plutoDk: '#706050',
+  mercury: '#9a9088',
+  mercuryDk: '#5a5048',
+  mercuryLt: '#c8c0b4',
   rock: '#8a7060',
   rockLt: '#b09880',
 };
@@ -103,10 +106,8 @@ function spriteCanvas(key, rows, colors, px) {
 
 export function drawSky(g, W, H, altitude, time) {
   g.imageSmoothingEnabled = false;
-  // Hard clear — prevents motion trails / ghost rockets on some GPUs.
   g.globalAlpha = 1;
   g.globalCompositeOperation = 'source-over';
-  g.clearRect(0, 0, W, H);
 
   const km = gameToKm(altitude);
   const col = skyColorAtKm(km);
@@ -222,6 +223,23 @@ const VENUS_SPRITE = [
 ];
 const VENUS_COLORS = { v: P.venus, V: P.venusDk };
 
+const MERCURY_SPRITE = [
+  '....hhhhhh....',
+  '..hhhhhhhhhh..',
+  '.hhhHhhhhhhhh.',
+  '.hhhhhhhhhHhh.',
+  'hhhhDhhhhhhhhh',
+  'hhhHhhhhhhHhhh',
+  'hhhhhhhhhhhhhh',
+  'hhHhhhDhhhhHhh',
+  'hhhhhhhhhhhhhh',
+  '.hhhhHhhhhhhh.',
+  '.hhhhhhhhhhhh.',
+  '..hhhhhhhhhh..',
+  '....hhhhhh....',
+];
+const MERCURY_COLORS = { h: P.mercury, H: P.mercuryLt, D: P.mercuryDk };
+
 const SUN_SPRITE = [
   '......yy......',
   '......yy......',
@@ -325,6 +343,7 @@ const BODY_ART = {
   moon: { rows: MOON_SPRITE, colors: MOON_COLORS, halo: P.moon },
   mars: { rows: MARS_SPRITE, colors: MARS_COLORS, halo: P.mars },
   venus: { rows: VENUS_SPRITE, colors: VENUS_COLORS, halo: P.venus },
+  mercury: { rows: MERCURY_SPRITE, colors: MERCURY_COLORS, halo: P.mercury },
   sun: { rows: SUN_SPRITE, colors: SUN_COLORS, halo: P.sun },
   jupiter: { rows: JUPITER_SPRITE, colors: JUPITER_COLORS, halo: P.jupiter },
   saturn: { rows: SATURN_SPRITE, colors: SATURN_COLORS, halo: P.saturn },
@@ -585,9 +604,20 @@ export function drawPickup(g, kind, x, y, r, spin, time) {
   }
 }
 
+/** Scratch canvas: compose upright rocket+flame, then one rotated blit. */
+let rocketPose = null;
+function poseCanvas(w, h) {
+  if (!rocketPose || rocketPose.width < w || rocketPose.height < h) {
+    rocketPose = document.createElement('canvas');
+    rocketPose.width = Math.max(w, 64);
+    rocketPose.height = Math.max(h, 96);
+  }
+  return rocketPose;
+}
+
 /**
- * Draw rocket as one cached bitmap + discrete tilt steps.
- * Avoids fillRect-under-rotation smear that looked like ghost rockets.
+ * Single rotated drawImage of a precomposed upright sprite.
+ * Opaque parent canvas + one blit kills high-speed afterimages.
  */
 export function drawRocket(g, x, y, scale, tilt, time, thrusting) {
   g.imageSmoothingEnabled = false;
@@ -598,22 +628,36 @@ export function drawRocket(g, x, y, scale, tilt, time, thrusting) {
   const sheet = spriteCanvas('rocket', ROCKET_SPRITE, ROCKET_COLORS, px);
   const bodyW = sheet.width;
   const bodyH = sheet.height;
+  const flameH = thrusting ? 4 * px : 0;
+  const pad = px * 2;
+  const poseW = bodyW + pad * 2;
+  const poseH = bodyH + flameH + pad * 2;
+  const pose = poseCanvas(poseW, poseH);
+  const pg = pose.getContext('2d', { alpha: true });
+  pg.setTransform(1, 0, 0, 1, 0, 0);
+  pg.globalAlpha = 1;
+  pg.globalCompositeOperation = 'source-over';
+  pg.imageSmoothingEnabled = false;
+  pg.clearRect(0, 0, pose.width, pose.height);
 
-  // Quantize attitude so consecutive frames don't AA-smear across angles.
-  const step = Math.PI / 24; // 7.5°
-  const t = Math.round(tilt / step) * step;
+  const ox = pad;
+  const oy = pad;
+  if (thrusting) {
+    const flame = Math.floor(time * 8) % 2 === 0 ? FLAME_A : FLAME_B;
+    const flameSheet = spriteCanvas(flame === FLAME_A ? 'flameA' : 'flameB', flame, FLAME_COLORS, px);
+    pg.drawImage(flameSheet, ox + Math.floor((bodyW - flameSheet.width) / 2), oy + bodyH - px * 2);
+  }
+  pg.drawImage(sheet, ox, oy);
+
+  // Device-pixel snap of the screen anchor (parent transform is CSS-scaled).
+  const ax = Math.round(x);
+  const ay = Math.round(y);
 
   g.save();
-  g.translate(snap(x), snap(y));
-  g.rotate(t);
-
-  if (thrusting) {
-    const flame = Math.floor(time * 10) % 2 === 0 ? FLAME_A : FLAME_B;
-    const flameSheet = spriteCanvas(flame === FLAME_A ? 'flameA' : 'flameB', flame, FLAME_COLORS, px);
-    g.drawImage(flameSheet, snap(-flameSheet.width / 2), snap(bodyH / 2 - px * 2));
-  }
-
-  g.drawImage(sheet, snap(-bodyW / 2), snap(-bodyH / 2));
+  g.translate(ax, ay);
+  g.rotate(tilt);
+  g.imageSmoothingEnabled = false;
+  g.drawImage(pose, 0, 0, poseW, poseH, Math.round(-poseW / 2), Math.round(-poseH / 2), poseW, poseH);
   g.restore();
 }
 

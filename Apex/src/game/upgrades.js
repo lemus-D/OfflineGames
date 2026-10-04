@@ -6,28 +6,28 @@ export const UPGRADES = {
     name: 'Tanker',
     desc: 'Bigger tank. Launch with a full load.',
     maxLevel: 5,
-    costs: [5, 12, 25, 50, 90],
+    costs: [8, 18, 36, 70, 120],
   },
   thrust: {
     id: 'thrust',
     name: 'Thrusters',
     desc: 'Climb and cruise faster.',
     maxLevel: 5,
-    costs: [5, 12, 25, 50, 90],
+    costs: [8, 18, 36, 70, 120],
   },
   scoop: {
     id: 'scoop',
     name: 'Fuel Scoop',
     desc: 'Gas cans refill more.',
     maxLevel: 5,
-    costs: [4, 10, 22, 45, 80],
+    costs: [6, 14, 30, 60, 100],
   },
   hull: {
     id: 'hull',
     name: 'Hull Plating',
     desc: 'Meteors steal less fuel.',
     maxLevel: 5,
-    costs: [6, 14, 28, 55, 100],
+    costs: [10, 20, 40, 80, 140],
   },
 };
 
@@ -50,6 +50,7 @@ export function normalizeUpgrades(raw) {
 
 /**
  * Fold owned upgrade levels into runtime stats.
+ * Kept modest so maxed ships still take skill — not a free climb.
  * fuel is stored in absolute tank units (not 0–1 only).
  */
 export function foldStats(upgrades = {}) {
@@ -59,17 +60,17 @@ export function foldStats(upgrades = {}) {
   const scoop = u.scoop;
   const hull = u.hull;
 
-  const fuelMax = 1 + tank * 0.25; // 1.00 → 2.25
+  const fuelMax = 1 + tank * 0.12; // 1.00 → 1.60
   return {
     upgrades: u,
     fuelMax,
     fuelStart: fuelMax, // launch full
-    thrustMul: 1 + thrust * 0.14,
-    maxSpeedMul: 1 + thrust * 0.12,
-    maxClimbMul: 1 + thrust * 0.12,
-    fuelPickupMul: 1 + scoop * 0.28,
+    thrustMul: 1 + thrust * 0.06, // → 1.30
+    maxSpeedMul: 1 + thrust * 0.05, // → 1.25
+    maxClimbMul: 1 + thrust * 0.05,
+    fuelPickupMul: 1 + scoop * 0.12, // → 1.60
     /** Multiplier on meteor fuel loss (negative gains). */
-    meteorDrainMul: Math.max(0.2, 1 - hull * 0.16),
+    meteorDrainMul: Math.max(0.55, 1 - hull * 0.08), // → 0.60
   };
 }
 

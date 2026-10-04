@@ -38,6 +38,10 @@
     width: 100vw;
     height: 100vh;
     touch-action: none;
+    background: #070b14;
+    /* Prevent browser upscale blur from looking like motion trails. */
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
   }
 
   .hidden { display: none !important; }

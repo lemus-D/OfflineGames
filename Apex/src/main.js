@@ -4,7 +4,7 @@ import { Input } from './core/input.js';
 import { Save } from './core/save.js';
 import { clamp } from './core/rng.js';
 import { PlaySession } from './game/play.js';
-import { tiltDegrees, ROCKET } from './game/content.js';
+import { tiltDegrees, ROCKET, WORLD_HALF_W } from './game/content.js';
 import {
   gameToKm,
   formatAltitudeKm,
@@ -32,7 +32,8 @@ import {
 } from './game/draw.js';
 
 const canvas = document.getElementById('stage');
-const g = canvas.getContext('2d');
+// Opaque buffer — translucent canvases can composite prior frames (ghost trails).
+const g = canvas.getContext('2d', { alpha: false, desynchronized: true });
 const input = new Input();
 
 let W = 0,
@@ -100,8 +101,20 @@ function resize() {
   canvas.width = Math.round(W * dpr);
   canvas.height = Math.round(H * dpr);
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.imageSmoothingEnabled = false;
 }
 addEventListener('resize', resize);
+
+/** Full-buffer clear in device pixels, then restore CSS-pixel transform. */
+function clearFrame() {
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = 'source-over';
+  g.fillStyle = '#070b14';
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.imageSmoothingEnabled = false;
+}
 
 function show(el) {
   el.classList.remove('hidden');
@@ -247,26 +260,28 @@ function drawSession(dt, playing) {
     checkFlybys(s, dt);
   }
 
-  g.imageSmoothingEnabled = false;
-  g.clearRect(0, 0, W, H);
-  drawSky(g, W, H, p.y, animTime);
-  drawLaunchPad(g, W, H, camY);
-  drawCelestials(g, W, H, camY, animTime);
+  clearFrame();
+  // Integer camera keeps world scroll on whole pixels at high speed.
+  const viewY = Math.round(camY);
+  drawSky(g, W, H, viewY, animTime);
+  drawLaunchPad(g, W, H, viewY);
+  drawCelestials(g, W, H, viewY, animTime);
 
   for (const u of s.pickups) {
-    const scr = worldToScreen(u.x, u.y, camY, W, H);
+    const scr = worldToScreen(u.x, u.y, viewY, W, H);
     if (scr.y < -80 || scr.y > H + 80) continue;
     drawPickup(g, u.kind, scr.x, scr.y, u.r * scr.scale, u.spin, animTime);
   }
 
-  for (const fx of s.collectFx) drawCollectFx(g, fx, camY, W, H, animTime);
+  for (const fx of s.collectFx) drawCollectFx(g, fx, viewY, W, H, animTime);
 
-  const rocketScr = worldToScreen(p.x, p.y, camY, W, H);
+  // Pin the player to a fixed screen anchor so camera rounding can't smear it.
+  const scale = Math.min(W, H) / (WORLD_HALF_W * 1.85);
   drawRocket(
     g,
-    rocketScr.x,
-    rocketScr.y,
-    rocketScr.scale * 0.85,
+    W * 0.5 + p.x * scale,
+    H * 0.62,
+    scale * 0.85,
     p.tilt,
     animTime,
     playing ? p.thrusting : p.alive
@@ -339,8 +354,7 @@ function drawMenuBackdrop(dt) {
   // Hold on the pad a moment, then drift up through the atmosphere.
   menuAltitude += dt * 40;
   if (menuAltitude > 3800) menuAltitude = 0;
-  g.imageSmoothingEnabled = false;
-  g.clearRect(0, 0, W, H);
+  clearFrame();
   const onPad = menuAltitude < 90;
   const cam = onPad ? ROCKET.startY : menuAltitude;
   drawSky(g, W, H, cam, animTime);
