@@ -12,6 +12,13 @@ import {
   CELESTIAL,
 } from './game/altitude.js';
 import {
+  UPGRADES,
+  UPGRADE_IDS,
+  nextCost,
+  buyUpgrade,
+  foldStats,
+} from './game/upgrades.js';
+import {
   drawSky,
   drawPickup,
   drawRocket,
@@ -61,6 +68,8 @@ const els = {
   peak: document.getElementById('peakVal'),
   best: document.getElementById('bestVal'),
   bestAlt: document.getElementById('bestAltVal'),
+  bank: document.getElementById('bankVal'),
+  shop: document.getElementById('shop'),
   flybyMeta: document.getElementById('flybyMeta'),
   summaryBody: document.getElementById('summaryBody'),
   btnPlay: document.getElementById('btnPlay'),
@@ -85,25 +94,70 @@ function hide(el) {
   el.classList.add('hidden');
 }
 
+function refreshShop() {
+  if (!els.shop) return;
+  const bank = Number(profile.bankCoins) || 0;
+  if (els.bank) els.bank.textContent = String(bank);
+
+  els.shop.innerHTML = '';
+  for (const id of UPGRADE_IDS) {
+    const def = UPGRADES[id];
+    const level = profile.upgrades?.[id] || 0;
+    const cost = nextCost(id, level);
+    const maxed = cost == null;
+    const canBuy = !maxed && bank >= cost;
+
+    const row = document.createElement('div');
+    row.className = 'shop-row';
+    row.innerHTML = `
+      <div class="name">${def.name}</div>
+      <div class="lvl">${maxed ? 'MAX' : `Lv ${level}/${def.maxLevel}`}</div>
+      <div class="desc">${def.desc}</div>
+      <button type="button" class="btn buy" data-id="${id}" ${
+        canBuy ? '' : 'disabled'
+      }>${maxed ? 'Owned' : `${cost}¢`}</button>
+    `;
+    els.shop.appendChild(row);
+  }
+
+  els.shop.querySelectorAll('button.buy').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      const result = buyUpgrade(profile, id);
+      if (!result.ok) return;
+      Save.writeProfile(profile);
+      refreshShop();
+      refreshMenuMeta();
+    });
+  });
+}
+
 function refreshMenuMeta() {
   const peakKm = formatAltitudeKm(gameToKm(profile.bestAltitude || 0));
-  els.best.textContent = String(profile.bestScore);
-  els.bestAlt.textContent = peakKm;
+  if (els.best) els.best.textContent = String(profile.bestScore);
+  if (els.bestAlt) els.bestAlt.textContent = peakKm;
+  if (els.bank) els.bank.textContent = String(Number(profile.bankCoins) || 0);
   if (els.flybyMeta) {
     const bits = [];
     if (profile.passedMoon) bits.push('Moon ✓');
     if (profile.passedMars) bits.push('Mars ✓');
     els.flybyMeta.textContent = bits.length ? `Flybys: ${bits.join(' · ')}` : '';
   }
+  refreshShop();
 }
 
 function startRun() {
   const seed = (Date.now() ^ (performance.now() * 1000)) >>> 0;
-  session = new PlaySession(seed, {
-    onDeath() {
-      endRun();
+  const stats = foldStats(profile.upgrades);
+  session = new PlaySession(
+    seed,
+    {
+      onDeath() {
+        endRun();
+      },
     },
-  });
+    stats
+  );
   flyby = null;
   flybySeen.clear();
   state = 'playing';
@@ -117,6 +171,7 @@ function endRun() {
   const sum = session.summary();
   profile.runs += 1;
   profile.totalCoins += sum.coins;
+  profile.bankCoins = (Number(profile.bankCoins) || 0) + sum.coins;
   profile.bestScore = Math.max(profile.bestScore, sum.score);
   profile.bestAltitude = Math.max(profile.bestAltitude, sum.altitude);
   profile.bestCoins = Math.max(profile.bestCoins, sum.coins);
@@ -140,10 +195,10 @@ function endRun() {
     <div class="stat-grid">
       <div><span>Score</span><b>${sum.score}</b></div>
       <div><span>Peak</span><b>${peakKm}</b></div>
-      <div><span>Coins</span><b>${sum.coins}</b></div>
-      <div><span>Layer</span><b style="font-size:1rem">${layer}</b></div>
+      <div><span>Coins</span><b>+${sum.coins}</b></div>
+      <div><span>Bank</span><b>${profile.bankCoins}</b></div>
     </div>
-    <p class="muted">Runs: ${profile.runs} · Lifetime coins: ${profile.totalCoins}${
+    <p class="muted">Runs: ${profile.runs} · Lifetime coins: ${profile.totalCoins} · ${layer}${
       eggs.length ? ` · Flybys: ${eggs.join(', ')}` : ''
     }</p>
   `;
@@ -210,7 +265,8 @@ function drawSession(dt, playing) {
 
 function updateGauges(s) {
   const p = s.player;
-  const fuelPct = clamp(p.fuel, 0, 1);
+  const fuelMax = p.fuelMax || 1;
+  const fuelPct = clamp(p.fuel / fuelMax, 0, 1);
   if (els.fuelFill) els.fuelFill.style.height = `${fuelPct * 100}%`;
   if (els.fuelVal) els.fuelVal.textContent = `${Math.round(fuelPct * 100)}%`;
   if (els.fuelGauge) els.fuelGauge.classList.toggle('low', fuelPct < 0.28);
@@ -239,13 +295,14 @@ function drawMenuBackdrop(dt) {
   menuAltitude += dt * 40;
   if (menuAltitude > 3800) menuAltitude = 0;
   g.imageSmoothingEnabled = false;
-  const cam = menuAltitude < 80 ? ROCKET_START_CAM : menuAltitude;
+  const onPad = menuAltitude < 90;
+  const cam = onPad ? ROCKET.startY : menuAltitude;
   drawSky(g, W, H, cam, animTime);
   drawLaunchPad(g, W, H, cam);
-  if (menuAltitude >= 80) drawCelestials(g, W, H, cam, animTime);
-  const padScr = worldToScreen(0, ROCKET_START_Y, cam, W, H);
-  const thrusting = menuAltitude > 40 && Math.sin(animTime * 3) > -0.2;
-  if (menuAltitude < 80) {
+  if (!onPad) drawCelestials(g, W, H, cam, animTime);
+  if (onPad) {
+    const padScr = worldToScreen(0, ROCKET.startY, cam, W, H);
+    const thrusting = menuAltitude > 50 && Math.sin(animTime * 3) > -0.2;
     drawRocket(g, padScr.x, padScr.y, padScr.scale * 0.85, 0, animTime, thrusting);
   } else {
     const x = W * 0.62 + Math.sin(animTime * 0.7) * 18;

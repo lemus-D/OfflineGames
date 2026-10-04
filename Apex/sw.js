@@ -1,5 +1,5 @@
 /* Apex service worker — precache, versioned cache name. */
-const CACHE = 'apex-v10';
+const CACHE = 'apex-v11';
 const PRECACHE = [
   './',
   './index.html',
@@ -12,6 +12,7 @@ const PRECACHE = [
   './src/game/altitude.js',
   './src/game/play.js',
   './src/game/draw.js',
+  './src/game/upgrades.js',
 ];
 
 self.addEventListener('install', (event) => {

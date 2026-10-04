@@ -1,7 +1,9 @@
 /* Namespaced, versioned localStorage. Keys always start with apex.v1. */
 
+import { emptyUpgrades, normalizeUpgrades } from '../game/upgrades.js';
+
 const PROFILE_KEY = 'apex.v1.profile';
-const SCHEMA = 1;
+const SCHEMA = 2;
 
 const DEFAULT_PROFILE = () => ({
   schema: SCHEMA,
@@ -10,14 +12,29 @@ const DEFAULT_PROFILE = () => ({
   bestCoins: 0,
   runs: 0,
   totalCoins: 0,
+  /** Spendable coins for the hangar shop. */
+  bankCoins: 0,
+  upgrades: emptyUpgrades(),
   passedMoon: false,
   passedMars: false,
 });
 
 function migrate(raw) {
   if (!raw || typeof raw !== 'object') return DEFAULT_PROFILE();
-  if (raw.schema !== SCHEMA) return DEFAULT_PROFILE();
-  return { ...DEFAULT_PROFILE(), ...raw, schema: SCHEMA };
+  const base = DEFAULT_PROFILE();
+  const merged = { ...base, ...raw, schema: SCHEMA };
+
+  // v1 → v2: lifetime total becomes the bank if bank is missing.
+  if (raw.schema === 1 || raw.bankCoins == null) {
+    const lifetime = Number(raw.totalCoins) || 0;
+    merged.bankCoins = Number(raw.bankCoins);
+    if (!Number.isFinite(merged.bankCoins)) merged.bankCoins = lifetime;
+  }
+
+  merged.bankCoins = Math.max(0, Math.floor(Number(merged.bankCoins) || 0));
+  merged.totalCoins = Math.max(0, Math.floor(Number(merged.totalCoins) || 0));
+  merged.upgrades = normalizeUpgrades(merged.upgrades);
+  return merged;
 }
 
 export const Save = {
@@ -32,7 +49,13 @@ export const Save = {
 
   writeProfile(profile) {
     try {
-      localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, schema: SCHEMA }));
+      const clean = {
+        ...profile,
+        schema: SCHEMA,
+        bankCoins: Math.max(0, Math.floor(Number(profile.bankCoins) || 0)),
+        upgrades: normalizeUpgrades(profile.upgrades),
+      };
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(clean));
       return true;
     } catch {
       return false;

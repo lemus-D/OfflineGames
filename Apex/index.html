@@ -52,9 +52,11 @@
   .overlay > * { pointer-events: auto; }
 
   #menu .menu-panel {
-    width: min(400px, 92vw);
-    margin: clamp(24px, 6vh, 64px) clamp(18px, 4vw, 48px);
-    padding: 28px 28px 24px;
+    width: min(420px, 92vw);
+    max-height: min(92vh, 900px);
+    overflow-y: auto;
+    margin: clamp(16px, 4vh, 48px) clamp(18px, 4vw, 48px);
+    padding: 24px 24px 20px;
     background: linear-gradient(165deg, rgba(18, 28, 48, 0.9), rgba(6, 10, 20, 0.82));
     border: 1px solid var(--line);
     backdrop-filter: blur(10px);
@@ -110,6 +112,61 @@
     color: var(--muted);
   }
   .meta b { color: var(--ink); }
+
+  .bank {
+    margin: 18px 0 8px;
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    color: var(--flame);
+  }
+  .bank b { color: #ffe08a; }
+
+  .shop {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 0 4px;
+    max-height: min(42vh, 280px);
+    overflow-y: auto;
+  }
+  .shop-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 10px;
+    align-items: center;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid var(--line);
+  }
+  .shop-row .name {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 0.98rem;
+    color: var(--ink);
+  }
+  .shop-row .desc {
+    grid-column: 1 / -1;
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.3;
+  }
+  .shop-row .lvl {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-align: right;
+  }
+  .shop-row .btn.buy {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    background: linear-gradient(180deg, #ffe0a0, #e07040);
+    color: #1a1008;
+  }
+  .shop-row .btn.buy:disabled {
+    opacity: 0.4;
+    cursor: default;
+    transform: none;
+    filter: none;
+  }
 
   .hint {
     margin: 14px 0 0;
@@ -362,6 +419,10 @@
 
     <button class="btn primary" id="btnPlay">Launch</button>
     <p class="hint">↑ / W boost · ← → or A / D spin (full 360°) · scoop fuel on the way down too</p>
+
+    <p class="bank">Hangar bank <b id="bankVal">0</b> coins</p>
+    <div class="shop" id="shop" aria-label="Upgrades"></div>
+
     <p class="meta">Best score <b id="bestVal">0</b> · Best altitude <b id="bestAltVal">0</b></p>
     <p class="meta" id="flybyMeta"></p>
   </div>

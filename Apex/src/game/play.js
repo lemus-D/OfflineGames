@@ -11,6 +11,7 @@ import {
   scoreFromRun,
   wrapAngle,
 } from './content.js';
+import { foldStats } from './upgrades.js';
 
 function pickKind(rng) {
   const entries = Object.values(PICKUPS);
@@ -25,17 +26,29 @@ function pickKind(rng) {
 }
 
 export class PlaySession {
-  constructor(seed, hooks = {}) {
+  /**
+   * @param {number} seed
+   * @param {object} [hooks]
+   * @param {object} [upgradesOrStats] owned levels `{tank,thrust,...}` or pre-folded stats
+   */
+  constructor(seed, hooks = {}, upgradesOrStats = {}) {
     this.seed = seed >>> 0;
     this.rng = makeRNG(this.seed);
     this.hooks = hooks;
+
+    const stats =
+      upgradesOrStats && typeof upgradesOrStats.fuelMax === 'number'
+        ? upgradesOrStats
+        : foldStats(upgradesOrStats);
+    this.stats = stats;
 
     this.player = {
       x: 0,
       y: ROCKET.startY,
       vx: 0,
       vy: 0,
-      fuel: ROCKET.startFuel,
+      fuel: stats.fuelStart,
+      fuelMax: stats.fuelMax,
       alive: true,
       deathReason: null,
       tilt: 0, // radians, 0 = nose up; free wrap
@@ -84,6 +97,7 @@ export class PlaySession {
   _fixedStep(dt, { steer = 0, thrust = false }) {
     this.time += dt;
     const p = this.player;
+    const st = this.stats;
 
     // Free 360° rotation — hold left/right to spin the whole way.
     if (steer !== 0) {
@@ -110,19 +124,22 @@ export class PlaySession {
       // tilt 0 = straight up (+y); positive tilt tips nose to the right.
       const dirX = Math.sin(p.tilt);
       const dirY = Math.cos(p.tilt);
-      p.vx += dirX * ROCKET.thrustAccel * dt;
-      p.vy += dirY * ROCKET.thrustAccel * dt;
+      const accel = ROCKET.thrustAccel * st.thrustMul;
+      p.vx += dirX * accel * dt;
+      p.vy += dirY * accel * dt;
       p.fuel -= ROCKET.burnRate * dt;
       if (p.fuel < 0) p.fuel = 0;
     }
 
     p.vy -= ROCKET.gravity * dt;
 
-    p.vy = clamp(p.vy, -ROCKET.maxFallSpeed, ROCKET.maxClimbSpeed);
+    const maxClimb = ROCKET.maxClimbSpeed * st.maxClimbMul;
+    const maxSpeed = ROCKET.maxSpeed * st.maxSpeedMul;
+    p.vy = clamp(p.vy, -ROCKET.maxFallSpeed, maxClimb);
     const spd = Math.hypot(p.vx, p.vy);
-    if (spd > ROCKET.maxSpeed) {
-      p.vx = (p.vx / spd) * ROCKET.maxSpeed;
-      p.vy = (p.vy / spd) * ROCKET.maxSpeed;
+    if (spd > maxSpeed) {
+      p.vx = (p.vx / spd) * maxSpeed;
+      p.vy = (p.vy / spd) * maxSpeed;
     }
     p.vx *= Math.pow(ROCKET.drag, dt * 60);
 
@@ -217,6 +234,7 @@ export class PlaySession {
 
   _collide() {
     const p = this.player;
+    const st = this.stats;
     const pr = ROCKET.radius;
     for (let i = this.pickups.length - 1; i >= 0; i--) {
       const u = this.pickups[i];
@@ -226,7 +244,10 @@ export class PlaySession {
       if (dx * dx + dy * dy > hitR * hitR) continue;
 
       const def = PICKUPS[u.kind];
-      p.fuel = clamp(p.fuel + def.fuelGain, 0, 1.15);
+      let gain = def.fuelGain;
+      if (gain > 0) gain *= st.fuelPickupMul;
+      else if (gain < 0) gain *= st.meteorDrainMul;
+      p.fuel = clamp(p.fuel + gain, 0, p.fuelMax);
       this.pickupScore += def.score;
       if (u.kind === 'coin') {
         this.coins += 1;

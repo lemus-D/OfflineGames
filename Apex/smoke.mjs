@@ -1,9 +1,15 @@
 #!/usr/bin/env node
-/* Headless smoke: thrust climb, free tilt, fall collects, no Math.random. */
+/* Headless smoke: thrust climb, free tilt, fall collects, upgrades, no Math.random. */
 import { readFileSync } from 'node:fs';
 import { PlaySession } from './src/game/play.js';
-import { ROCKET, wrapAngle, tiltDegrees } from './src/game/content.js';
+import { ROCKET, PICKUPS, wrapAngle, tiltDegrees } from './src/game/content.js';
 import { gameToKm, CELESTIAL, ATM_GAME_UNITS, ATM_KM, layerAtKm } from './src/game/altitude.js';
+import {
+  foldStats,
+  buyUpgrade,
+  emptyUpgrades,
+  UPGRADES,
+} from './src/game/upgrades.js';
 
 let failures = 0;
 function assert(cond, msg) {
@@ -23,6 +29,7 @@ for (const file of [
   'src/game/content.js',
   'src/game/draw.js',
   'src/game/altitude.js',
+  'src/game/upgrades.js',
   'src/core/rng.js',
 ]) {
   const src = readFileSync(new URL(file, import.meta.url), 'utf8')
@@ -145,6 +152,58 @@ assert(
   Math.abs(a.player.peakY - b.player.peakY) < 0.001 && a.score === b.score,
   'same seed, same inputs: identical outcome'
 );
+
+// —— Upgrades ——
+{
+  const base = foldStats(emptyUpgrades());
+  assert(base.fuelMax === 1 && base.fuelStart === 1, 'stock tank is 1.0');
+  assert(base.thrustMul === 1, 'stock thrust mul is 1');
+  assert(base.fuelPickupMul === 1, 'stock scoop mul is 1');
+  assert(base.meteorDrainMul === 1, 'stock hull mul is 1');
+
+  const maxed = foldStats({ tank: 5, thrust: 5, scoop: 5, hull: 5 });
+  assert(maxed.fuelMax > base.fuelMax, 'tank upgrade raises fuelMax');
+  assert(maxed.thrustMul > base.thrustMul, 'thrust upgrade raises thrustMul');
+  assert(maxed.fuelPickupMul > base.fuelPickupMul, 'scoop upgrade raises pickup');
+  assert(maxed.meteorDrainMul < base.meteorDrainMul, 'hull upgrade lowers meteor drain');
+
+  const stock = new PlaySession(55, {}, emptyUpgrades());
+  const tanker = new PlaySession(55, {}, { tank: 5 });
+  assert(stock.player.fuel === 1, 'stock starts with 1 fuel');
+  assert(tanker.player.fuelMax === foldStats({ tank: 5 }).fuelMax, 'tanker fuelMax applied');
+  assert(tanker.player.fuel === tanker.player.fuelMax, 'tanker launches full');
+
+  // Thrusters climb farther on the same seed / burn window.
+  const slow = new PlaySession(77, {}, emptyUpgrades());
+  const fast = new PlaySession(77, {}, { thrust: 5 });
+  for (let i = 0; i < 60 * 3; i++) {
+    slow.step(1 / 60, boost);
+    fast.step(1 / 60, boost);
+  }
+  assert(fast.player.y > slow.player.y + 20, `thrust upgrade climbs higher (${fast.player.y.toFixed(0)} > ${slow.player.y.toFixed(0)})`);
+
+  // Scoop: fuel pickup yields more absolute fuel.
+  const scoopStats = foldStats({ scoop: 5 });
+  const scooped = PICKUPS.fuel.fuelGain * scoopStats.fuelPickupMul;
+  assert(scooped > PICKUPS.fuel.fuelGain, 'scoop multiplies fuel gain');
+
+  // Hull: meteor takes less.
+  const hullStats = foldStats({ hull: 5 });
+  const drained = Math.abs(PICKUPS.meteor.fuelGain * hullStats.meteorDrainMul);
+  assert(drained < Math.abs(PICKUPS.meteor.fuelGain), 'hull reduces meteor fuel loss');
+
+  // Buyer spends bank coins.
+  const profile = {
+    bankCoins: 20,
+    upgrades: emptyUpgrades(),
+  };
+  const bought = buyUpgrade(profile, 'tank');
+  assert(bought.ok, 'can buy tank with coins');
+  assert(profile.upgrades.tank === 1, 'tank level became 1');
+  assert(profile.bankCoins === 20 - UPGRADES.tank.costs[0], 'coins deducted');
+  const broke = buyUpgrade({ bankCoins: 0, upgrades: emptyUpgrades() }, 'tank');
+  assert(!broke.ok && broke.reason === 'broke', 'cannot buy when broke');
+}
 
 if (failures) {
   console.error(`\n${failures} failure(s)`);
