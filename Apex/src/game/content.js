@@ -6,16 +6,21 @@ export const FIXED_DT = 1 / 60;
 export const WORLD_HALF_W = 220;
 
 export const ROCKET = {
-  /** Upward accel while holding boost (world units / sec²). */
+  /** Accel along the rocket's nose while boosting (world units / sec²). */
   thrustAccel: 780,
   /** Downward accel when not thrusting. */
   gravity: 520,
-  maxClimbSpeed: 280,
+  maxClimbSpeed: 300,
   maxFallSpeed: 360,
-  steerAccel: 520,
-  maxSteerSpeed: 210,
-  drag: 0.9, // per-frame factor at 60 Hz for horizontal
-  radius: 14,
+  maxSpeed: 340,
+  /** How fast left/right tilts the nose (rad / sec). */
+  tiltRate: 2.6,
+  /** Max lean from upright (radians). */
+  maxTilt: 0.85,
+  /** Slow return toward upright when not steering. */
+  tiltReturn: 1.1,
+  drag: 0.985, // light air drag on velocity
+  radius: 16,
   startFuel: 1,
   /** Fuel burned per second while boosting. */
   burnRate: 0.12,

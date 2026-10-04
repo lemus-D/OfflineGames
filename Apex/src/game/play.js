@@ -83,21 +83,39 @@ export class PlaySession {
     this.time += dt;
     const p = this.player;
 
+    // Left/right tilts the nose; thrust pushes along that angle.
+    if (steer !== 0) {
+      p.tilt += steer * ROCKET.tiltRate * dt;
+    } else {
+      // Ease back upright when not holding a lean.
+      if (p.tilt > 0) p.tilt = Math.max(0, p.tilt - ROCKET.tiltReturn * dt);
+      else if (p.tilt < 0) p.tilt = Math.min(0, p.tilt + ROCKET.tiltReturn * dt);
+    }
+    p.tilt = clamp(p.tilt, -ROCKET.maxTilt, ROCKET.maxTilt);
+
     const boosting = thrust && p.fuel > 0;
     p.thrusting = boosting;
 
     if (boosting) {
-      p.vy += ROCKET.thrustAccel * dt;
+      // tilt 0 = straight up (+y); positive tilt tips nose to the right.
+      const dirX = Math.sin(p.tilt);
+      const dirY = Math.cos(p.tilt);
+      p.vx += dirX * ROCKET.thrustAccel * dt;
+      p.vy += dirY * ROCKET.thrustAccel * dt;
       p.fuel -= ROCKET.burnRate * dt;
       if (p.fuel < 0) p.fuel = 0;
       if (p.y > ROCKET.startY * 0.5) p.airborne = true;
     }
 
     p.vy -= ROCKET.gravity * dt;
-    p.vy = clamp(p.vy, -ROCKET.maxFallSpeed, ROCKET.maxClimbSpeed);
 
-    p.vx += steer * ROCKET.steerAccel * dt;
-    p.vx = clamp(p.vx, -ROCKET.maxSteerSpeed, ROCKET.maxSteerSpeed);
+    // Soft speed caps.
+    p.vy = clamp(p.vy, -ROCKET.maxFallSpeed, ROCKET.maxClimbSpeed);
+    const spd = Math.hypot(p.vx, p.vy);
+    if (spd > ROCKET.maxSpeed) {
+      p.vx = (p.vx / spd) * ROCKET.maxSpeed;
+      p.vy = (p.vy / spd) * ROCKET.maxSpeed;
+    }
     p.vx *= Math.pow(ROCKET.drag, dt * 60);
 
     p.x += p.vx * dt;
@@ -106,9 +124,11 @@ export class PlaySession {
     if (p.x < -WORLD_HALF_W) {
       p.x = -WORLD_HALF_W;
       p.vx = Math.abs(p.vx) * 0.35;
+      p.tilt *= 0.5;
     } else if (p.x > WORLD_HALF_W) {
       p.x = WORLD_HALF_W;
       p.vx = -Math.abs(p.vx) * 0.35;
+      p.tilt *= 0.5;
     }
 
     // Pad: stay grounded until liftoff; after airborne, ground = crash.
@@ -116,6 +136,7 @@ export class PlaySession {
       if (!p.airborne) {
         p.y = 0;
         p.vy = Math.max(0, p.vy);
+        p.vx *= 0.8;
       } else {
         p.y = 0;
         p.alive = false;
@@ -126,7 +147,6 @@ export class PlaySession {
     }
 
     if (p.y > p.peakY) p.peakY = p.y;
-    p.tilt = lerpTilt(p.tilt, clamp(p.vx / ROCKET.maxSteerSpeed, -1, 1), dt * 10);
 
     while (this._nextBandY < p.y + SPAWN.ahead) {
       this._spawnBand(this._nextBandY);
@@ -231,8 +251,4 @@ export class PlaySession {
       reason: this.player.deathReason || 'crash',
     };
   }
-}
-
-function lerpTilt(a, b, t) {
-  return a + (b - a) * clamp(t, 0, 1);
 }

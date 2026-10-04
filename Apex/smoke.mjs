@@ -66,11 +66,13 @@ for (const seed of [1, 42, 99, 12345, 777777]) {
   assert(s.pickups.length > 0, `seed ${seed}: initial bands spawned`);
   assert(s.player.fuel === ROCKET.startFuel, `seed ${seed}: full tanks`);
 
-  // Boost and steer.
+  // Boost while tilting left, then right — angled thrust should move X.
   for (let i = 0; i < 60; i++) s.step(1 / 60, { steer: -1, thrust: true });
+  assert(s.player.tilt < -0.2, `seed ${seed}: tilts left`);
   const leftX = s.player.x;
   for (let i = 0; i < 120; i++) s.step(1 / 60, { steer: 1, thrust: true });
-  assert(s.player.x > leftX, `seed ${seed}: steering moves rocket`);
+  assert(s.player.tilt > 0.2, `seed ${seed}: tilts right`);
+  assert(s.player.x > leftX, `seed ${seed}: angled thrust moves rocket`);
   assert(s.player.peakY > 80, `seed ${seed}: gained altitude`);
 
   // Chase fuel/coins with boost for up to 15s.
