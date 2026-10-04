@@ -94,7 +94,11 @@ function endRun() {
   state = 'summary';
   hide(els.hud);
   const reason =
-    sum.reason === 'meteor' ? 'A meteor drained your tanks dry.' : 'Out of fuel. Free fall.';
+    sum.reason === 'meteor'
+      ? 'A meteor drained your tanks. You fell.'
+      : sum.reason === 'fuel'
+        ? 'Out of fuel. Free fall.'
+        : 'Slammed into the ground.';
   els.summaryBody.innerHTML = `
     <p class="reason">${reason}</p>
     <div class="stat-grid">
@@ -113,8 +117,9 @@ function drawSession(dt, playing) {
   const p = s.player;
   const camY = p.y;
 
-  if (playing) s.step(dt, input.steer());
+  if (playing) s.step(dt, input.controls());
 
+  g.imageSmoothingEnabled = false;
   drawSky(g, W, H, p.y, animTime);
 
   for (const u of s.pickups) {
@@ -126,8 +131,15 @@ function drawSession(dt, playing) {
   for (const fx of s.collectFx) drawCollectFx(g, fx, camY, W, H, animTime);
 
   const rocketScr = worldToScreen(p.x, p.y, camY, W, H);
-  // Rocket art is ~44 units tall at s=1; match collision radius (~14 world).
-  drawRocket(g, rocketScr.x, rocketScr.y, rocketScr.scale * 0.85, p.tilt, animTime, p.alive);
+  drawRocket(
+    g,
+    rocketScr.x,
+    rocketScr.y,
+    rocketScr.scale * 0.85,
+    p.tilt,
+    animTime,
+    playing ? p.thrusting : p.alive
+  );
 
   drawHitFlash(g, W, H, s.flash);
 
@@ -135,20 +147,22 @@ function drawSession(dt, playing) {
     els.fuelFill.style.width = `${clamp(p.fuel, 0, 1) * 100}%`;
     els.fuelFill.classList.toggle('low', p.fuel < 0.28);
     els.score.textContent = String(s.score);
-    els.altitude.textContent = String(Math.floor(p.y));
+    els.altitude.textContent = String(Math.floor(p.peakY));
     els.coins.textContent = String(s.coins);
   }
 }
 
 function drawMenuBackdrop(dt) {
   menuAltitude += dt * 40;
+  g.imageSmoothingEnabled = false;
   drawSky(g, W, H, menuAltitude, animTime);
   const x = W * 0.62 + Math.sin(animTime * 0.7) * 18;
   const y = H * 0.52 + Math.sin(animTime * 1.1) * 10;
-  drawRocket(g, x, y, 2.4, Math.sin(animTime) * 0.25, animTime, true);
-  drawPickup(g, 'fuel', W * 0.78, H * 0.28, 18, animTime, animTime);
-  drawPickup(g, 'coin', W * 0.22, H * 0.38, 14, -animTime * 1.4, animTime);
-  drawPickup(g, 'meteor', W * 0.85, H * 0.68, 22, animTime * 0.8, animTime);
+  const thrusting = Math.sin(animTime * 3) > -0.2;
+  drawRocket(g, x, y, 2.4, Math.sin(animTime) * 0.25, animTime, thrusting);
+  drawPickup(g, 'fuel', W * 0.78, H * 0.28, 22, animTime, animTime);
+  drawPickup(g, 'coin', W * 0.22, H * 0.38, 16, -animTime * 1.4, animTime);
+  drawPickup(g, 'meteor', W * 0.85, H * 0.68, 24, animTime * 0.8, animTime);
 }
 
 function frame(ts) {

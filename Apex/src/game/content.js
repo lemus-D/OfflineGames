@@ -6,20 +6,28 @@ export const FIXED_DT = 1 / 60;
 export const WORLD_HALF_W = 220;
 
 export const ROCKET = {
-  climbSpeed: 160, // world units / sec upward
+  /** Upward accel while holding boost (world units / sec²). */
+  thrustAccel: 780,
+  /** Downward accel when not thrusting. */
+  gravity: 520,
+  maxClimbSpeed: 280,
+  maxFallSpeed: 360,
   steerAccel: 520,
   maxSteerSpeed: 210,
-  drag: 0.9, // per-frame factor at 60 Hz
+  drag: 0.9, // per-frame factor at 60 Hz for horizontal
   radius: 14,
   startFuel: 1,
-  burnRate: 0.085, // fuel / sec at base climb
+  /** Fuel burned per second while boosting. */
+  burnRate: 0.12,
+  /** Start height above the pad. */
+  startY: 48,
 };
 
 /** Pickup kinds as data rows. */
 export const PICKUPS = {
   fuel: {
     id: 'fuel',
-    radius: 16,
+    radius: 18,
     fuelGain: 0.28,
     score: 5,
     weight: 0.38,

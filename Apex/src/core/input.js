@@ -1,4 +1,4 @@
-/* Keyboard-only steering for MVP: left / right. */
+/* Keyboard: left/right steer, up/W boost. */
 
 export class Input {
   constructor() {
@@ -36,5 +36,15 @@ export class Input {
     if (this.down('KeyA', 'ArrowLeft')) x -= 1;
     if (this.down('KeyD', 'ArrowRight')) x += 1;
     return x;
+  }
+
+  /** Booster held (Up arrow or W). */
+  thrust() {
+    return this.down('ArrowUp', 'KeyW');
+  }
+
+  /** Combined controls for the sim. */
+  controls() {
+    return { steer: this.steer(), thrust: this.thrust() };
   }
 }

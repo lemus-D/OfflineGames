@@ -1,4 +1,4 @@
-/* Simulation: climb, steer, spawn pickups, collide.
+/* Simulation: thrust-on-demand climb, steer, spawn pickups, collide.
    Fixed timestep. No Math.random() — seeded RNG only. */
 
 import { makeRNG, clamp } from '../core/rng.js';
@@ -31,12 +31,16 @@ export class PlaySession {
 
     this.player = {
       x: 0,
-      y: 0, // altitude — increases as we climb
+      y: ROCKET.startY,
       vx: 0,
+      vy: 0,
       fuel: ROCKET.startFuel,
       alive: true,
       deathReason: null,
-      tilt: 0, // visual lean
+      tilt: 0,
+      thrusting: false,
+      airborne: false,
+      peakY: ROCKET.startY,
     };
 
     this.pickups = [];
@@ -46,40 +50,58 @@ export class PlaySession {
     this.simAccum = 0;
     this._nextBandY = 120;
     this._nextId = 1;
-    this.flash = 0; // hit flash timer
+    this.flash = 0;
     this.collectFx = [];
+    this._meteorDrain = false;
 
-    // Seed a few bands so the first screen isn't empty.
     while (this._nextBandY < SPAWN.ahead) this._spawnBand(this._nextBandY);
   }
 
   get altitude() {
-    return this.player.y;
+    return this.player.peakY;
   }
 
   get score() {
-    return scoreFromRun(this.player.y, this.coins, this.pickupScore);
+    return scoreFromRun(this.player.peakY, this.coins, this.pickupScore);
   }
 
-  step(frameDt, steer) {
+  /**
+   * @param {number} frameDt
+   * @param {{ steer: number, thrust: boolean }} controls
+   */
+  step(frameDt, controls) {
     if (!this.player.alive) return;
+    const c = controls || { steer: 0, thrust: false };
     this.simAccum += Math.min(frameDt, 0.05);
     while (this.simAccum >= FIXED_DT) {
-      this._fixedStep(FIXED_DT, steer);
+      this._fixedStep(FIXED_DT, c);
       this.simAccum -= FIXED_DT;
     }
   }
 
-  _fixedStep(dt, steer) {
+  _fixedStep(dt, { steer = 0, thrust = false }) {
     this.time += dt;
     const p = this.player;
 
-    // Climb + lateral steer.
-    p.y += ROCKET.climbSpeed * dt;
+    const boosting = thrust && p.fuel > 0;
+    p.thrusting = boosting;
+
+    if (boosting) {
+      p.vy += ROCKET.thrustAccel * dt;
+      p.fuel -= ROCKET.burnRate * dt;
+      if (p.fuel < 0) p.fuel = 0;
+      if (p.y > ROCKET.startY * 0.5) p.airborne = true;
+    }
+
+    p.vy -= ROCKET.gravity * dt;
+    p.vy = clamp(p.vy, -ROCKET.maxFallSpeed, ROCKET.maxClimbSpeed);
+
     p.vx += steer * ROCKET.steerAccel * dt;
     p.vx = clamp(p.vx, -ROCKET.maxSteerSpeed, ROCKET.maxSteerSpeed);
     p.vx *= Math.pow(ROCKET.drag, dt * 60);
+
     p.x += p.vx * dt;
+    p.y += p.vy * dt;
 
     if (p.x < -WORLD_HALF_W) {
       p.x = -WORLD_HALF_W;
@@ -89,24 +111,27 @@ export class PlaySession {
       p.vx = -Math.abs(p.vx) * 0.35;
     }
 
-    p.tilt = lerpTilt(p.tilt, clamp(p.vx / ROCKET.maxSteerSpeed, -1, 1), dt * 10);
-
-    // Burn fuel while climbing.
-    p.fuel -= ROCKET.burnRate * dt;
-    if (p.fuel <= 0) {
-      p.fuel = 0;
-      p.alive = false;
-      p.deathReason = 'fuel';
-      this.hooks.onDeath?.(this.summary());
-      return;
+    // Pad: stay grounded until liftoff; after airborne, ground = crash.
+    if (p.y <= 0) {
+      if (!p.airborne) {
+        p.y = 0;
+        p.vy = Math.max(0, p.vy);
+      } else {
+        p.y = 0;
+        p.alive = false;
+        p.deathReason = this._meteorDrain ? 'meteor' : p.fuel <= 0 ? 'fuel' : 'crash';
+        this.hooks.onDeath?.(this.summary());
+        return;
+      }
     }
 
-    // Spawn bands ahead.
+    if (p.y > p.peakY) p.peakY = p.y;
+    p.tilt = lerpTilt(p.tilt, clamp(p.vx / ROCKET.maxSteerSpeed, -1, 1), dt * 10);
+
     while (this._nextBandY < p.y + SPAWN.ahead) {
       this._spawnBand(this._nextBandY);
     }
 
-    // Move meteors slightly (drift).
     for (const u of this.pickups) {
       if (u.kind === 'meteor') {
         u.x += u.driftX * dt;
@@ -136,7 +161,6 @@ export class PlaySession {
       const kind = pickKind(this.rng);
       const def = PICKUPS[kind];
       let x = (this.rng() * 2 - 1) * WORLD_HALF_W * SPAWN.spread;
-      // Soft separation so items in a band don't stack.
       for (let tries = 0; tries < 6; tries++) {
         if (used.every((ux) => Math.abs(ux - x) > 36)) break;
         x = (this.rng() * 2 - 1) * WORLD_HALF_W * SPAWN.spread;
@@ -150,7 +174,7 @@ export class PlaySession {
         y,
         r: def.radius * (0.85 + this.rng() * 0.3),
         spin: this.rng() * Math.PI * 2,
-        spinRate: (this.rng() - 0.5) * 4,
+        spinRate: kind === 'meteor' ? (this.rng() - 0.5) * 3 : 0,
         driftX: kind === 'meteor' ? (this.rng() - 0.5) * 40 : 0,
         driftY: kind === 'meteor' ? -20 - this.rng() * 40 : 0,
       });
@@ -178,6 +202,7 @@ export class PlaySession {
         this.hooks.onFuel?.();
       } else if (u.kind === 'meteor') {
         this.flash = 0.22;
+        this._meteorDrain = true;
         this.hooks.onMeteor?.();
       }
 
@@ -189,14 +214,6 @@ export class PlaySession {
         life: 0.35,
       });
       this.pickups.splice(i, 1);
-
-      if (p.fuel <= 0) {
-        p.fuel = 0;
-        p.alive = false;
-        p.deathReason = 'meteor';
-        this.hooks.onDeath?.(this.summary());
-        return;
-      }
     }
   }
 
@@ -208,10 +225,10 @@ export class PlaySession {
   summary() {
     return {
       score: this.score,
-      altitude: Math.floor(this.player.y),
+      altitude: Math.floor(this.player.peakY),
       coins: this.coins,
       time: this.time,
-      reason: this.player.deathReason || 'fuel',
+      reason: this.player.deathReason || 'crash',
     };
   }
 }
