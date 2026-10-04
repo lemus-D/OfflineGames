@@ -13,13 +13,11 @@ export const ROCKET = {
   maxClimbSpeed: 300,
   maxFallSpeed: 360,
   maxSpeed: 340,
-  /** How fast left/right tilts the nose (rad / sec). */
-  tiltRate: 2.6,
-  /** Max lean from upright (radians). */
-  maxTilt: 0.85,
-  /** Slow return toward upright when not steering. */
-  tiltReturn: 0.55,
-  drag: 0.985, // light air drag on velocity
+  /** How fast left/right rotates the nose (rad / sec). */
+  tiltRate: 2.8,
+  /** Full free rotation — no max lean clamp. */
+  freeRotate: true,
+  drag: 0.985,
   radius: 16,
   startFuel: 1,
   /** Fuel burned per second while boosting. */
@@ -54,8 +52,10 @@ export const PICKUPS = {
 };
 
 export const SPAWN = {
-  /** Distance above rocket to place new bands. */
+  /** Distance above rocket to keep / place bands. */
   ahead: 520,
+  /** Distance below rocket to keep / refill bands (for falling collects). */
+  behind: 520,
   /** Spacing between spawn bands (world Y). */
   bandGap: 95,
   /** How many items per band (min/max inclusive). */
@@ -63,10 +63,25 @@ export const SPAWN = {
   perBandMax: 3,
   /** Horizontal spread fraction of world width. */
   spread: 0.92,
-  /** Cull pickups this far below the rocket. */
-  cullBelow: 280,
+  /** Extra margin before culling / forgetting a band. */
+  cullPad: 120,
 };
 
 export function scoreFromRun(altitude, coins, pickupScore) {
   return Math.floor(altitude) + coins * 10 + pickupScore;
+}
+
+/** Wrap angle to (-π, π]. */
+export function wrapAngle(a) {
+  const t = Math.PI * 2;
+  a = ((a % t) + t) % t;
+  if (a > Math.PI) a -= t;
+  return a;
+}
+
+/** Display degrees 0–359, 0 = nose up. */
+export function tiltDegrees(tiltRad) {
+  let deg = Math.round((tiltRad * 180) / Math.PI);
+  deg = ((deg % 360) + 360) % 360;
+  return deg;
 }

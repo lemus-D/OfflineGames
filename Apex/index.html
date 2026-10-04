@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Apex</title>
-<meta name="description" content="Steer a rocket upward. Scoop fuel, snag coins, dodge meteors." />
+<meta name="description" content="Boost a rocket. Scoop gas cans, snag coins, dodge meteors." />
 <meta name="theme-color" content="#1a2438" />
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%231a2438'/><path fill='%23f0a060' d='M16 4l4 10v10l-4 5-4-5V14z'/><path fill='%23ffe08a' d='M12 24l4 6 4-6z'/></svg>" />
@@ -117,42 +117,200 @@
     color: var(--muted);
   }
 
+  /* —— Cockpit gauges (left stack + right readout) —— */
   #hud {
     position: fixed;
-    left: 14px; top: 12px; right: 14px;
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
+    inset: 0;
     pointer-events: none;
-    font-size: 0.9rem;
+    font-family: "Courier New", "Lucida Console", monospace;
   }
-  .hud-block {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    padding: 8px 12px;
-    backdrop-filter: blur(6px);
-    min-width: 140px;
+  .gauge-stack {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: center;
   }
-  .hud-block .label {
-    color: var(--muted);
-    font-size: 0.72rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+  .gauge {
+    background: linear-gradient(180deg, #1c2436 0%, #0c1018 100%);
+    border: 3px solid #6a7388;
+    box-shadow: inset 0 0 0 2px #0a0c12, 0 4px 0 #05070c;
+    padding: 8px 8px 6px;
+    color: #c8d0e0;
   }
-  .hud-block b { font-family: var(--font-display); font-size: 1.25rem; }
-  .fuel {
-    margin-top: 6px;
-    height: 8px;
-    background: rgba(0,0,0,0.35);
+  .gauge .g-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    text-align: center;
+    color: #8a93a8;
+    margin-bottom: 6px;
+  }
+  .gauge .g-val {
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-align: center;
+    color: #e8eef8;
+    margin-top: 4px;
+    min-width: 4ch;
+  }
+  .gauge.low .g-val, .gauge.low #fuelFill { color: #ffb454; }
+
+  /* Vertical fuel tank */
+  .fuel-tank {
+    width: 28px;
+    height: 120px;
+    margin: 0 auto;
+    background: #05070c;
+    border: 2px solid #8a93a8;
+    position: relative;
     overflow: hidden;
   }
-  #fuelFill {
-    height: 100%;
-    width: 100%;
-    background: linear-gradient(90deg, #1a7a58, var(--fuel));
-    transition: width 0.1s linear;
+  .fuel-tank::before, .fuel-tank::after {
+    content: "";
+    position: absolute;
+    left: 2px; right: 2px;
+    height: 2px;
+    background: #3a4258;
   }
-  #fuelFill.low { background: linear-gradient(90deg, var(--ember), var(--flame)); }
+  .fuel-tank::before { top: 33%; }
+  .fuel-tank::after { top: 66%; }
+  #fuelFill {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 100%;
+    background: repeating-linear-gradient(
+      180deg,
+      #3dcea0 0 3px,
+      #2a9a72 3px 6px
+    );
+    transition: height 0.08s linear;
+  }
+  .gauge.low #fuelFill {
+    background: repeating-linear-gradient(
+      180deg,
+      #e07040 0 3px,
+      #a84820 3px 6px
+    );
+  }
+
+  /* Altitude tape */
+  .alt-tape {
+    width: 52px;
+    height: 120px;
+    margin: 0 auto;
+    background: #05070c;
+    border: 2px solid #8a93a8;
+    position: relative;
+    overflow: hidden;
+  }
+  .alt-tape .ticks {
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-linear-gradient(
+        180deg,
+        transparent 0 9px,
+        #3a4258 9px 10px
+      );
+  }
+  .alt-tape .needle {
+    position: absolute;
+    left: 0; right: 0;
+    top: 50%;
+    height: 2px;
+    background: #fee761;
+    box-shadow: 0 0 0 1px #05070c;
+    transform: translateY(-50%);
+  }
+  .alt-tape .needle::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: -4px;
+    border: 5px solid transparent;
+    border-left-color: #fee761;
+  }
+
+  /* Attitude / tilt dial */
+  .tilt-dial {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto;
+    border-radius: 50%;
+    background: #05070c;
+    border: 2px solid #8a93a8;
+    position: relative;
+    overflow: hidden;
+  }
+  .tilt-dial .horizon {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, #3d5c94 0 50%, #8a3e18 50% 100%);
+    transform-origin: center center;
+  }
+  .tilt-dial .mark {
+    position: absolute;
+    left: 50%;
+    top: 6px;
+    width: 2px;
+    height: 8px;
+    background: #fee761;
+    transform: translateX(-50%);
+    z-index: 2;
+  }
+  .tilt-dial .wing {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 36px;
+    height: 2px;
+    background: #e8eef8;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+  }
+  .tilt-dial .wing::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: -5px;
+    width: 2px;
+    height: 10px;
+    background: #e8eef8;
+    transform: translateX(-50%);
+  }
+
+  .hud-right {
+    position: absolute;
+    right: 14px;
+    top: 12px;
+    background: linear-gradient(180deg, #1c2436 0%, #0c1018 100%);
+    border: 3px solid #6a7388;
+    box-shadow: inset 0 0 0 2px #0a0c12, 0 4px 0 #05070c;
+    padding: 10px 14px;
+    min-width: 120px;
+    text-align: right;
+  }
+  .hud-right .g-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    color: #8a93a8;
+  }
+  .hud-right b {
+    display: block;
+    font-size: 1.35rem;
+    color: #e8eef8;
+    margin: 2px 0 8px;
+  }
+  .hud-right b:last-child { margin-bottom: 0; }
+
+  @media (max-width: 520px) {
+    .gauge-stack { left: 6px; gap: 8px; transform: translateY(-50%) scale(0.88); transform-origin: left center; }
+    .hud-right { right: 6px; top: 8px; padding: 8px 10px; min-width: 96px; }
+    .hud-right b { font-size: 1.1rem; }
+  }
 
   #summary {
     align-items: center;
@@ -203,22 +361,43 @@
     <p class="tag">Hold ↑ to boost. Scoop gas cans. Bank coins. Dodge meteors.</p>
 
     <button class="btn primary" id="btnPlay">Launch</button>
-    <p class="hint">↑ / W boost · ← → or A / D tilt · fly at an angle · don’t hit the ground</p>
+    <p class="hint">↑ / W boost · ← → or A / D spin (full 360°) · scoop fuel on the way down too</p>
     <p class="meta">Best score <b id="bestVal">0</b> · Best altitude <b id="bestAltVal">0</b></p>
   </div>
 </div>
 
 <div id="hud" class="hidden">
-  <div class="hud-block">
-    <div class="label">Fuel</div>
-    <div class="fuel"><div id="fuelFill"></div></div>
-    <div style="margin-top:8px"><span class="label">Coins</span> <b id="coinVal">0</b></div>
+  <div class="gauge-stack">
+    <div class="gauge" id="fuelGauge">
+      <div class="g-label">FUEL</div>
+      <div class="fuel-tank"><div id="fuelFill"></div></div>
+      <div class="g-val" id="fuelVal">100%</div>
+    </div>
+    <div class="gauge">
+      <div class="g-label">ALT</div>
+      <div class="alt-tape">
+        <div class="ticks" id="altTicks"></div>
+        <div class="needle"></div>
+      </div>
+      <div class="g-val" id="altVal">0</div>
+    </div>
+    <div class="gauge">
+      <div class="g-label">ATT</div>
+      <div class="tilt-dial">
+        <div class="horizon" id="tiltHorizon"></div>
+        <div class="mark"></div>
+        <div class="wing"></div>
+      </div>
+      <div class="g-val" id="tiltVal">0°</div>
+    </div>
   </div>
-  <div class="hud-block" style="text-align:right">
-    <div class="label">Score</div>
+  <div class="hud-right">
+    <div class="g-label">SCORE</div>
     <b id="scoreVal">0</b>
-    <div class="label" style="margin-top:6px">Altitude</div>
-    <b id="altVal">0</b>
+    <div class="g-label">COINS</div>
+    <b id="coinVal">0</b>
+    <div class="g-label">PEAK</div>
+    <b id="peakVal">0</b>
   </div>
 </div>
 

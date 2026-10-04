@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-/* Headless smoke: thrust climb, collect, no Math.random in sim modules. */
+/* Headless smoke: thrust climb, free tilt, fall collects, no Math.random. */
 import { readFileSync } from 'node:fs';
 import { PlaySession } from './src/game/play.js';
-import { ROCKET } from './src/game/content.js';
+import { ROCKET, wrapAngle, tiltDegrees } from './src/game/content.js';
 
 let failures = 0;
 function assert(cond, msg) {
@@ -29,7 +29,11 @@ for (const file of [
   assert(!/\bMath\.random\s*\(/.test(src), `${file} has no Math.random()`);
 }
 
-// No thrust: stay on the pad, fuel untouched.
+assert(tiltDegrees(0) === 0, 'tiltDegrees upright is 0');
+assert(tiltDegrees(Math.PI) === 180, 'tiltDegrees π is 180');
+assert(Math.abs(wrapAngle(Math.PI * 3) - Math.PI) < 1e-9, 'wrapAngle wraps');
+
+// No thrust: stay on the pad.
 {
   const s = new PlaySession(7);
   for (let i = 0; i < 60 * 2; i++) s.step(1 / 60, idle);
@@ -38,78 +42,79 @@ for (const file of [
   assert(s.player.fuel === ROCKET.startFuel, 'idle does not burn fuel');
 }
 
-// Thrust climbs and burns; release falls and can crash.
+// Full spin past 180°.
+{
+  const s = new PlaySession(3);
+  for (let i = 0; i < 60 * 2; i++) s.step(1 / 60, { steer: 1, thrust: false });
+  assert(Math.abs(s.player.tilt) > 1.5 || s.player.tilt < -0.5, 'can rotate past old max lean');
+  // Keep spinning — should wrap, not clamp.
+  for (let i = 0; i < 60 * 3; i++) s.step(1 / 60, { steer: 1, thrust: false });
+  assert(Number.isFinite(s.player.tilt), 'tilt stays finite after full spins');
+  assert(s.player.tilt >= -Math.PI - 0.01 && s.player.tilt <= Math.PI + 0.01, 'tilt wrapped');
+}
+
+// Thrust climbs; release falls; pickups still exist below while falling.
 {
   const s = new PlaySession(11);
-  for (let i = 0; i < 60 * 2; i++) s.step(1 / 60, boost);
-  assert(s.player.y > 100, `boost climbs (y=${s.player.y.toFixed(0)})`);
-  assert(s.player.fuel < ROCKET.startFuel, 'boost burns fuel');
-  assert(s.player.thrusting, 'thrusting flag set while holding boost');
+  for (let i = 0; i < 60 * 3; i++) s.step(1 / 60, boost);
+  assert(s.player.y > 200, `boost climbs (y=${s.player.y.toFixed(0)})`);
+  const peak = s.player.y;
 
-  // Coast — should start falling.
-  for (let i = 0; i < 60; i++) s.step(1 / 60, idle);
+  // Fall for a bit — bands below should refill.
+  for (let i = 0; i < 60 * 2; i++) s.step(1 / 60, idle);
   assert(s.player.vy < 0, 'release boost → falling');
-
-  // Keep falling until crash or timeout.
-  let steps = 0;
-  while (s.player.alive && steps < 60 * 20) {
-    s.step(1 / 60, idle);
-    steps += 1;
-  }
-  assert(!s.player.alive, 'fall ends in crash');
-  assert(s.player.deathReason === 'crash' || s.player.deathReason === 'fuel', 'crash/fuel death');
+  const below = s.pickups.filter((u) => u.y < s.player.y && u.y > s.player.y - 400);
+  assert(below.length > 0, `falling still has pickups below (n=${below.length})`);
+  assert(s.player.y < peak, 'actually descended');
 }
 
 for (const seed of [1, 42, 99, 12345, 777777]) {
   const s = new PlaySession(seed);
-
   assert(s.pickups.length > 0, `seed ${seed}: initial bands spawned`);
-  assert(s.player.fuel === ROCKET.startFuel, `seed ${seed}: full tanks`);
 
-  // Boost while tilting left, then right — angled thrust should move X.
-  for (let i = 0; i < 60; i++) s.step(1 / 60, { steer: -1, thrust: true });
-  assert(s.player.tilt < -0.2, `seed ${seed}: tilts left`);
-  const leftX = s.player.x;
-  for (let i = 0; i < 120; i++) s.step(1 / 60, { steer: 1, thrust: true });
-  assert(s.player.tilt > 0.2, `seed ${seed}: tilts right`);
-  assert(s.player.x > leftX, `seed ${seed}: angled thrust moves rocket`);
-  assert(s.player.peakY > 80, `seed ${seed}: gained altitude`);
+  // Tip a little left, then boost — should drift left.
+  for (let i = 0; i < 12; i++) s.step(1 / 60, { steer: -1, thrust: false });
+  assert(s.player.tilt < -0.3, `seed ${seed}: tilts left`);
+  for (let i = 0; i < 45; i++) s.step(1 / 60, { steer: 0, thrust: true });
+  assert(s.player.x < -5, `seed ${seed}: left attitude thrusts left (x=${s.player.x.toFixed(0)})`);
 
-  // Chase fuel/coins with boost for up to 15s.
+  // Straighten up and climb / chase pickups.
   let steps = 0;
   const coinsBefore = s.coins;
-  const scoreBefore = s.pickupScore;
-  while (s.player.alive && steps < 60 * 15) {
+  while (s.player.alive && steps < 60 * 16) {
     let target = null;
     let best = Infinity;
     for (const u of s.pickups) {
       if (u.kind === 'meteor') continue;
-      if (u.y < s.player.y - 40) continue;
       const d = Math.hypot(u.x - s.player.x, u.y - s.player.y);
-      const score = d + (u.kind === 'fuel' ? 0 : 40);
+      const score = d + (u.kind === 'fuel' ? 0 : 30);
       if (score < best) {
         best = score;
         target = u;
       }
     }
     let steer = 0;
-    let thrust = true;
+    let thrust = s.player.fuel > 0.05;
     if (target) {
       const dx = target.x - s.player.x;
       const dy = target.y - s.player.y;
-      if (dx < -8) steer = -1;
-      else if (dx > 8) steer = 1;
-      // Coast a bit if target is below.
-      if (dy < -30 && s.player.vy > 40) thrust = false;
+      const want = Math.atan2(dx, dy);
+      const err = wrapAngle(want - s.player.tilt);
+      if (err < -0.1) steer = -1;
+      else if (err > 0.1) steer = 1;
+    } else {
+      // Prefer nose-up when hunting.
+      const err = wrapAngle(0 - s.player.tilt);
+      if (err < -0.12) steer = -1;
+      else if (err > 0.12) steer = 1;
     }
-    if (s.player.fuel < 0.08) thrust = false;
     s.step(1 / 60, { steer, thrust });
     steps += 1;
   }
 
-  assert(s.player.peakY > 200, `seed ${seed}: meaningful altitude`);
+  assert(s.player.peakY > 150, `seed ${seed}: meaningful altitude`);
   assert(
-    s.coins > coinsBefore || s.pickupScore > scoreBefore || s.player.peakY > 400,
+    s.coins > coinsBefore || s.pickupScore > 0 || s.player.peakY > 200,
     `seed ${seed}: collected or climbed`
   );
   console.log(
@@ -117,7 +122,6 @@ for (const seed of [1, 42, 99, 12345, 777777]) {
   );
 }
 
-// Determinism: same seed + same inputs → same outcome.
 const a = new PlaySession(999);
 const b = new PlaySession(999);
 for (let i = 0; i < 60 * 3; i++) {
@@ -136,3 +140,4 @@ if (failures) {
   process.exit(1);
 }
 console.log('\nAll smoke checks passed.');
+

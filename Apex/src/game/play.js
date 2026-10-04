@@ -1,4 +1,4 @@
-/* Simulation: thrust-on-demand climb, steer, spawn pickups, collide.
+/* Simulation: thrust-on-demand climb, free tilt, spawn pickups, collide.
    Fixed timestep. No Math.random() — seeded RNG only. */
 
 import { makeRNG, clamp } from '../core/rng.js';
@@ -9,6 +9,7 @@ import {
   PICKUPS,
   SPAWN,
   scoreFromRun,
+  wrapAngle,
 } from './content.js';
 
 function pickKind(rng) {
@@ -37,7 +38,7 @@ export class PlaySession {
       fuel: ROCKET.startFuel,
       alive: true,
       deathReason: null,
-      tilt: 0,
+      tilt: 0, // radians, 0 = nose up; free wrap
       thrusting: false,
       airborne: false,
       peakY: ROCKET.startY,
@@ -48,13 +49,14 @@ export class PlaySession {
     this.pickupScore = 0;
     this.time = 0;
     this.simAccum = 0;
-    this._nextBandY = 120;
     this._nextId = 1;
     this.flash = 0;
     this.collectFx = [];
     this._meteorDrain = false;
+    /** @type {Set<number>} band indices that currently have pickups spawned */
+    this._filledBands = new Set();
 
-    while (this._nextBandY < SPAWN.ahead) this._spawnBand(this._nextBandY);
+    this._ensureBandsAround(this.player.y);
   }
 
   get altitude() {
@@ -83,18 +85,26 @@ export class PlaySession {
     this.time += dt;
     const p = this.player;
 
-    // Left/right tilts the nose; thrust pushes along that angle.
+    // Free 360° rotation — hold left/right to spin the whole way.
     if (steer !== 0) {
       p.tilt += steer * ROCKET.tiltRate * dt;
-    } else {
-      // Ease back upright when not holding a lean.
-      if (p.tilt > 0) p.tilt = Math.max(0, p.tilt - ROCKET.tiltReturn * dt);
-      else if (p.tilt < 0) p.tilt = Math.min(0, p.tilt + ROCKET.tiltReturn * dt);
+      p.tilt = wrapAngle(p.tilt);
     }
-    p.tilt = clamp(p.tilt, -ROCKET.maxTilt, ROCKET.maxTilt);
 
     const boosting = thrust && p.fuel > 0;
     p.thrusting = boosting;
+
+    // On the pad: no gravity until the first boost. Still free to spin.
+    if (!p.airborne) {
+      p.y = ROCKET.startY;
+      p.vy = 0;
+      p.vx = 0;
+      if (!boosting) {
+        this._ensureBandsAround(p.y);
+        return;
+      }
+      p.airborne = true;
+    }
 
     if (boosting) {
       // tilt 0 = straight up (+y); positive tilt tips nose to the right.
@@ -104,12 +114,10 @@ export class PlaySession {
       p.vy += dirY * ROCKET.thrustAccel * dt;
       p.fuel -= ROCKET.burnRate * dt;
       if (p.fuel < 0) p.fuel = 0;
-      if (p.y > ROCKET.startY * 0.5) p.airborne = true;
     }
 
     p.vy -= ROCKET.gravity * dt;
 
-    // Soft speed caps.
     p.vy = clamp(p.vy, -ROCKET.maxFallSpeed, ROCKET.maxClimbSpeed);
     const spd = Math.hypot(p.vx, p.vy);
     if (spd > ROCKET.maxSpeed) {
@@ -124,33 +132,23 @@ export class PlaySession {
     if (p.x < -WORLD_HALF_W) {
       p.x = -WORLD_HALF_W;
       p.vx = Math.abs(p.vx) * 0.35;
-      p.tilt *= 0.5;
     } else if (p.x > WORLD_HALF_W) {
       p.x = WORLD_HALF_W;
       p.vx = -Math.abs(p.vx) * 0.35;
-      p.tilt *= 0.5;
     }
 
-    // Pad: stay grounded until liftoff; after airborne, ground = crash.
     if (p.y <= 0) {
-      if (!p.airborne) {
-        p.y = 0;
-        p.vy = Math.max(0, p.vy);
-        p.vx *= 0.8;
-      } else {
-        p.y = 0;
-        p.alive = false;
-        p.deathReason = this._meteorDrain ? 'meteor' : p.fuel <= 0 ? 'fuel' : 'crash';
-        this.hooks.onDeath?.(this.summary());
-        return;
-      }
+      p.y = 0;
+      p.alive = false;
+      p.deathReason = this._meteorDrain ? 'meteor' : p.fuel <= 0 ? 'fuel' : 'crash';
+      this.hooks.onDeath?.(this.summary());
+      return;
     }
 
     if (p.y > p.peakY) p.peakY = p.y;
 
-    while (this._nextBandY < p.y + SPAWN.ahead) {
-      this._spawnBand(this._nextBandY);
-    }
+    // Keep pickups above AND below so falling runs can still scoop fuel/coins.
+    this._ensureBandsAround(p.y);
 
     for (const u of this.pickups) {
       if (u.kind === 'meteor') {
@@ -172,7 +170,21 @@ export class PlaySession {
     }
   }
 
-  _spawnBand(bandY) {
+  _bandIndex(y) {
+    return Math.floor(y / SPAWN.bandGap);
+  }
+
+  _ensureBandsAround(y) {
+    const lo = this._bandIndex(Math.max(0, y - SPAWN.behind));
+    const hi = this._bandIndex(y + SPAWN.ahead);
+    for (let i = lo; i <= hi; i++) {
+      if (i < 0 || this._filledBands.has(i)) continue;
+      this._filledBands.add(i);
+      this._spawnBandAt(i * SPAWN.bandGap);
+    }
+  }
+
+  _spawnBandAt(bandY) {
     const n =
       SPAWN.perBandMin +
       Math.floor(this.rng() * (SPAWN.perBandMax - SPAWN.perBandMin + 1));
@@ -187,6 +199,7 @@ export class PlaySession {
       }
       used.push(x);
       const y = bandY + (this.rng() - 0.5) * 28;
+      if (y < 40) continue; // keep clear of the pad
       this.pickups.push({
         id: this._nextId++,
         kind,
@@ -197,9 +210,9 @@ export class PlaySession {
         spinRate: kind === 'meteor' ? (this.rng() - 0.5) * 3 : 0,
         driftX: kind === 'meteor' ? (this.rng() - 0.5) * 40 : 0,
         driftY: kind === 'meteor' ? -20 - this.rng() * 40 : 0,
+        band: this._bandIndex(bandY),
       });
     }
-    this._nextBandY += SPAWN.bandGap * (0.85 + this.rng() * 0.35);
   }
 
   _collide() {
@@ -238,8 +251,17 @@ export class PlaySession {
   }
 
   _cull() {
-    const floor = this.player.y - SPAWN.cullBelow;
-    this.pickups = this.pickups.filter((u) => u.y > floor);
+    const y = this.player.y;
+    const lo = y - SPAWN.behind - SPAWN.cullPad;
+    const hi = y + SPAWN.ahead + SPAWN.cullPad;
+    this.pickups = this.pickups.filter((u) => u.y >= lo && u.y <= hi);
+
+    // Forget band markers outside the window so descent can refill them.
+    const minB = this._bandIndex(Math.max(0, lo)) - 1;
+    const maxB = this._bandIndex(hi) + 1;
+    for (const b of [...this._filledBands]) {
+      if (b < minB || b > maxB) this._filledBands.delete(b);
+    }
   }
 
   summary() {
