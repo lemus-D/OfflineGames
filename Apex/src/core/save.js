@@ -41,7 +41,12 @@ export const Save = {
   loadProfile() {
     try {
       const raw = JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null');
-      return migrate(raw);
+      const profile = migrate(raw);
+      // Persist schema bumps (e.g. v1 → bankCoins) so they stick.
+      if (!raw || raw.schema !== SCHEMA) {
+        Save.writeProfile(profile);
+      }
+      return profile;
     } catch {
       return DEFAULT_PROFILE();
     }
