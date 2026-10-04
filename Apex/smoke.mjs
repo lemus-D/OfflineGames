@@ -3,7 +3,14 @@
 import { readFileSync } from 'node:fs';
 import { PlaySession } from './src/game/play.js';
 import { ROCKET, PICKUPS, wrapAngle, tiltDegrees } from './src/game/content.js';
-import { gameToKm, CELESTIAL, ATM_GAME_UNITS, ATM_KM, layerAtKm } from './src/game/altitude.js';
+import {
+  gameToKm,
+  CELESTIAL,
+  ATM_GAME_UNITS,
+  ATM_KM,
+  layerAtKm,
+  nextCelestial,
+} from './src/game/altitude.js';
 import {
   foldStats,
   buyUpgrade,
@@ -63,6 +70,16 @@ for (const need of ['moon', 'venus', 'mars', 'sun', 'belt', 'jupiter', 'saturn',
 }
 assert(gameToKm(100) < gameToKm(1000), 'gameToKm monotonic');
 assert(gameToKm(CELESTIAL[0].gameY) < gameToKm(CELESTIAL[CELESTIAL.length - 1].gameY), 'moon km < pluto km');
+
+{
+  const fromPad = nextCelestial(0);
+  assert(fromPad.body?.id === 'moon', 'from pad, next is Moon');
+  assert(fromPad.remainKm > 1e5, 'Moon is far from the pad in story-km');
+  const mid = nextCelestial((CELESTIAL[0].gameY + CELESTIAL[1].gameY) / 2);
+  assert(mid.body?.id === 'venus', 'after Moon, next is Venus');
+  const past = nextCelestial(CELESTIAL[CELESTIAL.length - 1].gameY + 10);
+  assert(past.body == null, 'past Pluto, no next body');
+}
 
 // No thrust: stay on the pad.
 {

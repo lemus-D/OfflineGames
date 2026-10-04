@@ -9,6 +9,7 @@ import {
   gameToKm,
   formatAltitudeKm,
   layerAtKm,
+  nextCelestial,
   CELESTIAL,
 } from './game/altitude.js';
 import {
@@ -70,6 +71,9 @@ const els = {
   velGauge: document.getElementById('velGauge'),
   coins: document.getElementById('coinVal'),
   peak: document.getElementById('peakVal'),
+  nextBody: document.getElementById('nextBodyVal'),
+  nextDist: document.getElementById('nextDistVal'),
+  nextFill: document.getElementById('nextFill'),
   best: document.getElementById('bestVal'),
   bestAlt: document.getElementById('bestAltVal'),
   bank: document.getElementById('bankVal'),
@@ -312,6 +316,23 @@ function updateGauges(s) {
   if (els.coins) els.coins.textContent = String(s.coins);
   if (!els.peak) els.peak = document.getElementById('peakVal');
   if (els.peak) els.peak.textContent = formatAltitudeKm(peakKm);
+
+  const nav = nextCelestial(p.y);
+  if (els.nextBody && els.nextDist && els.nextFill) {
+    if (!nav.body) {
+      els.nextBody.textContent = 'Deep space';
+      els.nextDist.textContent = 'Past Pluto';
+      els.nextFill.style.width = '100%';
+    } else if (nav.remainGame < 400) {
+      els.nextBody.textContent = nav.body.name;
+      els.nextDist.textContent = 'CLOSE';
+      els.nextFill.style.width = `${Math.round(nav.progress * 100)}%`;
+    } else {
+      els.nextBody.textContent = nav.body.name;
+      els.nextDist.textContent = `↑ ${formatAltitudeKm(nav.remainKm)}`;
+      els.nextFill.style.width = `${Math.round(nav.progress * 100)}%`;
+    }
+  }
 }
 
 function drawMenuBackdrop(dt) {

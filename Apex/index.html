@@ -399,6 +399,39 @@
     margin: 2px 0 8px;
   }
   .hud-right b:last-child { margin-bottom: 0; }
+  .hud-right .next-block { margin-top: 4px; }
+  .hud-right .next-name {
+    display: block;
+    font-size: 1.05rem;
+    color: #fee761;
+    margin: 2px 0 2px;
+  }
+  .hud-right .next-dist {
+    display: block;
+    font-size: 0.85rem;
+    color: #c8d0e0;
+    margin: 0 0 6px;
+  }
+  .next-meter {
+    width: 100%;
+    height: 8px;
+    background: #05070c;
+    border: 1px solid #6a7388;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 2px;
+  }
+  #nextFill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 0%;
+    background: repeating-linear-gradient(
+      90deg,
+      #fee761 0 3px,
+      #c09020 3px 6px
+    );
+    transition: width 0.08s linear;
+  }
 
   @media (max-width: 520px) {
     .gauge-stack { left: 6px; gap: 6px; transform: translateY(-50%) scale(0.78); transform-origin: left center; }
@@ -504,6 +537,12 @@
     <b id="coinVal">0</b>
     <div class="g-label">PEAK</div>
     <b id="peakVal">0</b>
+    <div class="next-block">
+      <div class="g-label">NEXT</div>
+      <span class="next-name" id="nextBodyVal">Moon</span>
+      <span class="next-dist" id="nextDistVal">—</span>
+      <div class="next-meter"><div id="nextFill"></div></div>
+    </div>
   </div>
 </div>
 

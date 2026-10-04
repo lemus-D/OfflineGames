@@ -239,6 +239,34 @@ export function bodiesNear(camY, margin = 1400) {
   return CELESTIAL.filter((b) => Math.abs(b.gameY - camY) < margin);
 }
 
+/**
+ * Next body still above the rocket, with story-km remaining and climb progress
+ * from the previous waypoint (ground / last body).
+ */
+export function nextCelestial(gameY) {
+  gameY = Math.max(0, gameY);
+  let prevG = 0;
+  let prevKm = 0;
+  for (const body of CELESTIAL) {
+    if (gameY < body.gameY) {
+      const kmHere = gameToKm(gameY);
+      const remainKm = Math.max(0, body.realKm - kmHere);
+      const span = Math.max(1, body.gameY - prevG);
+      const t = clamp((gameY - prevG) / span, 0, 1);
+      return {
+        body,
+        remainKm,
+        remainGame: body.gameY - gameY,
+        progress: t,
+        prevKm,
+      };
+    }
+    prevG = body.gameY;
+    prevKm = body.realKm;
+  }
+  return { body: null, remainKm: 0, remainGame: 0, progress: 1, prevKm };
+}
+
 /** Normalize persisted flyby flags; fold legacy passedMoon / passedMars. */
 export function normalizeFlybys(raw, legacy = {}) {
   const out = {};
