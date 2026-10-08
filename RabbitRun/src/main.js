@@ -53,7 +53,7 @@ function clearFrame() {
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalAlpha = 1;
   g.globalCompositeOperation = 'source-over';
-  g.fillStyle = '#1a2e1a';
+  g.fillStyle = '#121820';
   g.fillRect(0, 0, canvas.width, canvas.height);
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
@@ -131,12 +131,14 @@ function updateHud() {
 
 function drawMenuBackdrop(dt) {
   clearFrame();
-  drawSky(g, W, H);
-  drawPath(g, W, H, animTime * 6, animTime);
-  drawCarrot(g, W * 0.22, H * 0.55, 1.2, animTime);
-  drawCarrot(g, W * 0.78, H * 0.48, 0.9, animTime + 1);
-  drawFox(g, W * 0.28, H * 0.78, 1.1, animTime * 4, true);
-  drawRabbit(g, W * 0.62, H * 0.72, 1.25, animTime * 5, 0);
+  const cam = animTime * 8;
+  drawSky(g, W, H, animTime);
+  drawPath(g, W, H, cam, animTime, 0xbee5);
+  drawCarrot(g, W * 0.2, H * 0.52, 1.35, animTime);
+  drawCarrot(g, W * 0.78, H * 0.46, 1.05, animTime + 1);
+  drawCarrot(g, W * 0.5, H * 0.4, 0.85, animTime + 2);
+  drawFox(g, W * 0.3, H * 0.82, 1.7, animTime * 5, true);
+  drawRabbit(g, W * 0.62, H * 0.7, 1.15, animTime * 6, 0);
   void dt;
 }
 

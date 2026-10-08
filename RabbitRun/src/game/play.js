@@ -5,13 +5,40 @@ import { LANES, RUN, OBSTACLES, OBSTACLE_IDS } from './content.js';
 
 const FIXED_DT = 1 / 60;
 
+/**
+ * Smooth path centerline bend in lane-widths.
+ * Discrete seeded turns + gentle wander so both runners share one ribbon.
+ */
+export function pathBend(z, seed) {
+  const spacing = RUN.turnSpacing;
+  const i0 = Math.floor(z / spacing);
+  let bend = 0;
+  // Blend a few nearby turn keypoints.
+  for (let i = i0 - 1; i <= i0 + 2; i++) {
+    if (i < 0) continue;
+    const rng = makeRNG((seed ^ Math.imul(i + 1, 0x9e3779b1)) >>> 0);
+    const dir = rng() < 0.5 ? -1 : 1;
+    const strength = (0.55 + rng() * 0.45) * RUN.turnAmp * dir;
+    const center = (i + 0.5) * spacing;
+    const half = spacing * 0.42;
+    const t = clamp(1 - Math.abs(z - center) / half, 0, 1);
+    const s = t * t * (3 - 2 * t);
+    bend += strength * s;
+  }
+  // Soft continuous wander so straights aren't dead-flat.
+  bend += Math.sin(z * 0.045 + seed * 0.001) * 0.22;
+  bend += Math.sin(z * 0.11 + 1.7) * 0.1;
+  return bend;
+}
+
 export class PlaySession {
   /**
    * @param {number} seed
    * @param {{ onDeath?: (reason: string) => void }} hooks
    */
   constructor(seed, hooks = {}) {
-    this.rng = makeRNG(seed >>> 0);
+    this.seed = seed >>> 0;
+    this.rng = makeRNG(this.seed);
     this.hooks = hooks;
     this.alive = true;
     this.reason = null;
@@ -34,12 +61,19 @@ export class PlaySession {
     this.obstacles = [];
     /** @type {Array<{z:number,lane:number,taken:boolean}>} */
     this.pickups = [];
+    /** @type {Array<{x:number,y:number,age:number,life:number,vx:number,vy:number}>} */
+    this.collectFx = [];
     /** Hit stun flash */
     this.flash = 0;
     this.hopPhase = 0;
+    this.foxHop = 0.4;
 
     // Seed a clear runway.
     for (let i = 0; i < 4; i++) this.nextSpawnZ += RUN.segmentGap;
+  }
+
+  bendAt(z) {
+    return pathBend(z, this.seed);
   }
 
   summary() {
@@ -72,7 +106,9 @@ export class PlaySession {
       RUN.maxSpeed
     );
     this.distance += this.speed * dt;
-    this.hopPhase += dt * (8 + this.speed * 0.15);
+    const cadence = 9 + this.speed * 0.22;
+    this.hopPhase += dt * cadence;
+    this.foxHop += dt * (cadence * 1.12);
     if (this.flash > 0) this.flash = Math.max(0, this.flash - dt);
 
     // Lane change (one step per intent).
@@ -105,15 +141,22 @@ export class PlaySession {
     this._spawnAhead();
     this._collide();
     this._fox();
+    this._fx(dt);
 
     // Score: distance + carrots.
-    this.score =
-      Math.floor(this.distance) * 10 + this.carrots * 50;
+    this.score = Math.floor(this.distance) * 10 + this.carrots * 50;
 
     // Cull behind camera.
     const cam = this.distance;
     this.obstacles = this.obstacles.filter((o) => o.z > cam - RUN.cullBehind);
-    this.pickups = this.pickups.filter((p) => p.z > cam - RUN.cullBehind && !p.taken);
+    this.pickups = this.pickups.filter(
+      (p) => p.z > cam - RUN.cullBehind && !p.taken
+    );
+  }
+
+  _fx(dt) {
+    for (const fx of this.collectFx) fx.age += dt;
+    this.collectFx = this.collectFx.filter((fx) => fx.age < fx.life);
   }
 
   _spawnAhead() {
@@ -127,10 +170,10 @@ export class PlaySession {
   _rollSegment(z) {
     const r = this.rng();
     // Early game softer; later denser.
-    const density = clamp(0.35 + this.time * 0.012, 0.35, 0.78);
+    const density = clamp(0.32 + this.time * 0.012, 0.32, 0.78);
 
-    if (r < density * 0.55) {
-      // Obstacle in one lane.
+    if (r < density * 0.5) {
+      // Obstacle in one lane + carrot bait in another.
       const lane = Math.floor(this.rng() * LANES);
       const kind =
         this.rng() < 0.28
@@ -138,29 +181,33 @@ export class PlaySession {
           : OBSTACLE_IDS[Math.floor(this.rng() * (OBSTACLE_IDS.length - 1))];
       this.obstacles.push({ z, lane, kind, hit: false });
 
-      // Maybe a carrot in another lane.
-      if (this.rng() < 0.55) {
+      if (this.rng() < 0.75) {
         let cl = Math.floor(this.rng() * LANES);
         if (cl === lane) cl = (cl + 1) % LANES;
         this.pickups.push({ z, lane: cl, taken: false });
       }
     } else if (r < density) {
-      // Twin obstacles leave one safe lane.
+      // Twin obstacles leave one safe lane — carrot on the safe line.
       const safe = Math.floor(this.rng() * LANES);
       for (let lane = 0; lane < LANES; lane++) {
         if (lane === safe) continue;
         const kind = this.rng() < 0.4 ? 'hedge' : 'log';
         this.obstacles.push({ z, lane, kind, hit: false });
       }
-      if (this.rng() < 0.7) {
-        this.pickups.push({ z: z + 1.2, lane: safe, taken: false });
+      this.pickups.push({ z: z + 0.8, lane: safe, taken: false });
+      if (this.rng() < 0.55) {
+        this.pickups.push({ z: z + 2.0, lane: safe, taken: false });
       }
     } else {
-      // Open stretch — sprinkle carrots.
-      if (this.rng() < 0.65) {
+      // Open stretch — carrot trail the rabbit wants to weave through.
+      const lane = Math.floor(this.rng() * LANES);
+      const n = 1 + Math.floor(this.rng() * RUN.carrotTrail);
+      for (let i = 0; i < n; i++) {
+        const swing =
+          this.rng() < 0.35 ? clamp(lane + (this.rng() < 0.5 ? -1 : 1), 0, 2) : lane;
         this.pickups.push({
-          z,
-          lane: Math.floor(this.rng() * LANES),
+          z: z + i * 1.15,
+          lane: swing,
           taken: false,
         });
       }
@@ -199,7 +246,20 @@ export class PlaySession {
       p.taken = true;
       this.carrots += 1;
       // Carrots buy a little breathing room.
-      this.foxGap = Math.min(RUN.foxBaseGap + 1.5, this.foxGap + 0.35);
+      this.foxGap = Math.min(RUN.foxBaseGap + 1.5, this.foxGap + 0.4);
+      // Screen-space-ish burst; draw maps with current camera later.
+      for (let i = 0; i < 6; i++) {
+        const a = this.rng() * Math.PI * 2;
+        const sp = 40 + this.rng() * 80;
+        this.collectFx.push({
+          lane: pl,
+          z: pz,
+          age: 0,
+          life: 0.45 + this.rng() * 0.25,
+          vx: Math.cos(a) * sp,
+          vy: Math.sin(a) * sp - 40,
+        });
+      }
     }
   }
 
@@ -225,18 +285,48 @@ export class PlaySession {
   }
 }
 
-/** Project a world (lane, z) into screen space. */
-export function project(lane, z, camZ, W, H, jumpY = 0) {
+/**
+ * Project a world (lane, z) into screen space, following the bent path.
+ * @param {number} [bendCam] path bend at camera (defaults to 0 for menu draws)
+ * @param {number} [bendHere] path bend at z
+ */
+export function project(
+  lane,
+  z,
+  camZ,
+  W,
+  H,
+  jumpY = 0,
+  bendCam = 0,
+  bendHere = 0
+) {
   const rel = z - camZ;
   const depth = RUN.near + Math.max(0, rel);
   const scale = RUN.near / depth;
-  const horizonY = H * 0.28;
-  const groundY = H * 0.92;
-  // Map scale 1 (near) → groundY, scale→0 (far) → horizonY
+  const horizonY = H * 0.26;
+  const groundY = H * 0.94;
   const t = clamp(scale, 0.04, 1);
   const yBase = lerp(horizonY, groundY, Math.pow(t, 0.85));
-  const laneSpread = W * 0.38;
-  const x = W * 0.5 + (lane - 1) * laneSpread * t;
+  const laneSpread = W * 0.34;
+  // Path center follows bend; lanes are offsets from that ribbon.
+  const worldLat = bendHere + (lane - 1);
+  const camLat = bendCam;
+  const x = W * 0.5 + (worldLat - camLat) * laneSpread * t;
   const y = yBase - jumpY * H * 0.12 * t;
-  return { x, y, scale: t, onScreen: rel > -2 && rel < RUN.far };
+  return { x, y, scale: t, onScreen: rel > -3 && rel < RUN.far, bend: bendHere };
+}
+
+/** Convenience: project using a live session's bend seed. */
+export function projectSession(session, lane, z, W, H, jumpY = 0) {
+  const camZ = session.distance;
+  return project(
+    lane,
+    z,
+    camZ,
+    W,
+    H,
+    jumpY,
+    session.bendAt(camZ),
+    session.bendAt(z)
+  );
 }

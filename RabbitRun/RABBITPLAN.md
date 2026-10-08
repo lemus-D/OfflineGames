@@ -1,16 +1,22 @@
 # Rabbit Run — design notes (MVP)
 
 Temple Run–style endless chase. You are a rabbit; a fox is always behind you.
-Dodge obstacles, grab carrots, survive as long as you can.
+Dodge obstacles, grab carrot trails, survive the bends.
 
 ## Loop
 
-1. Auto-run down a three-lane trail (2.5D perspective on Canvas 2D).
+1. Auto-run down a **winding** three-lane trail (2.5D perspective on Canvas 2D).
+   Path bends are seeded; rabbit and fox both follow the same ribbon.
 2. **← → / A D** change lanes. **Space / ↑** jump.
 3. Hit a **log** or **rock** without jumping → fox closes the gap.
 4. **Hedges** are tall — you must switch lanes.
-5. **Carrots** score points and buy a little lead on the fox.
+5. **Carrot trails** score points and buy a little lead on the fox.
 6. Fox catches you when the gap collapses → run over.
+
+## Look
+
+Dusk woodland art: warm dirt path, cool sky, ink outlines, run-cycle
+animations on both animals. Fox is drawn large and predatory.
 
 ## Controls (MVP)
 

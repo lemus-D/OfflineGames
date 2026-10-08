@@ -4,8 +4,8 @@
   "description": "Dash down the trail. Grab carrots. Don't let the fox catch you.",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#1a2e1a",
-  "theme_color": "#2d5a27",
+  "background_color": "#121820",
+  "theme_color": "#1b2a44",
   "orientation": "any",
   "icons": [
     {
