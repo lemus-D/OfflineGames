@@ -77,6 +77,9 @@ function startRun() {
       endRun();
     },
   });
+  // Demo / tooling hook — not part of save schema.
+  globalThis.__rabbitSession = session;
+  globalThis.__rabbitState = () => state;
   state = 'playing';
   hide(els.menu);
   hide(els.summary);
