@@ -172,6 +172,39 @@
     font-size: 0.85rem;
   }
 
+  .spin-panel {
+    position: absolute;
+    left: 12px;
+    bottom: 14px;
+    pointer-events: auto;
+    background: rgba(8, 16, 12, 0.78);
+    border: 1px solid var(--line);
+    padding: 8px 10px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .spin-panel .spin-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+  }
+  .spin-panel canvas {
+    display: block;
+    width: 88px;
+    height: 88px;
+    cursor: crosshair;
+    touch-action: none;
+  }
+  .spin-panel .spin-hint {
+    font-size: 0.68rem;
+    color: var(--muted);
+    max-width: 96px;
+    text-align: center;
+    line-height: 1.25;
+  }
+
   #summary {
     align-items: center;
     justify-content: center;
@@ -223,10 +256,10 @@
 <div id="menu" class="overlay">
   <div class="menu-panel">
     <h1 class="brand">Break</h1>
-    <p class="tag">Top-down pool. Drag to aim, release to shoot, clear the rack.</p>
+    <p class="tag">Top-down pool. Aim, English, cut angles — clear the rack.</p>
 
     <button class="btn primary" id="btnPlay">Rack ’em</button>
-    <p class="hint">Drag back from the cue ball to set power and direction. Pocket all fifteen.</p>
+    <p class="hint">Point to aim · drag back for power · use the English dial for spin. Ghost circle shows contact; green line is the object path.</p>
 
     <p class="meta">Best clear <b id="bestVal">—</b> shots · Clears <b id="clearsVal">0</b></p>
   </div>
@@ -237,7 +270,12 @@
     <div class="hud-chip"><span>SHOTS</span><b id="shotsVal">0</b></div>
     <div class="hud-chip"><span>LEFT</span><b id="leftVal">15</b></div>
   </div>
-  <div class="hud-msg" id="msgVal">Aim: drag back from the cue ball.</div>
+  <div class="spin-panel" id="spinPanel">
+    <div class="spin-label">ENGLISH</div>
+    <canvas id="spinDial" width="88" height="88" aria-label="Cue tip English dial"></canvas>
+    <div class="spin-hint">Drag tip · double-click center</div>
+  </div>
+  <div class="hud-msg" id="msgVal">Aim with the cursor · drag back to shoot.</div>
   <div class="hud-actions">
     <button class="btn ghost" id="btnReset" type="button">End</button>
   </div>

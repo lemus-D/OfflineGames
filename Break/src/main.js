@@ -1,6 +1,6 @@
 /* Boot, menu, HUD, frame loop for Break. */
 
-import { CueInput } from './core/input.js';
+import { CueInput, EnglishDial } from './core/input.js';
 import { Save } from './core/save.js';
 import { clamp } from './core/rng.js';
 import { PHYSICS } from './game/content.js';
@@ -9,14 +9,28 @@ import {
   fitView,
   drawTable,
   drawBall,
-  drawCueGuide,
+  drawCueAndAim,
+  drawEnglishDial,
   drawKitchenHint,
   screenToTable,
+  tableToScreen,
 } from './game/draw.js';
 
 const canvas = document.getElementById('stage');
 const g = canvas.getContext('2d', { alpha: false, desynchronized: true });
 const cueInput = new CueInput(canvas);
+
+const spinCanvas = document.getElementById('spinDial');
+const spinCtx = spinCanvas.getContext('2d');
+const englishDial = new EnglishDial(spinCanvas, { maxEnglish: PHYSICS.maxEnglish });
+
+// Block table aim while using the English dial.
+spinCanvas.addEventListener('pointerdown', () => {
+  cueInput.blocked = true;
+});
+addEventListener('pointerup', () => {
+  cueInput.blocked = false;
+});
 
 let W = 0;
 let H = 0;
@@ -46,6 +60,7 @@ const els = {
   btnAgain: document.getElementById('btnAgain'),
   btnMenu: document.getElementById('btnMenu'),
   btnReset: document.getElementById('btnReset'),
+  spinPanel: document.getElementById('spinPanel'),
 };
 
 function resize() {
@@ -64,9 +79,9 @@ function clearFrame() {
   g.globalAlpha = 1;
   g.globalCompositeOperation = 'source-over';
   const bg = g.createLinearGradient(0, 0, 0, canvas.height);
-  bg.addColorStop(0, '#142218');
+  bg.addColorStop(0, '#1a2a1e');
   bg.addColorStop(0.55, '#0c1810');
-  bg.addColorStop(1, '#08120c');
+  bg.addColorStop(1, '#060c08');
   g.fillStyle = bg;
   g.fillRect(0, 0, canvas.width, canvas.height);
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -94,6 +109,7 @@ function startRun() {
     },
   });
   pendingShot = null;
+  englishDial.reset();
   cueInput.enabled = true;
   cueInput.reset();
   state = 'playing';
@@ -144,7 +160,11 @@ function updateHud() {
   if (els.msg) els.msg.textContent = session.message || ' ';
 }
 
-function handleAim(view) {
+/**
+ * Build screen-space aim for drawing / shooting.
+ * Hover: aim cue → pointer. Dragging: pull-back vector sets aim + power.
+ */
+function resolveAim(view) {
   if (!session) return null;
   const aiming = session.phase === 'aiming' || session.phase === 'ballInHand';
   cueInput.enabled = aiming && state === 'playing';
@@ -154,10 +174,9 @@ function handleAim(view) {
   }
   cueInput.unlock();
 
-  // Ball-in-hand: tap kitchen to place, then aim.
   if (session.phase === 'ballInHand') {
-    const aim = cueInput.aimScreen();
-    if (aim && aim.released) {
+    const drag = cueInput.aimScreen();
+    if (drag && drag.released) {
       const world = screenToTable(cueInput.cx, cueInput.cy, view);
       session.placeCue(world.x, world.y);
       cueInput.reset();
@@ -166,44 +185,78 @@ function handleAim(view) {
     return null;
   }
 
-  const aim = cueInput.aimScreen();
-  if (!aim) return null;
-
-  if (aim.released) {
+  const drag = cueInput.aimScreen();
+  if (drag && drag.pulling) {
     const power = clamp(
-      (aim.powerPull - PHYSICS.minPullPx) / (PHYSICS.maxPullPx - PHYSICS.minPullPx),
+      (drag.powerPull - PHYSICS.minPullPx) / (PHYSICS.maxPullPx - PHYSICS.minPullPx),
       0,
       1
     );
-    if (power >= 0.02 && (aim.dx !== 0 || aim.dy !== 0)) {
-      // Convert screen aim vector to table space (uniform scale).
+    return {
+      dx: drag.dx,
+      dy: drag.dy,
+      powerPull: drag.powerPull,
+      power,
+      pulling: true,
+      released: false,
+    };
+  }
+
+  if (drag && drag.released) {
+    const power = clamp(
+      (drag.powerPull - PHYSICS.minPullPx) / (PHYSICS.maxPullPx - PHYSICS.minPullPx),
+      0,
+      1
+    );
+    if (power >= 0.02 && (drag.dx !== 0 || drag.dy !== 0)) {
       pendingShot = {
-        dx: aim.dx / view.scale,
-        dy: aim.dy / view.scale,
+        dx: drag.dx / view.scale,
+        dy: drag.dy / view.scale,
         power,
+        english: { ...englishDial.english },
       };
     }
     cueInput.reset();
     return null;
   }
-  return aim;
+
+  // Hover aim toward pointer.
+  if (cueInput.hasPointer && session.cue) {
+    const cueS = tableToScreen(session.cue.x, session.cue.y, view);
+    const dx = cueInput.px - cueS.x;
+    const dy = cueInput.py - cueS.y;
+    if (Math.hypot(dx, dy) > 4) {
+      return { dx, dy, powerPull: 0, power: 0, pulling: false, released: false };
+    }
+  }
+
+  // Default aim toward the rack apex.
+  return { dx: 80, dy: 0, powerPull: 0, power: 0, pulling: false, released: false };
 }
 
-function drawMenuBackdrop(dt) {
+function drawMenuBackdrop() {
   clearFrame();
   const view = fitView(W, H);
-  // Idle demo: a static rack scene with gentle light.
-  if (!session) {
-    session = new PlaySession(42);
-  }
+  if (!session) session = new PlaySession(42);
   drawTable(g, view, animTime);
   for (const b of session.balls) drawBall(g, b, view);
-  // Soft title glow pulse
+  // Resting cue preview aimed at the rack.
+  if (session.cue) {
+    drawCueAndAim(
+      g,
+      session.cue,
+      session.balls,
+      view,
+      { dx: 90, dy: 0, powerPull: 0 },
+      { x: 0, y: 0 },
+      { pulling: false, power: 0 }
+    );
+  }
   g.save();
-  g.globalAlpha = 0.08 + Math.sin(animTime * 1.2) * 0.03;
+  g.globalAlpha = 0.07 + Math.sin(animTime * 1.1) * 0.025;
   g.fillStyle = '#d4c078';
   g.beginPath();
-  g.arc(W * 0.72, H * 0.35, 90, 0, Math.PI * 2);
+  g.arc(W * 0.72, H * 0.32, 100, 0, Math.PI * 2);
   g.fill();
   g.restore();
 }
@@ -212,7 +265,7 @@ function drawPlay(dt) {
   const s = session;
   s.step(dt);
   if (pendingShot && s.phase === 'aiming') {
-    s.shoot(pendingShot.dx, pendingShot.dy, pendingShot.power);
+    s.shoot(pendingShot.dx, pendingShot.dy, pendingShot.power, pendingShot.english);
     pendingShot = null;
   }
 
@@ -222,21 +275,21 @@ function drawPlay(dt) {
 
   if (s.phase === 'ballInHand') drawKitchenHint(g, view);
 
-  // Draw object balls then cue on top.
   for (const b of s.balls) {
     if (b.id !== 0) drawBall(g, b, view);
   }
   drawBall(g, s.cue, view);
 
-  const aim = handleAim(view);
-  if (aim && s.phase === 'aiming') drawCueGuide(g, s.cue, view, aim);
-
-  updateHud();
-
-  if (s.phase === 'won' && state === 'playing') {
-    // onClear hook also fires; guard double summary
-    if (!els.summary.classList.contains('hidden')) return;
+  const aim = resolveAim(view);
+  if (aim && s.phase === 'aiming') {
+    drawCueAndAim(g, s.cue, s.balls, view, aim, englishDial.english, {
+      pulling: aim.pulling,
+      power: aim.power,
+    });
   }
+
+  drawEnglishDial(spinCtx, spinCanvas.width, englishDial.english, englishDial.hover || englishDial.dragging);
+  updateHud();
 }
 
 function frame(ts) {
@@ -246,9 +299,8 @@ function frame(ts) {
   animTime += dt;
 
   if (state === 'menu') {
-    // Fresh decorative rack each menu entry if we wiped session on leave.
     if (!session || session.phase === 'won') session = new PlaySession(42);
-    drawMenuBackdrop(dt);
+    drawMenuBackdrop();
   } else if (state === 'summary') {
     clearFrame();
     const view = fitView(W, H);
@@ -294,4 +346,5 @@ resize();
 show(els.menu);
 hide(els.hud);
 hide(els.summary);
+drawEnglishDial(spinCtx, spinCanvas.width, englishDial.english, false);
 requestAnimationFrame(frame);

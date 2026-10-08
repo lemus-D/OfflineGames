@@ -1,28 +1,46 @@
 /* Table geometry, ball catalog, tunables. Content lives here; play applies it. */
 
-export const FIXED_DT = 1 / 120;
+export const FIXED_DT = 1 / 180;
 
 /** Playing surface in world units (2:1 table). Origin at center. */
 export const TABLE = {
   halfW: 112,
   halfH: 56,
-  cushion: 4.2,
-  pocketR: 5.6,
+  cushion: 5.2,
+  pocketR: 5.8,
   /** Corner / side pocket centers relative to rail insides. */
-  pocketInset: 0.35,
+  pocketInset: 0.2,
+  jaw: 3.2,
 };
 
 export const BALL_R = 2.85;
 
 export const PHYSICS = {
-  friction: 0.992,
-  stopSpeed: 0.04,
-  cushionRestitution: 0.78,
-  ballRestitution: 0.98,
+  /** Linear drag accel (units/s²) — speed bleeds off more naturally than a multiply. */
+  rollingDrag: 22,
+  /** Extra drag while |spin| is high (sliding). */
+  slidingDrag: 12,
+  stopSpeed: 0.07,
+  cushionRestitution: 0.68,
+  /** Fraction of tangent speed killed on rail. */
+  cushionFriction: 0.42,
+  ballRestitution: 0.94,
   /** Max cue impulse magnitude (world units / sec). */
-  maxShotSpeed: 95,
-  /** Screen pixels of drag that maps to max power (scaled in main). */
-  maxPullPx: 160,
+  maxShotSpeed: 108,
+  /** How strongly tip English becomes stored spin. */
+  englishToSpin: 0.55,
+  /** Side spin kick on cushions. */
+  sideOnCushion: 0.38,
+  /** Throw: side spin nudges object ball on contact. */
+  throwFactor: 0.18,
+  /** Follow / draw blend into cue residual after a hit. */
+  followFactor: 0.5,
+  drawFactor: 0.48,
+  spinDecay: 0.992,
+  /** Cap |english| tip offset. */
+  maxEnglish: 0.88,
+  /** Screen pixels of drag that maps to max power. */
+  maxPullPx: 170,
   minPullPx: 8,
 };
 
@@ -71,16 +89,15 @@ export function pocketCenters() {
   const { halfW: w, halfH: h, pocketInset: i } = TABLE;
   return [
     { x: -w + i, y: -h + i, corner: true },
-    { x: 0, y: -h - 0.4, corner: false },
+    { x: 0, y: -h - 0.55, corner: false },
     { x: w - i, y: -h + i, corner: true },
     { x: -w + i, y: h - i, corner: true },
-    { x: 0, y: h + 0.4, corner: false },
+    { x: 0, y: h + 0.55, corner: false },
     { x: w - i, y: h - i, corner: true },
   ];
 }
 
 export function scoreClear(shots, pocketed) {
-  // Lower shots is better; pocketed is usually 15 on a clear.
   if (pocketed < 15) return Math.max(0, pocketed * 10 - shots);
   return Math.max(1, 500 - shots * 8);
 }

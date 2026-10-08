@@ -66,7 +66,7 @@ export class PlaySession {
     this.time = 0;
     this.simAccum = 0;
     this.phase = 'aiming'; // aiming | rolling | ballInHand | won
-    this.message = 'Aim: drag back from the cue ball, release to shoot.';
+    this.message = 'Aim with the cursor · drag back to set power · English dial for spin.';
     this.lastPocketed = [];
     this.needsBallInHand = false;
   }
@@ -100,16 +100,17 @@ export class PlaySession {
 
   /**
    * Fire a shot. dir is world-space aim; power01 in [0,1].
+   * @param {{x:number,y:number}} [english] tip offset on the cue ball
    * @returns {boolean} whether the shot was accepted
    */
-  shoot(dirX, dirY, power01) {
+  shoot(dirX, dirY, power01, english = { x: 0, y: 0 }) {
     if (this.phase !== 'aiming' && this.phase !== 'ballInHand') return false;
     if (this.moving) return false;
     const cue = this.cue;
     if (!cue || cue.pocketed) return false;
     if (power01 < 0.02) return false;
 
-    applyCueShot(cue, dirX, dirY, power01);
+    applyCueShot(cue, dirX, dirY, power01, english);
     this.shots += 1;
     this.phase = 'rolling';
     this.message = '';
