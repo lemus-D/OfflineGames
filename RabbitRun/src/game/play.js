@@ -305,7 +305,8 @@ export function project(
   bendHere = 0
 ) {
   const rel = z - camZ;
-  const depth = RUN.near + Math.max(0, rel);
+  // Keep depth positive for math, but never treat behind-camera as "near".
+  const depth = RUN.near + Math.max(0.001, rel);
   const scale = RUN.near / depth;
   const horizonY = H * 0.26;
   const groundY = H * 0.94;
@@ -317,7 +318,12 @@ export function project(
   const camLat = bendCam;
   const x = W * 0.5 + (worldLat - camLat) * laneSpread * t;
   const y = yBase - jumpY * H * 0.12 * t;
-  return { x, y, scale: t, onScreen: rel > -3 && rel < RUN.far, bend: bendHere };
+  // Hide before the near-plane blow-up that looked like a final flash.
+  const drawNear = RUN.drawNear ?? 1.35;
+  const onScreen = rel > drawNear && rel < RUN.far;
+  // Soft fade as props approach the rabbit so they ease out.
+  const fade = clamp((rel - drawNear) / 1.8, 0, 1);
+  return { x, y, scale: t, onScreen, fade, bend: bendHere, rel };
 }
 
 /** Convenience: project using a live session's bend seed. */

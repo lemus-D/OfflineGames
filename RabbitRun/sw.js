@@ -1,5 +1,5 @@
 /* Rabbit Run service worker — precache, versioned cache name. */
-const CACHE = 'rabbit-v7';
+const CACHE = 'rabbit-v8';
 const PRECACHE = [
   './',
   './index.html',

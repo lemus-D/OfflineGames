@@ -11,8 +11,10 @@ export const RUN = {
   maxSpeed: 20,
   /** How far ahead we keep segments spawned. */
   spawnAhead: 60,
-  /** How far behind we cull. */
-  cullBehind: 10,
+  /** How far behind the camera props may linger before culling. */
+  cullBehind: 0.4,
+  /** Stop drawing props closer than this (avoids near-plane size pop). */
+  drawNear: 1.35,
   /** Spacing between obstacle/carrot rolls. */
   segmentGap: 4.8,
   /** Jump: height peak and duration feel. */

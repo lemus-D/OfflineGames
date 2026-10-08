@@ -608,18 +608,28 @@ export function drawWorld(g, W, H, session, anim) {
     if (o.hit) continue;
     const p = projectSession(session, o.lane, o.z, W, H);
     if (!p.onScreen) continue;
+    const alpha = p.fade ?? 1;
     stack.push({
       z: o.z,
-      draw: () => drawObstacle(g, o.kind, p.x, p.y, p.scale),
+      draw: () => {
+        g.globalAlpha = alpha;
+        drawObstacle(g, o.kind, p.x, p.y, p.scale);
+        g.globalAlpha = 1;
+      },
     });
   }
   for (const c of session.pickups) {
     if (c.taken) continue;
     const p = projectSession(session, c.lane, c.z, W, H);
     if (!p.onScreen) continue;
+    const alpha = p.fade ?? 1;
     stack.push({
       z: c.z,
-      draw: () => drawCarrot(g, p.x, p.y, Math.max(0.35, p.scale * 1.15), anim),
+      draw: () => {
+        g.globalAlpha = alpha;
+        drawCarrot(g, p.x, p.y, Math.max(0.35, p.scale * 1.15), anim);
+        g.globalAlpha = 1;
+      },
     });
   }
 
