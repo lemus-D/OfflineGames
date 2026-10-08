@@ -28,7 +28,7 @@ export const PHYSICS = {
   cushionFriction: 0.42,
   ballRestitution: 0.94,
   /** Max cue impulse magnitude before mass (world units / sec). */
-  maxShotSpeed: 108,
+  maxShotSpeed: 160,
   /** How strongly tip English becomes stored spin. */
   englishToSpin: 0.55,
   /** Side spin kick on cushions. */
