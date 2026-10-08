@@ -123,9 +123,13 @@ function updateHud() {
   if (els.dist) els.dist.textContent = `${Math.floor(session.distance)}m`;
   if (els.carrots) els.carrots.textContent = String(session.carrots);
   if (els.gap) {
-    const pct = Math.round((session.foxGap / 6.5) * 100);
-    els.gap.textContent = `${Math.max(0, pct)}%`;
-    els.gap.classList.toggle('danger', session.foxGap < 2.5);
+    // Match on-screen fox distance: 100% = healthy lead, 0% = caught.
+    const span = Math.max(0.01, 6.0 - 1.15);
+    const pct = Math.round(
+      Math.max(0, Math.min(1, (session.foxGap - 1.15) / span)) * 100
+    );
+    els.gap.textContent = `${pct}%`;
+    els.gap.classList.toggle('danger', pct < 40);
   }
 }
 
@@ -137,7 +141,7 @@ function drawMenuBackdrop(dt) {
   drawCarrot(g, W * 0.2, H * 0.52, 1.35, animTime);
   drawCarrot(g, W * 0.78, H * 0.46, 1.05, animTime + 1);
   drawCarrot(g, W * 0.5, H * 0.4, 0.85, animTime + 2);
-  drawFox(g, W * 0.32, H * 0.84, 2.0, animTime * 5, true);
+  drawFox(g, W * 0.32, H * 0.86, 2.1, animTime * 5, true);
   drawRabbit(g, W * 0.64, H * 0.68, 1.05, animTime * 6, 0);
   void dt;
 }

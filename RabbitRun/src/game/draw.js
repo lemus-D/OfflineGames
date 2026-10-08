@@ -409,55 +409,57 @@ export function drawRabbit(g, x, y, scale, phase, jumpY = 0) {
 }
 
 /**
- * Fox from behind — galloping chase.
- * Camera sees: streaming tail, pounding haunches, back, head up-trail;
- * when close, a shoulder-glance with slit eyes + fangs.
+ * Fox from behind — galloping chase, always facing up-trail.
+ * Intimidation is proximity/scale + pinned ears (no head-turn).
+ * @param {boolean} [close] when true: ears pinned, denser silhouette
  */
-export function drawFox(g, x, y, scale, phase, snarl = false) {
+export function drawFox(g, x, y, scale, phase, close = false) {
   const s = scale;
   const plant = Math.sin(phase);
   const bob = (0.45 + 0.55 * Math.abs(plant)) * 6 * s;
   const squash = plant * 0.07;
-  const sway = Math.sin(phase * 0.5) * 3 * s;
+  const sway = Math.sin(phase * 0.5) * 2.5 * s;
   const legL = Math.sin(phase) * 18 * s;
   const legR = Math.sin(phase + Math.PI) * 18 * s;
-  const tailLash = Math.sin(phase * 1.3) * 16 * s;
+  const tailLash = Math.sin(phase * 1.3) * 14 * s;
+  // Ears flatten when closing in.
+  const earPin = close ? 0.55 : 0;
 
   g.save();
   g.translate(x + sway, y - bob);
   g.scale(1 + squash * 0.6, 1 - squash * 0.5);
 
-  // Shadow
-  g.fillStyle = 'rgba(0,0,0,0.5)';
+  // Shadow grows with closeness
+  g.fillStyle = `rgba(0,0,0,${close ? 0.58 : 0.42})`;
   g.beginPath();
-  g.ellipse(0, bob + 22 * s, 50 * s, 12 * s, 0, 0, Math.PI * 2);
+  g.ellipse(0, bob + 22 * s, 48 * s, 11 * s, 0, 0, Math.PI * 2);
   g.fill();
 
-  // Tail streams toward camera / to the side (between us and the body)
+  // Tail streams toward camera
   g.fillStyle = COLORS.foxDark;
   g.strokeStyle = COLORS.ink;
   g.lineWidth = Math.max(1.5, 2.2 * s);
   g.beginPath();
   g.moveTo(0, 10 * s);
   g.quadraticCurveTo(
-    -8 * s + tailLash,
-    28 * s,
-    4 * s + tailLash * 0.4,
-    42 * s + Math.abs(tailLash) * 0.15
+    -6 * s + tailLash,
+    26 * s,
+    2 * s + tailLash * 0.35,
+    40 * s + Math.abs(tailLash) * 0.12
   );
-  g.quadraticCurveTo(18 * s + tailLash * 0.2, 30 * s, 8 * s, 12 * s);
+  g.quadraticCurveTo(16 * s + tailLash * 0.15, 28 * s, 8 * s, 12 * s);
   g.closePath();
   g.fill();
   g.stroke();
   g.fillStyle = '#d8c8b0';
   g.beginPath();
-  g.moveTo(2 * s + tailLash * 0.35, 36 * s);
-  g.lineTo(10 * s + tailLash * 0.4, 48 * s);
-  g.lineTo(-6 * s + tailLash * 0.2, 44 * s);
+  g.moveTo(0 + tailLash * 0.3, 34 * s);
+  g.lineTo(8 * s + tailLash * 0.35, 46 * s);
+  g.lineTo(-8 * s + tailLash * 0.15, 42 * s);
   g.closePath();
   g.fill();
 
-  // Hind legs — big, low, pounding (closest)
+  // Hind legs
   g.fillStyle = COLORS.foxDark;
   for (const [sx, leg] of [
     [-1, legL],
@@ -476,7 +478,7 @@ export function drawFox(g, x, y, scale, phase, snarl = false) {
     g.stroke();
   }
 
-  // Haunches — wide predator rear
+  // Haunches
   g.fillStyle = COLORS.fox;
   g.beginPath();
   g.moveTo(-28 * s, 0);
@@ -491,7 +493,7 @@ export function drawFox(g, x, y, scale, phase, snarl = false) {
   g.fill();
   g.stroke();
 
-  // Forelegs reaching up-trail under the ribs
+  // Forelegs
   g.fillStyle = COLORS.foxMid;
   for (const [sx, leg] of [
     [-1, legR],
@@ -507,7 +509,7 @@ export function drawFox(g, x, y, scale, phase, snarl = false) {
     g.stroke();
   }
 
-  // Torso / shoulders farther up the path
+  // Torso / shoulders
   g.fillStyle = COLORS.foxMid;
   g.beginPath();
   g.moveTo(-16 * s, -8 * s);
@@ -520,78 +522,55 @@ export function drawFox(g, x, y, scale, phase, snarl = false) {
   g.fill();
   g.stroke();
 
-  // Spiked dorsal fur
+  // Dorsal ridge
   g.fillStyle = COLORS.foxDark;
   g.beginPath();
   g.moveTo(-10 * s, -14 * s);
-  g.lineTo(-8 * s, -32 * s);
-  g.lineTo(0, -20 * s);
-  g.lineTo(8 * s, -34 * s);
+  g.lineTo(-6 * s, -28 * s);
+  g.lineTo(0, -18 * s);
+  g.lineTo(6 * s, -30 * s);
   g.lineTo(10 * s, -14 * s);
   g.closePath();
   g.fill();
 
-  // Head facing AWAY (up trail) — back of skull + ear backs
+  // Head facing up-trail only — back of skull
   g.fillStyle = COLORS.fox;
   g.beginPath();
   g.ellipse(0, -30 * s, 12 * s, 11 * s, 0, 0, Math.PI * 2);
   g.fill();
   g.stroke();
 
-  // Ear backs (tall points)
+  // Ears: upright when far, pinned flat when close
   g.fillStyle = COLORS.foxDark;
-  g.beginPath();
-  g.moveTo(-8 * s, -34 * s);
-  g.lineTo(-12 * s, -54 * s);
-  g.lineTo(0, -38 * s);
-  g.closePath();
-  g.moveTo(8 * s, -34 * s);
-  g.lineTo(12 * s, -54 * s);
-  g.lineTo(0, -38 * s);
-  g.closePath();
-  g.fill();
-  g.stroke();
-
-  // When close: glance over right shoulder — slit eye + fang flash
-  if (snarl) {
-    g.save();
-    g.translate(14 * s, -24 * s);
-    g.rotate(-0.55);
-    g.fillStyle = COLORS.foxMid;
+  for (const sx of [-1, 1]) {
     g.beginPath();
-    g.moveTo(-6 * s, -4 * s);
-    g.lineTo(10 * s, -8 * s);
-    g.lineTo(14 * s, 4 * s);
-    g.lineTo(0, 8 * s);
+    if (earPin > 0.3) {
+      // Flattened back along the neck
+      g.moveTo(sx * 6 * s, -32 * s);
+      g.lineTo(sx * 22 * s, -28 * s);
+      g.lineTo(sx * 10 * s, -22 * s);
+    } else {
+      g.moveTo(sx * 6 * s, -34 * s);
+      g.lineTo(sx * 10 * s, -52 * s);
+      g.lineTo(0, -38 * s);
+    }
     g.closePath();
     g.fill();
     g.stroke();
-    g.fillStyle = COLORS.foxEyeGlow;
+  }
+
+  // Soft amber rim-light on ear edges when closing in (reads as threat, no face)
+  if (close) {
+    g.strokeStyle = COLORS.foxEye;
+    g.globalAlpha = 0.55;
+    g.lineWidth = Math.max(1.2, 1.8 * s);
     g.beginPath();
-    g.ellipse(4 * s, -1 * s, 5 * s, 3 * s, 0, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = COLORS.foxEye;
-    g.fillRect(1.5 * s, -1.8 * s, 5 * s, 1.5 * s);
-    g.fillStyle = COLORS.ink;
-    g.fillRect(3.5 * s, -2.4 * s, 1.2 * s, 2.6 * s);
-    g.fillStyle = '#1a0806';
-    g.beginPath();
-    g.ellipse(8 * s, 5 * s, 5 * s, 3.5 * s, 0, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = '#f0e8dc';
-    g.beginPath();
-    g.moveTo(5 * s, 3 * s);
-    g.lineTo(7 * s, 3 * s);
-    g.lineTo(6 * s, 9 * s);
-    g.closePath();
-    g.fill();
-    g.beginPath();
-    g.moveTo(9 * s, 3 * s);
-    g.lineTo(11 * s, 3 * s);
-    g.lineTo(10.5 * s, 9 * s);
-    g.closePath();
-    g.fill();
-    g.restore();
+    g.moveTo(-8 * s, -30 * s);
+    g.lineTo(-18 * s, -26 * s);
+    g.moveTo(8 * s, -30 * s);
+    g.lineTo(18 * s, -26 * s);
+    g.stroke();
+    g.globalAlpha = 1;
   }
 
   g.restore();
@@ -649,33 +628,31 @@ export function drawWorld(g, W, H, session, anim) {
 
   for (const fx of session.collectFx) drawCollectFx(g, fx, session, W, H);
 
-  // Both runners follow the same bent ribbon.
-  const close = 1 - Math.min(
-    1,
-    Math.max(0, session.foxGap - RUN.foxCatchGap) /
-      (RUN.foxBaseGap - RUN.foxCatchGap)
-  );
+  // Lead → how close the fox sits on screen (uses smoothed visual gap).
+  const gap = session.foxVisualGap ?? session.foxGap;
+  const gapSpan = Math.max(0.01, RUN.foxBaseGap + 0.8 - RUN.foxCatchGap);
+  const close = 1 - clamp((gap - RUN.foxCatchGap) / gapSpan, 0, 1);
+
   const rabbitZ = cam + 0.35;
-  const foxZ = cam - session.foxGap * 0.55;
   const rabbitP = projectSession(session, session.laneVisual, rabbitZ, W, H, session.jumpY);
-  const foxP = projectSession(session, session.laneVisual, Math.max(foxZ, cam - 4.5), W, H);
+  // Fox world-Z also tracks gap so X follows the same ribbon.
+  const foxZ = cam - lerp(6.5, 1.2, close);
+  const foxP = projectSession(session, session.laneVisual, foxZ, W, H);
 
-  // Screen anchors keep them readable; X still follows the turn.
   const rabbitY = lerp(H * 0.68, rabbitP.y, 0.22) - session.jumpY * H * 0.1;
-  const foxY = lerp(H * 0.92, H * 0.8, close);
-  // Fox looms — always bigger than the rabbit, meaner when close.
-  const foxScale = lerp(1.9, 2.7, close);
-  const snarl = close > 0.18;
+  // Far: mostly off the bottom. Close: up near the rabbit's heels.
+  const foxY = lerp(H * 1.08, H * 0.74, close);
+  const foxScale = lerp(1.35, 2.85, close);
+  const threatening = close > 0.45;
 
-  // Lean both runners into the bend so turns read in their pose.
   const bendNow = session.bendAt(cam);
   const bendAhead = session.bendAt(cam + 6);
-  const lean = clamp((bendAhead - bendNow) * 0.18, -0.35, 0.35);
+  const lean = clamp((bendAhead - bendNow) * 0.12, -0.22, 0.22);
 
   g.save();
   g.translate(foxP.x, foxY);
-  g.rotate(lean * 0.85);
-  drawFox(g, 0, 0, foxScale, session.foxHop, snarl);
+  g.rotate(lean * 0.7);
+  drawFox(g, 0, 0, foxScale, session.foxHop, threatening);
   g.restore();
 
   g.save();

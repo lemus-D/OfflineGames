@@ -25,9 +25,8 @@ export function pathBend(z, seed) {
     const s = t * t * (3 - 2 * t);
     bend += strength * s;
   }
-  // Soft continuous wander so straights aren't dead-flat.
-  bend += Math.sin(z * 0.045 + seed * 0.001) * 0.22;
-  bend += Math.sin(z * 0.11 + 1.7) * 0.1;
+  // Very soft wander — mostly straight with gentle bends.
+  bend += Math.sin(z * 0.03 + seed * 0.001) * 0.08;
   return bend;
 }
 
@@ -48,6 +47,8 @@ export class PlaySession {
     this.carrots = 0;
     this.speed = RUN.baseSpeed;
     this.foxGap = RUN.foxBaseGap;
+    /** Smoothed gap for drawing — fox eases closer/farther on screen. */
+    this.foxVisualGap = RUN.foxBaseGap;
     this.accum = 0;
 
     this.lane = 1;
@@ -142,6 +143,8 @@ export class PlaySession {
     this._spawnAhead();
     this._collide();
     this._fox();
+    // Ease the on-screen fox toward the logical gap so Lead% reads visually.
+    this.foxVisualGap = lerp(this.foxVisualGap, this.foxGap, 0.12);
     this._fx(dt);
 
     // Score: distance + carrots.

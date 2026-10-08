@@ -52,7 +52,7 @@ const b0 = pathBend(10, 42);
 const b1 = pathBend(40, 42);
 const b0b = pathBend(10, 42);
 assert(b0 === b0b, 'pathBend is deterministic');
-assert(Math.abs(b0 - b1) > 0.05, `path bends along trail (${b0} vs ${b1})`);
+assert(Math.abs(b0 - b1) > 0.02, `path bends along trail (${b0} vs ${b1})`);
 
 // Run long enough to spawn content and gain score.
 const run = new PlaySession(42, {});

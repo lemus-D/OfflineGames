@@ -30,9 +30,9 @@ export const RUN = {
   near: 2.2,
   far: 52,
   /** Path turn strength (lane-widths of centerline sway). */
-  turnAmp: 1.65,
+  turnAmp: 0.55,
   /** How often discrete bends are rolled (world units). */
-  turnSpacing: 28,
+  turnSpacing: 42,
   /** Carrot trail length on open stretches. */
   carrotTrail: 3,
 };
