@@ -337,16 +337,14 @@ export function drawWorld(g, W, H, session, anim) {
   stack.sort((a, b) => a.z - b.z);
   for (const item of stack) item.draw();
 
-  // Fox sits behind the rabbit on screen; gap maps to how close it looms.
+  // Fox sits just behind the rabbit; closing gap → larger + nearer on screen.
   const close = 1 - Math.min(1, Math.max(0, session.foxGap - RUN.foxCatchGap) / (RUN.foxBaseGap - RUN.foxCatchGap));
   const rabbitX = project(session.laneVisual, cam + 0.35, cam, W, H).x;
-  const foxY = lerp(H * 0.93, H * 0.84, close);
-  const foxScale = lerp(0.95, 1.45, close);
+  const rabbitY = H * 0.68 - session.jumpY * H * 0.1;
+  const foxY = lerp(H * 0.88, H * 0.76, close);
+  const foxScale = lerp(1.05, 1.55, close);
   drawFox(g, rabbitX, foxY, foxScale, session.hopPhase, close > 0.4);
-
-  // Rabbit near camera.
-  const rabbitY = H * 0.72 - session.jumpY * H * 0.1;
-  drawRabbit(g, rabbitX, rabbitY, 1.1, session.hopPhase, session.jumpY);
+  drawRabbit(g, rabbitX, rabbitY, 1.15, session.hopPhase, session.jumpY);
 
   drawHitFlash(g, W, H, session.flash);
 }
