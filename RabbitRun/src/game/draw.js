@@ -337,19 +337,16 @@ export function drawWorld(g, W, H, session, anim) {
   stack.sort((a, b) => a.z - b.z);
   for (const item of stack) item.draw();
 
-  // Fox behind the rabbit.
-  const foxZ = cam - session.foxGap;
-  const foxP = project(session.laneVisual, Math.max(foxZ, cam - 6), cam, W, H);
-  // Pull fox toward bottom of screen when close.
-  const close = 1 - Math.min(1, session.foxGap / RUN.foxBaseGap);
-  const foxY = lerp(foxP.y + H * 0.08, H * 0.96, close * 0.55);
-  const foxScale = lerp(foxP.scale * 1.1, 1.35, close);
-  drawFox(g, foxP.x, foxY, foxScale, session.hopPhase, close > 0.45);
+  // Fox sits behind the rabbit on screen; gap maps to how close it looms.
+  const close = 1 - Math.min(1, Math.max(0, session.foxGap - RUN.foxCatchGap) / (RUN.foxBaseGap - RUN.foxCatchGap));
+  const rabbitX = project(session.laneVisual, cam + 0.35, cam, W, H).x;
+  const foxY = lerp(H * 0.93, H * 0.84, close);
+  const foxScale = lerp(0.95, 1.45, close);
+  drawFox(g, rabbitX, foxY, foxScale, session.hopPhase, close > 0.4);
 
   // Rabbit near camera.
-  const rp = project(session.laneVisual, cam + 0.35, cam, W, H, session.jumpY);
-  const rabbitY = H * 0.78 - session.jumpY * H * 0.1;
-  drawRabbit(g, rp.x, rabbitY, 1.05, session.hopPhase, session.jumpY);
+  const rabbitY = H * 0.72 - session.jumpY * H * 0.1;
+  drawRabbit(g, rabbitX, rabbitY, 1.1, session.hopPhase, session.jumpY);
 
   drawHitFlash(g, W, H, session.flash);
 }
