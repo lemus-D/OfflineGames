@@ -137,8 +137,8 @@ function drawMenuBackdrop(dt) {
   drawCarrot(g, W * 0.2, H * 0.52, 1.35, animTime);
   drawCarrot(g, W * 0.78, H * 0.46, 1.05, animTime + 1);
   drawCarrot(g, W * 0.5, H * 0.4, 0.85, animTime + 2);
-  drawFox(g, W * 0.3, H * 0.82, 1.7, animTime * 5, true);
-  drawRabbit(g, W * 0.62, H * 0.7, 1.15, animTime * 6, 0);
+  drawFox(g, W * 0.32, H * 0.84, 2.0, animTime * 5, true);
+  drawRabbit(g, W * 0.64, H * 0.68, 1.05, animTime * 6, 0);
   void dt;
 }
 
