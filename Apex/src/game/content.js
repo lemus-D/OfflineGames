@@ -77,7 +77,8 @@ export const PICKUPS = {
     fuelGain: -0.06,
     healthDamage: 0.34,
     score: 0,
-    weight: 0.18,
+    /** Slightly rarer so the sky stays more pickups than hazards. */
+    weight: 0.12,
   },
   blackhole: {
     id: 'blackhole',
@@ -85,13 +86,13 @@ export const PICKUPS = {
     fuelGain: 0,
     healthDamage: 0,
     score: 0,
-    weight: 0.06,
+    weight: 0.035,
     /** Min world Y before this kind may spawn. */
     minY: 900,
     /** Pull strength (accel ≈ pull / dist², capped). */
-    pull: 160000,
+    pull: 220000,
     /** Soft max pull accel. */
-    pullCap: 1600,
+    pullCap: 2200,
     /** Event-horizon radius as a fraction of entity radius. */
     horizonMul: 0.4,
   },
