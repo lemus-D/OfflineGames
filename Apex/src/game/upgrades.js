@@ -25,7 +25,7 @@ export const UPGRADES = {
   hull: {
     id: 'hull',
     name: 'Hull Plating',
-    desc: 'Meteors steal less fuel.',
+    desc: 'Asteroids chip less hull integrity.',
     maxLevel: 5,
     costs: [10, 20, 40, 80, 140],
   },
@@ -61,16 +61,21 @@ export function foldStats(upgrades = {}) {
   const hull = u.hull;
 
   const fuelMax = 1 + tank * 0.12; // 1.00 → 1.60
+  const healthMax = 1 + hull * 0.08; // 1.00 → 1.40
   return {
     upgrades: u,
     fuelMax,
     fuelStart: fuelMax, // launch full
+    healthMax,
+    healthStart: healthMax,
     thrustMul: 1 + thrust * 0.06, // → 1.30
     maxSpeedMul: 1 + thrust * 0.05, // → 1.25
     maxClimbMul: 1 + thrust * 0.05,
     fuelPickupMul: 1 + scoop * 0.12, // → 1.60
-    /** Multiplier on meteor fuel loss (negative gains). */
+    /** Multiplier on meteor fuel splash (negative gains). */
     meteorDrainMul: Math.max(0.55, 1 - hull * 0.08), // → 0.60
+    /** Multiplier on asteroid hull damage. */
+    healthDamageMul: Math.max(0.5, 1 - hull * 0.1), // → 0.50
   };
 }
 

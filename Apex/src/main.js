@@ -4,7 +4,7 @@ import { Input } from './core/input.js';
 import { Save } from './core/save.js';
 import { clamp } from './core/rng.js';
 import { PlaySession } from './game/play.js';
-import { tiltDegrees, ROCKET, WORLD_HALF_W } from './game/content.js';
+import { tiltDegrees, ROCKET } from './game/content.js';
 import {
   gameToKm,
   formatAltitudeKm,
@@ -60,6 +60,9 @@ const els = {
   fuelFill: document.getElementById('fuelFill'),
   fuelVal: document.getElementById('fuelVal'),
   fuelGauge: document.getElementById('fuelGauge'),
+  healthFill: document.getElementById('healthFill'),
+  healthVal: document.getElementById('healthVal'),
+  healthGauge: document.getElementById('healthGauge'),
   score: document.getElementById('scoreVal'),
   altitude: document.getElementById('altVal'),
   layerVal: document.getElementById('layerVal'),
@@ -209,11 +212,15 @@ function endRun() {
   state = 'summary';
   hide(els.hud);
   const reason =
-    sum.reason === 'meteor'
-      ? 'A meteor drained your tanks. You fell.'
-      : sum.reason === 'fuel'
-        ? 'Out of fuel. Free fall.'
-        : 'Slammed into the ground.';
+    sum.reason === 'hull'
+      ? 'Hull breached by asteroids. Systems offline.'
+      : sum.reason === 'blackhole'
+        ? 'Pulled past the event horizon. Run over.'
+        : sum.reason === 'meteor'
+          ? 'Asteroid swarm tore the ship apart.'
+          : sum.reason === 'fuel'
+            ? 'Out of fuel. Free fall.'
+            : 'Slammed into the ground.';
   const peakKm = formatAltitudeKm(gameToKm(sum.altitude));
   const layer = layerAtKm(gameToKm(sum.altitude)).name;
   const eggs = flybyNames();
@@ -254,6 +261,7 @@ function drawSession(dt, playing) {
   const s = session;
   const p = s.player;
   const camY = p.y;
+  const camX = p.x;
 
   if (playing) {
     s.step(dt, input.controls());
@@ -263,25 +271,29 @@ function drawSession(dt, playing) {
   clearFrame();
   // Integer camera keeps world scroll on whole pixels at high speed.
   const viewY = Math.round(camY);
-  drawSky(g, W, H, viewY, animTime);
-  drawLaunchPad(g, W, H, viewY);
-  drawCelestials(g, W, H, viewY, animTime);
+  const viewX = camX;
+  drawSky(g, W, H, viewY, animTime, viewX);
+  drawLaunchPad(g, W, H, viewY, viewX);
+  drawCelestials(g, W, H, viewY, animTime, viewX);
 
   for (const u of s.pickups) {
-    const scr = worldToScreen(u.x, u.y, viewY, W, H);
-    if (scr.y < -80 || scr.y > H + 80) continue;
-    drawPickup(g, u.kind, scr.x, scr.y, u.r * scr.scale, u.spin, animTime);
+    const scr = worldToScreen(u.x, u.y, viewX, viewY, W, H);
+    const margin = u.kind === 'blackhole' ? 120 : 80;
+    if (scr.y < -margin || scr.y > H + margin) continue;
+    if (scr.x < -margin || scr.x > W + margin) continue;
+    const drawR = u.kind === 'blackhole' ? u.r * scr.scale * 0.55 : u.r * scr.scale;
+    drawPickup(g, u.kind, scr.x, scr.y, drawR, u.spin, animTime);
   }
 
-  for (const fx of s.collectFx) drawCollectFx(g, fx, viewY, W, H, animTime);
+  for (const fx of s.collectFx) drawCollectFx(g, fx, viewY, W, H, animTime, viewX);
 
-  // Pin the player to a fixed screen anchor so camera rounding can't smear it.
-  const scale = Math.min(W, H) / (WORLD_HALF_W * 1.85);
+  // Pin the player to screen center — camera follows X+Y (infinite sides).
+  const scr = worldToScreen(p.x, p.y, viewX, viewY, W, H);
   drawRocket(
     g,
-    W * 0.5 + p.x * scale,
-    H * 0.62,
-    scale * 0.85,
+    scr.x,
+    scr.y,
+    scr.scale * 0.85,
     p.tilt,
     animTime,
     playing ? p.thrusting : p.alive
@@ -300,6 +312,12 @@ function updateGauges(s) {
   if (els.fuelFill) els.fuelFill.style.height = `${fuelPct * 100}%`;
   if (els.fuelVal) els.fuelVal.textContent = `${Math.round(fuelPct * 100)}%`;
   if (els.fuelGauge) els.fuelGauge.classList.toggle('low', fuelPct < 0.28);
+
+  const healthMax = p.healthMax || 1;
+  const healthPct = clamp(p.health / healthMax, 0, 1);
+  if (els.healthFill) els.healthFill.style.height = `${healthPct * 100}%`;
+  if (els.healthVal) els.healthVal.textContent = `${Math.round(healthPct * 100)}%`;
+  if (els.healthGauge) els.healthGauge.classList.toggle('low', healthPct < 0.34);
 
   const km = gameToKm(Math.max(0, p.y));
   const peakKm = gameToKm(Math.max(0, p.peakY));
@@ -357,11 +375,11 @@ function drawMenuBackdrop(dt) {
   clearFrame();
   const onPad = menuAltitude < 90;
   const cam = onPad ? ROCKET.startY : menuAltitude;
-  drawSky(g, W, H, cam, animTime);
-  drawLaunchPad(g, W, H, cam);
-  if (!onPad) drawCelestials(g, W, H, cam, animTime);
+  drawSky(g, W, H, cam, animTime, 0);
+  drawLaunchPad(g, W, H, cam, 0);
+  if (!onPad) drawCelestials(g, W, H, cam, animTime, 0);
   if (onPad) {
-    const padScr = worldToScreen(0, ROCKET.startY, cam, W, H);
+    const padScr = worldToScreen(0, ROCKET.startY, 0, cam, W, H);
     const thrusting = menuAltitude > 50 && Math.sin(animTime * 3) > -0.2;
     drawRocket(g, padScr.x, padScr.y, padScr.scale * 0.85, 0, animTime, thrusting);
   } else {
@@ -372,6 +390,7 @@ function drawMenuBackdrop(dt) {
   drawPickup(g, 'fuel', W * 0.78, H * 0.28, 22, animTime, animTime);
   drawPickup(g, 'coin', W * 0.22, H * 0.38, 16, -animTime * 1.4, animTime);
   drawPickup(g, 'meteor', W * 0.85, H * 0.68, 24, animTime * 0.8, animTime);
+  drawPickup(g, 'blackhole', W * 0.18, H * 0.72, 28, animTime * 0.9, animTime);
 }
 
 function frame(ts) {

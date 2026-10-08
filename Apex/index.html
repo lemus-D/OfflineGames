@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Apex</title>
-<meta name="description" content="Boost a rocket. Scoop gas cans, snag coins, dodge meteors." />
+<meta name="description" content="Boost a rocket. Scoop gas cans, snag coins, dodge asteroids and black holes." />
 <meta name="theme-color" content="#1a2438" />
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%231a2438'/><path fill='%23f0a060' d='M16 4l4 10v10l-4 5-4-5V14z'/><path fill='%23ffe08a' d='M12 24l4 6 4-6z'/></svg>" />
@@ -16,6 +16,7 @@
     --ember: #e07040;
     --flame: #ffc878;
     --fuel: #4fd4a0;
+    --hull: #e07070;
     --panel: rgba(8, 14, 26, 0.72);
     --line: rgba(180, 200, 230, 0.18);
     --font-display: "Trebuchet MS", "Verdana", "Geneva", sans-serif;
@@ -217,10 +218,10 @@
     margin-top: 4px;
     min-width: 4ch;
   }
-  .gauge.low .g-val, .gauge.low #fuelFill { color: #ffb454; }
+  .gauge.low .g-val, .gauge.low #fuelFill, .gauge.low #healthFill { color: #ffb454; }
 
-  /* Vertical fuel tank */
-  .fuel-tank {
+  /* Vertical fuel / hull tanks */
+  .fuel-tank, .health-tank {
     width: 28px;
     height: 120px;
     margin: 0 auto;
@@ -229,31 +230,49 @@
     position: relative;
     overflow: hidden;
   }
-  .fuel-tank::before, .fuel-tank::after {
+  .health-tank { height: 88px; width: 24px; }
+  .fuel-tank::before, .fuel-tank::after,
+  .health-tank::before, .health-tank::after {
     content: "";
     position: absolute;
     left: 2px; right: 2px;
     height: 2px;
     background: #3a4258;
   }
-  .fuel-tank::before { top: 33%; }
-  .fuel-tank::after { top: 66%; }
-  #fuelFill {
+  .fuel-tank::before, .health-tank::before { top: 33%; }
+  .fuel-tank::after, .health-tank::after { top: 66%; }
+  #fuelFill, #healthFill {
     position: absolute;
     left: 0; right: 0; bottom: 0;
     height: 100%;
+    transition: height 0.08s linear;
+  }
+  #fuelFill {
     background: repeating-linear-gradient(
       180deg,
       #3dcea0 0 3px,
       #2a9a72 3px 6px
     );
-    transition: height 0.08s linear;
+  }
+  #healthFill {
+    background: repeating-linear-gradient(
+      180deg,
+      #e07070 0 3px,
+      #a83838 3px 6px
+    );
   }
   .gauge.low #fuelFill {
     background: repeating-linear-gradient(
       180deg,
       #e07040 0 3px,
       #a84820 3px 6px
+    );
+  }
+  .gauge.low #healthFill {
+    background: repeating-linear-gradient(
+      180deg,
+      #ffb454 0 3px,
+      #c06020 3px 6px
     );
   }
 
@@ -489,10 +508,10 @@
 <div id="menu" class="overlay">
   <div class="menu-panel">
     <h1 class="brand">Apex</h1>
-    <p class="tag">Climb the atmosphere. Scoop gas cans. Maybe wave at the Moon.</p>
+    <p class="tag">Climb forever left or right. Watch the hull. Mind the voids.</p>
 
     <button class="btn primary" id="btnPlay">Launch</button>
-    <p class="hint">↑ / W boost · ← → or A / D spin (full 360°) · scoop fuel on the way down too</p>
+    <p class="hint">↑ / W boost · ← → or A / D spin · asteroids chip hull · black holes pull</p>
 
     <p class="bank">Hangar bank <b id="bankVal">0</b> coins</p>
     <div class="shop" id="shop" aria-label="Upgrades"></div>
@@ -508,6 +527,11 @@
       <div class="g-label">FUEL</div>
       <div class="fuel-tank"><div id="fuelFill"></div></div>
       <div class="g-val" id="fuelVal">100%</div>
+    </div>
+    <div class="gauge" id="healthGauge">
+      <div class="g-label">HULL</div>
+      <div class="health-tank"><div id="healthFill"></div></div>
+      <div class="g-val" id="healthVal">100%</div>
     </div>
     <div class="gauge">
       <div class="g-label">ALT</div>

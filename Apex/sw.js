@@ -1,5 +1,5 @@
 /* Apex service worker — precache, versioned cache name. */
-const CACHE = 'apex-v16';
+const CACHE = 'apex-v17';
 const PRECACHE = [
   './',
   './index.html',

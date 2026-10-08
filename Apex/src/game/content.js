@@ -2,8 +2,22 @@
 
 export const FIXED_DT = 1 / 60;
 
-/** World half-width the rocket can travel in. */
+/** World half-width; X wraps so the map is infinite side-to-side. */
 export const WORLD_HALF_W = 220;
+/** Full wrap period on X. */
+export const WORLD_W = WORLD_HALF_W * 2;
+
+/** Wrap world X into [-WORLD_HALF_W, WORLD_HALF_W). */
+export function wrapX(x) {
+  const w = WORLD_W;
+  x = ((((x + WORLD_HALF_W) % w) + w) % w) - WORLD_HALF_W;
+  return x;
+}
+
+/** Shortest signed ΔX across the wrap (for physics / collision). */
+export function deltaX(from, to) {
+  return wrapX(to - from);
+}
 
 /** Launch pad in world space. Deck is the top surface; ground is y = 0. */
 export const PAD = {
@@ -29,6 +43,9 @@ export const ROCKET = {
   drag: 0.985,
   radius: 16,
   startFuel: 1,
+  /** Hull hit points (absolute). Asteroids chip this down. */
+  startHealth: 1,
+  healthMax: 1,
   /** Fuel burned per second while boosting. */
   burnRate: 0.12,
   /** Sit on the pad deck (sprite center above the deck). */
@@ -41,22 +58,42 @@ export const PICKUPS = {
     id: 'fuel',
     radius: 18,
     fuelGain: 0.28,
+    healthDamage: 0,
     score: 5,
-    weight: 0.38,
+    weight: 0.36,
   },
   coin: {
     id: 'coin',
     radius: 11,
     fuelGain: 0,
+    healthDamage: 0,
     score: 25,
-    weight: 0.42,
+    weight: 0.4,
   },
   meteor: {
     id: 'meteor',
     radius: 18,
-    fuelGain: -0.22,
+    /** Small splash of fuel loss; hull takes the real hit. */
+    fuelGain: -0.06,
+    healthDamage: 0.34,
     score: 0,
-    weight: 0.2,
+    weight: 0.18,
+  },
+  blackhole: {
+    id: 'blackhole',
+    radius: 42,
+    fuelGain: 0,
+    healthDamage: 0,
+    score: 0,
+    weight: 0.06,
+    /** Min world Y before this kind may spawn. */
+    minY: 900,
+    /** Pull strength (accel ≈ pull / dist², capped). */
+    pull: 160000,
+    /** Soft max pull accel. */
+    pullCap: 1600,
+    /** Event-horizon radius as a fraction of entity radius. */
+    horizonMul: 0.4,
   },
 };
 
