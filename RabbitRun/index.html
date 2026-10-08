@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Rabbit Run</title>
+<meta name="description" content="Dash down the trail. Grab carrots. Don't let the fox catch you." />
+<meta name="theme-color" content="#2d5a27" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%232d5a27'/><ellipse cx='16' cy='20' rx='8' ry='6' fill='%23efe6d4'/><ellipse cx='12' cy='10' rx='2.5' ry='7' fill='%23efe6d4'/><ellipse cx='20' cy='10' rx='2.5' ry='7' fill='%23efe6d4'/></svg>" />
+<style>
+  :root {
+    --ink: #1a2418;
+    --muted: #5a6a52;
+    --cream: #f4efe4;
+    --moss: #2d5a27;
+    --leaf: #4a9a40;
+    --carrot: #e87828;
+    --fox: #e07030;
+    --panel: rgba(244, 239, 228, 0.92);
+    --line: rgba(45, 90, 39, 0.22);
+    --font-display: "Trebuchet MS", "Verdana", "Geneva", sans-serif;
+    --font-body: "Verdana", "Geneva", "Trebuchet MS", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: #1a2e1a;
+    color: var(--ink);
+    font-family: var(--font-body);
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  #stage {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    touch-action: none;
+    background: #1a2e1a;
+  }
+
+  .hidden { display: none !important; }
+
+  .overlay {
+    position: fixed; inset: 0;
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-start;
+    pointer-events: none;
+  }
+  .overlay > * { pointer-events: auto; }
+
+  #menu .menu-panel {
+    width: min(400px, 92vw);
+    margin: clamp(16px, 4vh, 48px) clamp(18px, 4vw, 48px);
+    padding: 26px 24px 20px;
+    background: linear-gradient(165deg, rgba(244,239,228,0.95), rgba(220,232,200,0.9));
+    border: 2px solid var(--line);
+    align-self: center;
+  }
+
+  .brand {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(2.6rem, 8vw, 3.8rem);
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    color: var(--moss);
+    margin: 0 0 8px;
+  }
+  .tag {
+    margin: 0 0 22px;
+    color: var(--muted);
+    font-size: 1.02rem;
+    line-height: 1.35;
+    max-width: 28ch;
+  }
+
+  .btn {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.05rem;
+    border: none;
+    cursor: pointer;
+    padding: 12px 18px;
+    color: var(--cream);
+    background: var(--moss);
+    transition: transform 0.12s, filter 0.12s;
+  }
+  .btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary {
+    width: 100%;
+    background: linear-gradient(180deg, var(--leaf), var(--moss));
+  }
+  .btn.ghost {
+    background: transparent;
+    color: var(--moss);
+    border: 2px solid var(--line);
+  }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+  .meta {
+    margin-top: 16px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .meta b { color: var(--ink); }
+
+  .hint {
+    margin: 14px 0 0;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  #hud {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    font-family: var(--font-display);
+  }
+  .hud-bar {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .hud-chip {
+    background: rgba(244, 239, 228, 0.88);
+    border: 2px solid var(--line);
+    padding: 8px 12px;
+    min-width: 72px;
+  }
+  .hud-chip span {
+    display: block;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .hud-chip b {
+    font-size: 1.25rem;
+    color: var(--ink);
+  }
+  .hud-chip b.danger { color: #c04020; }
+
+  #touch {
+    position: fixed;
+    left: 0; right: 0; bottom: 18px;
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    pointer-events: none;
+    z-index: 5;
+  }
+  #touch button {
+    pointer-events: auto;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 2px solid rgba(45, 90, 39, 0.35);
+    background: rgba(244, 239, 228, 0.75);
+    color: var(--moss);
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  #touch #btnJump {
+    width: 88px;
+    background: rgba(232, 120, 40, 0.85);
+    color: #fff;
+    border-color: rgba(160, 70, 20, 0.4);
+  }
+
+  #summary {
+    align-items: center;
+    justify-content: center;
+    background: rgba(20, 40, 18, 0.45);
+  }
+  .summary-panel {
+    width: min(400px, 92vw);
+    padding: 28px;
+    background: linear-gradient(160deg, rgba(244,239,228,0.96), rgba(220,232,200,0.94));
+    border: 2px solid var(--line);
+  }
+  .summary-panel h2 {
+    font-family: var(--font-display);
+    margin: 0 0 8px;
+    font-size: 2rem;
+    color: var(--fox);
+  }
+  .reason { margin: 0 0 14px; color: var(--muted); }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .stat-grid div {
+    background: rgba(45, 90, 39, 0.08);
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+  }
+  .stat-grid span {
+    display: block;
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .stat-grid b { font-family: var(--font-display); font-size: 1.35rem; }
+  .muted { color: var(--muted); font-size: 0.85rem; }
+
+  @media (min-width: 800px) {
+    #touch { display: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="stage" aria-label="Rabbit Run trail"></canvas>
+
+<div id="menu" class="overlay">
+  <div class="menu-panel">
+    <h1 class="brand">Rabbit Run</h1>
+    <p class="tag">Dash down the trail. Grab carrots. Don't let the fox catch you.</p>
+
+    <button class="btn primary" id="btnPlay">Run</button>
+    <p class="hint">← → change lane · Space / ↑ jump · swipe on phone</p>
+
+    <p class="meta">Best score <b id="bestVal">0</b> · Best distance <b id="bestDistVal">0</b>m</p>
+  </div>
+</div>
+
+<div id="hud" class="hidden">
+  <div class="hud-bar">
+    <div class="hud-chip"><span>Score</span><b id="scoreVal">0</b></div>
+    <div class="hud-chip"><span>Distance</span><b id="distVal">0m</b></div>
+    <div class="hud-chip"><span>Carrots</span><b id="carrotVal">0</b></div>
+    <div class="hud-chip"><span>Lead</span><b id="gapVal">100%</b></div>
+  </div>
+</div>
+
+<div id="touch" class="hidden">
+  <button type="button" id="btnLeft" aria-label="Lane left">←</button>
+  <button type="button" id="btnJump" aria-label="Jump">↑</button>
+  <button type="button" id="btnRight" aria-label="Lane right">→</button>
+</div>
+
+<div id="summary" class="overlay hidden">
+  <div class="summary-panel">
+    <h2>Caught!</h2>
+    <div id="summaryBody"></div>
+    <div class="btn-row" style="margin-top:18px">
+      <button class="btn primary" id="btnAgain" style="flex:1">Run again</button>
+      <button class="btn ghost" id="btnMenu">Menu</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
