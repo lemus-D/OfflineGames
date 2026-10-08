@@ -16,16 +16,18 @@ export const TABLE = {
 export const BALL_R = 2.85;
 
 export const PHYSICS = {
-  /** Linear drag accel (units/s²) — speed bleeds off more naturally than a multiply. */
-  rollingDrag: 22,
+  /** Relative ball mass — higher = heavier (same cue stroke → less speed). */
+  ballMass: 1.45,
+  /** Linear drag accel (units/s²) — slightly slicker cloth. */
+  rollingDrag: 15,
   /** Extra drag while |spin| is high (sliding). */
-  slidingDrag: 12,
+  slidingDrag: 8,
   stopSpeed: 0.07,
   cushionRestitution: 0.68,
   /** Fraction of tangent speed killed on rail. */
   cushionFriction: 0.42,
   ballRestitution: 0.94,
-  /** Max cue impulse magnitude (world units / sec). */
+  /** Max cue impulse magnitude before mass (world units / sec). */
   maxShotSpeed: 108,
   /** How strongly tip English becomes stored spin. */
   englishToSpin: 0.55,

@@ -66,7 +66,7 @@ export class PlaySession {
     this.time = 0;
     this.simAccum = 0;
     this.phase = 'aiming'; // aiming | rolling | ballInHand | won
-    this.message = 'Aim with the cursor · drag back to set power · English dial for spin.';
+    this.message = 'Aim with the cursor · pull back away from the target for power.';
     this.lastPocketed = [];
     this.needsBallInHand = false;
   }

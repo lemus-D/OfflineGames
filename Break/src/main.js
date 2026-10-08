@@ -275,6 +275,8 @@ function drawPlay(dt) {
   if (pendingShot && s.phase === 'aiming') {
     s.shoot(pendingShot.dx, pendingShot.dy, pendingShot.power, pendingShot.english);
     pendingShot = null;
+    // Fresh tip each stroke — don't leave last English armed.
+    englishDial.reset();
   }
 
   clearFrame();

@@ -282,7 +282,8 @@ export function applyCueShot(cue, dirX, dirY, power01, english = { x: 0, y: 0 })
   const nx = dirX / len;
   const ny = dirY / len;
   const power = Math.max(0, Math.min(1, power01));
-  const speed = PHYSICS.maxShotSpeed * power;
+  const mass = PHYSICS.ballMass || 1;
+  const speed = (PHYSICS.maxShotSpeed * power) / mass;
   cue.vx = nx * speed;
   cue.vy = ny * speed;
 

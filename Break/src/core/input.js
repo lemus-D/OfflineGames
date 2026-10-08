@@ -102,17 +102,17 @@ export class CueInput {
   }
 
   /**
-   * While pulling: aim stays locked; power = drag projected opposite the aim.
-   * On release: same locked aim + measured power.
+   * While pulling: aim stays locked; power = how far you pull BACK
+   * (drag the pointer opposite the aim / away from the target).
    */
   aimScreen() {
     if (this.mode !== 'aiming') return null;
     const dragX = this.sx - this.cx;
     const dragY = this.sy - this.cy;
-    // Component of the pull-back along the opposite of aim (= along aim as shot dir).
-    // Dragging opposite the aim direction increases power.
+    // drag = start − current. Pulling back (away from the target) makes
+    // drag point along the aim direction, so the projection is positive.
     const along = this.hasLock
-      ? Math.max(0, -(dragX * this.lockDx + dragY * this.lockDy))
+      ? Math.max(0, dragX * this.lockDx + dragY * this.lockDy)
       : Math.hypot(dragX, dragY);
     const dx = this.hasLock ? this.lockDx * Math.max(along, 1) : dragX;
     const dy = this.hasLock ? this.lockDy * Math.max(along, 1) : dragY;
