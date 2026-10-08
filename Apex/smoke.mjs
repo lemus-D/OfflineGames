@@ -10,7 +10,12 @@ import {
   deltaX,
   wrapAngle,
   tiltDegrees,
+  pickupWeight,
+  bandItemBudget,
+  HAZARD_SCALE,
+  SPAWN,
 } from './src/game/content.js';
+import { makeRNG } from './src/core/rng.js';
 import {
   gameToKm,
   CELESTIAL,
@@ -64,6 +69,26 @@ assert(Math.abs(deltaX(-200, 200)) < Math.abs(200 - -200), 'deltaX prefers short
 assert(PICKUPS.meteor.healthDamage > 0, 'meteors deal hull damage');
 assert(PICKUPS.blackhole.pull > 0, 'black holes have pull');
 assert(PICKUPS.blackhole.minY > 0, 'black holes spawn above pad');
+
+{
+  const mLow = pickupWeight(PICKUPS.meteor, 0);
+  const mMid = pickupWeight(PICKUPS.meteor, (HAZARD_SCALE.meteorStartY + HAZARD_SCALE.meteorFullY) / 2);
+  const mHigh = pickupWeight(PICKUPS.meteor, HAZARD_SCALE.meteorFullY);
+  assert(mLow < mMid && mMid < mHigh, 'meteor weight ramps with altitude');
+  assert(pickupWeight(PICKUPS.blackhole, 100) === 0, 'no black holes near pad');
+  const bLow = pickupWeight(PICKUPS.blackhole, PICKUPS.blackhole.minY);
+  const bHigh = pickupWeight(PICKUPS.blackhole, HAZARD_SCALE.blackholeFullY);
+  assert(bLow < bHigh, 'blackhole weight ramps after unlock');
+  const rng = makeRNG(99);
+  let sawDense = false;
+  for (let i = 0; i < 80; i++) {
+    if (bandItemBudget(rng, HAZARD_SCALE.densifyFullY) > SPAWN.perBandMax) {
+      sawDense = true;
+      break;
+    }
+  }
+  assert(sawDense, 'high bands sometimes exceed low perBandMax');
+}
 
 assert(Math.abs(gameToKm(0)) < 0.01, 'sea level ~0 km');
 assert(Math.abs(gameToKm(ATM_GAME_UNITS) - ATM_KM) < 0.01, 'atm top maps to 100 km');

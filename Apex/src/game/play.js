@@ -11,24 +11,25 @@ import {
   ROCKET,
   PICKUPS,
   SPAWN,
+  pickupWeight,
+  bandItemBudget,
   scoreFromRun,
   wrapAngle,
 } from './content.js';
 import { foldStats } from './upgrades.js';
 
 function pickKind(rng, bandY) {
-  const entries = Object.values(PICKUPS).filter((e) => {
-    if (e.minY != null && bandY < e.minY) return false;
-    return true;
-  });
+  const entries = Object.values(PICKUPS)
+    .map((e) => ({ e, w: pickupWeight(e, bandY) }))
+    .filter((row) => row.w > 0);
   let total = 0;
-  for (const e of entries) total += e.weight;
+  for (const row of entries) total += row.w;
   let roll = rng() * total;
-  for (const e of entries) {
-    roll -= e.weight;
-    if (roll <= 0) return e.id;
+  for (const row of entries) {
+    roll -= row.w;
+    if (roll <= 0) return row.e.id;
   }
-  return entries[entries.length - 1].id;
+  return entries[entries.length - 1].e.id;
 }
 
 export class PlaySession {
@@ -241,9 +242,7 @@ export class PlaySession {
   }
 
   _spawnBandAt(bandY) {
-    const n =
-      SPAWN.perBandMin +
-      Math.floor(this.rng() * (SPAWN.perBandMax - SPAWN.perBandMin + 1));
+    const n = bandItemBudget(this.rng, bandY);
     const used = [];
     for (let i = 0; i < n; i++) {
       const kind = pickKind(this.rng, bandY);
