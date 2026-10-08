@@ -30,6 +30,7 @@ import {
   buyUpgrade,
   emptyUpgrades,
   UPGRADES,
+  UPGRADE_IDS,
 } from './src/game/upgrades.js';
 
 let failures = 0;
@@ -380,8 +381,20 @@ assert(
   assert(base.meteorDrainMul === 1, 'stock meteor drain mul is 1');
   assert(base.healthDamageMul === 1, 'stock health damage mul is 1');
 
-  const maxed = foldStats({ tank: 5, thrust: 5, scoop: 5, hull: 5 });
-  assert(maxed.fuelMax > base.fuelMax, 'tank upgrade raises fuelMax');
+  assert(
+    UPGRADE_IDS.every((id) => UPGRADES[id].maxLevel === 8),
+    'all upgrades cap at Lv8'
+  );
+  assert(
+    UPGRADE_IDS.every((id) => UPGRADES[id].costs.length === UPGRADES[id].maxLevel),
+    'cost rows match maxLevel'
+  );
+  assert(UPGRADES.tank.costs[0] <= 5, 'tank first level is cheap');
+
+  const mid = foldStats({ tank: 5, thrust: 5, scoop: 5, hull: 5 });
+  const maxed = foldStats({ tank: 8, thrust: 8, scoop: 8, hull: 8 });
+  assert(mid.fuelMax > base.fuelMax, 'tank upgrade raises fuelMax');
+  assert(maxed.fuelMax > mid.fuelMax, 'Lv8 tank stronger than Lv5');
   assert(maxed.thrustMul > base.thrustMul, 'thrust upgrade raises thrustMul');
   assert(maxed.fuelPickupMul > base.fuelPickupMul, 'scoop upgrade raises pickup');
   assert(maxed.meteorDrainMul < base.meteorDrainMul, 'hull upgrade lowers meteor drain');
@@ -389,14 +402,14 @@ assert(
   assert(maxed.healthDamageMul < base.healthDamageMul, 'hull upgrade lowers health damage');
 
   const stock = new PlaySession(55, {}, emptyUpgrades());
-  const tanker = new PlaySession(55, {}, { tank: 5 });
+  const tanker = new PlaySession(55, {}, { tank: 8 });
   assert(stock.player.fuel === 1, 'stock starts with 1 fuel');
-  assert(tanker.player.fuelMax === foldStats({ tank: 5 }).fuelMax, 'tanker fuelMax applied');
+  assert(tanker.player.fuelMax === foldStats({ tank: 8 }).fuelMax, 'tanker fuelMax applied');
   assert(tanker.player.fuel === tanker.player.fuelMax, 'tanker launches full');
 
   // Thrusters climb farther on the same seed / burn window.
   const slow = new PlaySession(77, {}, emptyUpgrades());
-  const fast = new PlaySession(77, {}, { thrust: 5 });
+  const fast = new PlaySession(77, {}, { thrust: 8 });
   for (let i = 0; i < 60 * 3; i++) {
     slow.step(1 / 60, boost);
     fast.step(1 / 60, boost);
@@ -404,12 +417,12 @@ assert(
   assert(fast.player.y > slow.player.y + 8, `thrust upgrade climbs higher (${fast.player.y.toFixed(0)} > ${slow.player.y.toFixed(0)})`);
 
   // Scoop: fuel pickup yields more absolute fuel.
-  const scoopStats = foldStats({ scoop: 5 });
+  const scoopStats = foldStats({ scoop: 8 });
   const scooped = PICKUPS.fuel.fuelGain * scoopStats.fuelPickupMul;
   assert(scooped > PICKUPS.fuel.fuelGain, 'scoop multiplies fuel gain');
 
   // Hull: meteor takes less fuel splash and less hull damage.
-  const hullStats = foldStats({ hull: 5 });
+  const hullStats = foldStats({ hull: 8 });
   const drained = Math.abs(PICKUPS.meteor.fuelGain * hullStats.meteorDrainMul);
   assert(drained < Math.abs(PICKUPS.meteor.fuelGain), 'hull reduces meteor fuel loss');
   const dmg =
