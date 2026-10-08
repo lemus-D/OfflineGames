@@ -185,6 +185,11 @@ function resolveAim(view) {
     return null;
   }
 
+  // Keep cue screen pos fresh so pull-start can lock aim cue → pointer.
+  if (session.cue) {
+    cueInput.cueScreen = tableToScreen(session.cue.x, session.cue.y, view);
+  }
+
   const drag = cueInput.aimScreen();
   if (drag && drag.pulling) {
     const power = clamp(
@@ -222,10 +227,13 @@ function resolveAim(view) {
 
   // Hover aim toward pointer.
   if (cueInput.hasPointer && session.cue) {
-    const cueS = tableToScreen(session.cue.x, session.cue.y, view);
+    const cueS = cueInput.cueScreen;
     const dx = cueInput.px - cueS.x;
     const dy = cueInput.py - cueS.y;
     if (Math.hypot(dx, dy) > 4) {
+      const len = Math.hypot(dx, dy);
+      cueInput.lockDx = dx / len;
+      cueInput.lockDy = dy / len;
       return { dx, dy, powerPull: 0, power: 0, pulling: false, released: false };
     }
   }

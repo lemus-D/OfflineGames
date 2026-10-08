@@ -1,4 +1,4 @@
-/* Pointer aim + English dial. Drag back for power; hover aims. */
+/* Pointer aim + English dial. Hover aims; drag back for power (aim locked). */
 
 export class CueInput {
   constructor(canvas) {
@@ -17,6 +17,15 @@ export class CueInput {
     this.enabled = true;
     /** When true, table ignore events (spin dial capturing). */
     this.blocked = false;
+    /**
+     * Aim direction locked at pull start (screen space, unit-ish).
+     * Shot goes along this; drag opposite increases power.
+     */
+    this.lockDx = 1;
+    this.lockDy = 0;
+    this.hasLock = false;
+    /** Optional cue screen pos provider set by main each frame. */
+    this.cueScreen = null;
 
     const pos = (e) => {
       const r = canvas.getBoundingClientRect();
@@ -47,6 +56,21 @@ export class CueInput {
       this.py = p.y;
       this.hasPointer = true;
       this.mode = 'aiming';
+
+      // Lock aim: cue → pointer (hover aim). Fallback to last lock / right.
+      if (this.cueScreen) {
+        let adx = p.x - this.cueScreen.x;
+        let ady = p.y - this.cueScreen.y;
+        let len = Math.hypot(adx, ady);
+        if (len < 8) {
+          adx = this.lockDx;
+          ady = this.lockDy;
+          len = Math.hypot(adx, ady) || 1;
+        }
+        this.lockDx = adx / len;
+        this.lockDy = ady / len;
+        this.hasLock = true;
+      }
     };
     const move = (e) => {
       track(e);
@@ -77,13 +101,25 @@ export class CueInput {
     canvas.addEventListener('touchcancel', up, { passive: false });
   }
 
-  /** Screen-space aim while dragging (pull-back). */
+  /**
+   * While pulling: aim stays locked; power = drag projected opposite the aim.
+   * On release: same locked aim + measured power.
+   */
   aimScreen() {
     if (this.mode !== 'aiming') return null;
+    const dragX = this.sx - this.cx;
+    const dragY = this.sy - this.cy;
+    // Component of the pull-back along the opposite of aim (= along aim as shot dir).
+    // Dragging opposite the aim direction increases power.
+    const along = this.hasLock
+      ? Math.max(0, -(dragX * this.lockDx + dragY * this.lockDy))
+      : Math.hypot(dragX, dragY);
+    const dx = this.hasLock ? this.lockDx * Math.max(along, 1) : dragX;
+    const dy = this.hasLock ? this.lockDy * Math.max(along, 1) : dragY;
     return {
-      dx: this.sx - this.cx,
-      dy: this.sy - this.cy,
-      powerPull: Math.hypot(this.sx - this.cx, this.sy - this.cy),
+      dx,
+      dy,
+      powerPull: this.hasLock ? along : Math.hypot(dragX, dragY),
       released: !this.pointerDown,
       pulling: this.pointerDown,
     };
@@ -92,11 +128,13 @@ export class CueInput {
   reset() {
     this.mode = 'idle';
     this.pointerDown = false;
+    this.hasLock = false;
   }
 
   lock() {
     this.mode = 'locked';
     this.pointerDown = false;
+    this.hasLock = false;
   }
 
   unlock() {
