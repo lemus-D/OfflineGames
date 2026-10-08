@@ -142,33 +142,40 @@ export function drawPath(g, W, H, camZ, anim, seed = 0x5eed) {
   }
   g.setLineDash([]);
 
-  // Pines hugging the outside of the curve.
-  for (let i = 0; i < 16; i++) {
-    const z = camZ + 3 + ((i * 4.2 - (camZ * 0.85) % 4.2 + 4.2) % 4.2);
+  // Pines hugging the outside of the curve — big enough to frame the chase.
+  for (let i = 0; i < 14; i++) {
+    const z = camZ + 2.5 + ((i * 4.6 - (camZ * 0.85) % 4.6 + 4.6) % 4.6);
     const bend = pathBend(z, seed);
     const bendCam = pathBend(camZ, seed);
     for (const side of [-1, 1]) {
-      const p = project(1 + side * 2.05, z, camZ, W, H, 0, bendCam, bend);
-      if (!p.onScreen || p.scale < 0.06) continue;
-      const s = p.scale * 1.35;
+      const p = project(1 + side * 2.0, z, camZ, W, H, 0, bendCam, bend);
+      if (!p.onScreen || p.scale < 0.05) continue;
+      const s = p.scale * 2.15;
       g.fillStyle = '#2a1a10';
-      g.fillRect(p.x - 4 * s, p.y - 70 * s, 8 * s, 55 * s);
+      g.fillRect(p.x - 5 * s, p.y - 85 * s, 10 * s, 70 * s);
       g.fillStyle = i % 2 ? '#163822' : '#1c4530';
       g.beginPath();
-      g.moveTo(p.x, p.y - 150 * s);
-      g.lineTo(p.x + 40 * s, p.y - 50 * s);
-      g.lineTo(p.x - 40 * s, p.y - 50 * s);
+      g.moveTo(p.x, p.y - 190 * s);
+      g.lineTo(p.x + 52 * s, p.y - 55 * s);
+      g.lineTo(p.x - 52 * s, p.y - 55 * s);
       g.closePath();
       g.fill();
       g.fillStyle = i % 3 ? '#245a38' : '#1a4a2c';
       g.beginPath();
-      g.moveTo(p.x, p.y - 125 * s);
-      g.lineTo(p.x + 32 * s, p.y - 58 * s);
-      g.lineTo(p.x - 32 * s, p.y - 58 * s);
+      g.moveTo(p.x, p.y - 160 * s);
+      g.lineTo(p.x + 42 * s, p.y - 70 * s);
+      g.lineTo(p.x - 42 * s, p.y - 70 * s);
+      g.closePath();
+      g.fill();
+      g.fillStyle = '#2f6a40';
+      g.beginPath();
+      g.moveTo(p.x, p.y - 135 * s);
+      g.lineTo(p.x + 30 * s, p.y - 78 * s);
+      g.lineTo(p.x - 30 * s, p.y - 78 * s);
       g.closePath();
       g.fill();
       g.strokeStyle = COLORS.ink;
-      g.lineWidth = Math.max(1, 1.2 * s);
+      g.lineWidth = Math.max(1, 1.4 * s);
       g.stroke();
     }
   }
@@ -186,8 +193,8 @@ export function drawPath(g, W, H, camZ, anim, seed = 0x5eed) {
 
 export function drawObstacle(g, kind, x, y, scale) {
   const def = OBSTACLES[kind];
-  const w = def.w * 95 * scale;
-  const h = def.h * 95 * scale;
+  const w = def.w * 125 * scale;
+  const h = def.h * 125 * scale;
 
   if (kind === 'log') {
     g.fillStyle = COLORS.log;
@@ -286,283 +293,306 @@ export function drawCarrot(g, x, y, scale, t) {
 }
 
 /**
- * Rabbit run cycle — rear/¾ view with hopping gait.
- * @param {number} phase run cycle radians
+ * Rabbit from behind — fleeing hop.
+ * Camera sees: cotton tail, pumping haunches, back, ear backs flopping.
  */
 export function drawRabbit(g, x, y, scale, phase, jumpY = 0) {
-  const s = 42 * scale;
-  const run = jumpY > 0.08 ? 0.2 : 1;
-  const bob = Math.abs(Math.sin(phase)) * 10 * scale * run;
-  const stretch = Math.sin(phase * 2) * 0.07;
-  const legA = Math.sin(phase) * 14 * scale * run;
-  const legB = Math.sin(phase + Math.PI) * 14 * scale * run;
-  const earFlop = Math.sin(phase) * 5 * scale;
+  const sc = scale;
+  const air = jumpY > 0.08;
+  const run = air ? 0.25 : 1;
+  // Hop: gather (compress) then spring (extend).
+  const plant = Math.sin(phase); // -1..1
+  const bob = (0.5 + 0.5 * Math.abs(plant)) * 9 * sc * run;
+  const squash = air ? 0 : plant * 0.08;
+  const sway = Math.sin(phase * 0.5) * 2.5 * sc * run;
+  // Hind feet: opposite push — down/back when planting.
+  const legL = Math.sin(phase) * 16 * sc * run;
+  const legR = Math.sin(phase + Math.PI) * 16 * sc * run;
+  const earL = Math.sin(phase + 0.4) * 7 * sc;
+  const earR = Math.sin(phase + 0.4 + Math.PI) * 7 * sc;
 
   g.save();
-  g.translate(x, y - bob - jumpY * 46 * scale);
-  g.scale(1 + stretch, 1 - stretch);
+  g.translate(x + sway, y - bob - jumpY * 48 * sc);
+  g.scale(1 + squash, 1 - squash);
 
-  // Shadow
-  g.fillStyle = 'rgba(0,0,0,0.28)';
+  // Shadow under rear
+  g.fillStyle = 'rgba(0,0,0,0.3)';
   g.beginPath();
-  g.ellipse(0, bob + 12 * scale, 20 * scale, 7 * scale, 0, 0, Math.PI * 2);
+  g.ellipse(0, bob + 14 * sc, 22 * sc, 7 * sc, 0, 0, Math.PI * 2);
   g.fill();
 
-  // Hind legs (pushing)
+  // Big hind feet / calves (closest to camera, pumping)
   g.fillStyle = COLORS.rabbitShade;
-  g.beginPath();
-  g.ellipse(-11 * scale, 12 * scale + legA * 0.2, 8 * scale, 5 * scale, -0.4 + legA * 0.03, 0, Math.PI * 2);
-  g.ellipse(11 * scale, 12 * scale + legB * 0.2, 8 * scale, 5 * scale, 0.4 - legB * 0.03, 0, Math.PI * 2);
-  g.fill();
-
-  // Forepaws
-  g.beginPath();
-  g.ellipse(-8 * scale, 6 * scale - legB * 0.15, 5 * scale, 4 * scale, 0, 0, Math.PI * 2);
-  g.ellipse(8 * scale, 6 * scale - legA * 0.15, 5 * scale, 4 * scale, 0, 0, Math.PI * 2);
-  g.fill();
-
-  // Body
-  g.fillStyle = COLORS.rabbit;
-  g.beginPath();
-  g.ellipse(0, 0, 17 * scale, 15 * scale, 0, 0, Math.PI * 2);
-  g.fill();
   g.strokeStyle = COLORS.ink;
-  g.lineWidth = Math.max(1.2, 1.6 * scale);
-  g.stroke();
-
-  // Head
-  g.beginPath();
-  g.ellipse(0, -15 * scale, 13 * scale, 12 * scale, 0, 0, Math.PI * 2);
-  g.fill();
-  g.stroke();
-
-  // Ears
-  g.fillStyle = COLORS.rabbitEar;
-  g.beginPath();
-  g.ellipse(-8 * scale, -34 * scale + earFlop, 5.5 * scale, 16 * scale, -0.18, 0, Math.PI * 2);
-  g.ellipse(8 * scale, -34 * scale - earFlop, 5.5 * scale, 16 * scale, 0.18, 0, Math.PI * 2);
-  g.fill();
-  g.stroke();
-  g.fillStyle = COLORS.rabbitPink;
-  g.beginPath();
-  g.ellipse(-8 * scale, -34 * scale + earFlop, 2.4 * scale, 9 * scale, -0.18, 0, Math.PI * 2);
-  g.ellipse(8 * scale, -34 * scale - earFlop, 2.4 * scale, 9 * scale, 0.18, 0, Math.PI * 2);
-  g.fill();
-
-  // Face
-  g.fillStyle = COLORS.rabbitEye;
-  g.beginPath();
-  g.arc(-5.5 * scale, -16 * scale, 2.4 * scale, 0, Math.PI * 2);
-  g.arc(5.5 * scale, -16 * scale, 2.4 * scale, 0, Math.PI * 2);
-  g.fill();
-  g.fillStyle = COLORS.rabbitPink;
-  g.beginPath();
-  g.ellipse(0, -11 * scale, 3.2 * scale, 2.2 * scale, 0, 0, Math.PI * 2);
-  g.fill();
-
-  // Tail
-  g.fillStyle = '#fff8f0';
-  g.beginPath();
-  g.arc(0, 14 * scale + Math.sin(phase) * 2 * scale, 6 * scale, 0, Math.PI * 2);
-  g.fill();
-  g.strokeStyle = COLORS.ink;
-  g.stroke();
-
-  g.restore();
-  void s;
-}
-
-/**
- * Predatory fox — angular ink silhouette, rear chase, always snarling a little.
- */
-export function drawFox(g, x, y, scale, phase, snarl = false) {
-  const s = scale;
-  const bob = Math.abs(Math.sin(phase)) * 4 * s;
-  const stretch = Math.sin(phase * 2) * 0.06;
-  const legL = Math.sin(phase) * 14 * s;
-  const legR = Math.sin(phase + Math.PI) * 14 * s;
-  const tailLash = Math.sin(phase * 1.5) * 14 * s;
-
-  g.save();
-  g.translate(x, y - bob);
-  g.scale(1 + stretch, 1 - stretch * 0.55);
-
-  // Shadow
-  g.fillStyle = 'rgba(0,0,0,0.5)';
-  g.beginPath();
-  g.ellipse(0, bob + 20 * s, 48 * s, 12 * s, 0, 0, Math.PI * 2);
-  g.fill();
-
-  // Angular hind legs
-  g.fillStyle = COLORS.foxDark;
-  g.strokeStyle = COLORS.ink;
-  g.lineWidth = Math.max(1.5, 2.2 * s);
+  g.lineWidth = Math.max(1.2, 1.5 * sc);
   for (const [sx, leg] of [
     [-1, legL],
     [1, legR],
   ]) {
+    const footY = 16 * sc + Math.max(0, leg) * 0.35;
+    const push = Math.max(0, -leg) * 0.25; // retracted up when swinging
     g.beginPath();
-    g.moveTo(sx * 10 * s, 4 * s);
-    g.lineTo(sx * 28 * s, 8 * s + leg * 0.1);
-    g.lineTo(sx * 24 * s, 22 * s + leg * 0.2);
-    g.lineTo(sx * 8 * s, 16 * s);
+    g.moveTo(sx * 6 * sc, 4 * sc);
+    g.lineTo(sx * 18 * sc, 6 * sc + push);
+    g.lineTo(sx * 20 * sc, footY);
+    g.lineTo(sx * 8 * sc, footY + 2 * sc);
+    g.lineTo(sx * 4 * sc, 10 * sc);
+    g.closePath();
+    g.fill();
+    g.stroke();
+    // Pad
+    g.fillStyle = COLORS.rabbitPink;
+    g.beginPath();
+    g.ellipse(sx * 14 * sc, footY + 1 * sc, 5 * sc, 2.5 * sc, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = COLORS.rabbitShade;
+  }
+
+  // Haunches — wide rear end
+  g.fillStyle = COLORS.rabbit;
+  g.beginPath();
+  g.ellipse(0, 4 * sc, 20 * sc, 16 * sc, 0, 0, Math.PI * 2);
+  g.fill();
+  g.stroke();
+
+  // Back / shoulders farther up the trail
+  g.beginPath();
+  g.ellipse(0, -10 * sc, 14 * sc, 12 * sc, 0, 0, Math.PI * 2);
+  g.fill();
+  g.stroke();
+
+  // Cotton tail — signature rear-view cue, bouncing on the rump
+  const tailBob = Math.sin(phase * 2) * 3 * sc * run;
+  g.fillStyle = '#fff8f0';
+  g.beginPath();
+  g.arc(0, 12 * sc + tailBob, 8 * sc, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = COLORS.ink;
+  g.stroke();
+  g.fillStyle = 'rgba(255,255,255,0.55)';
+  g.beginPath();
+  g.arc(-2 * sc, 10 * sc + tailBob, 3 * sc, 0, Math.PI * 2);
+  g.fill();
+
+  // Head from behind (no face) — tucked forward
+  g.fillStyle = COLORS.rabbit;
+  g.beginPath();
+  g.ellipse(0, -22 * sc, 11 * sc, 10 * sc, 0, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = COLORS.ink;
+  g.stroke();
+
+  // Ears from behind — tall, flopping with the hop (backs of ears)
+  for (const [sx, flop] of [
+    [-1, earL],
+    [1, earR],
+  ]) {
+    g.save();
+    g.translate(sx * 6 * sc, -28 * sc);
+    g.rotate(sx * 0.12 + flop * 0.02);
+    g.fillStyle = COLORS.rabbitEar;
+    g.beginPath();
+    g.ellipse(0, -12 * sc + flop * 0.3, 5 * sc, 16 * sc, sx * 0.08, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    // Inner pink just peeking at edges
+    g.fillStyle = COLORS.rabbitPink;
+    g.globalAlpha = 0.45;
+    g.beginPath();
+    g.ellipse(sx * 1.2 * sc, -12 * sc + flop * 0.3, 2 * sc, 10 * sc, sx * 0.08, 0, Math.PI * 2);
+    g.fill();
+    g.globalAlpha = 1;
+    g.restore();
+  }
+
+  g.restore();
+}
+
+/**
+ * Fox from behind — galloping chase.
+ * Camera sees: streaming tail, pounding haunches, back, head up-trail;
+ * when close, a shoulder-glance with slit eyes + fangs.
+ */
+export function drawFox(g, x, y, scale, phase, snarl = false) {
+  const s = scale;
+  const plant = Math.sin(phase);
+  const bob = (0.45 + 0.55 * Math.abs(plant)) * 6 * s;
+  const squash = plant * 0.07;
+  const sway = Math.sin(phase * 0.5) * 3 * s;
+  const legL = Math.sin(phase) * 18 * s;
+  const legR = Math.sin(phase + Math.PI) * 18 * s;
+  const tailLash = Math.sin(phase * 1.3) * 16 * s;
+
+  g.save();
+  g.translate(x + sway, y - bob);
+  g.scale(1 + squash * 0.6, 1 - squash * 0.5);
+
+  // Shadow
+  g.fillStyle = 'rgba(0,0,0,0.5)';
+  g.beginPath();
+  g.ellipse(0, bob + 22 * s, 50 * s, 12 * s, 0, 0, Math.PI * 2);
+  g.fill();
+
+  // Tail streams toward camera / to the side (between us and the body)
+  g.fillStyle = COLORS.foxDark;
+  g.strokeStyle = COLORS.ink;
+  g.lineWidth = Math.max(1.5, 2.2 * s);
+  g.beginPath();
+  g.moveTo(0, 10 * s);
+  g.quadraticCurveTo(
+    -8 * s + tailLash,
+    28 * s,
+    4 * s + tailLash * 0.4,
+    42 * s + Math.abs(tailLash) * 0.15
+  );
+  g.quadraticCurveTo(18 * s + tailLash * 0.2, 30 * s, 8 * s, 12 * s);
+  g.closePath();
+  g.fill();
+  g.stroke();
+  g.fillStyle = '#d8c8b0';
+  g.beginPath();
+  g.moveTo(2 * s + tailLash * 0.35, 36 * s);
+  g.lineTo(10 * s + tailLash * 0.4, 48 * s);
+  g.lineTo(-6 * s + tailLash * 0.2, 44 * s);
+  g.closePath();
+  g.fill();
+
+  // Hind legs — big, low, pounding (closest)
+  g.fillStyle = COLORS.foxDark;
+  for (const [sx, leg] of [
+    [-1, legL],
+    [1, legR],
+  ]) {
+    const footY = 20 * s + Math.max(0, leg) * 0.4;
+    const lift = Math.max(0, -leg) * 0.3;
+    g.beginPath();
+    g.moveTo(sx * 8 * s, 2 * s);
+    g.lineTo(sx * 26 * s, 4 * s + lift);
+    g.lineTo(sx * 28 * s, footY);
+    g.lineTo(sx * 12 * s, footY + 2 * s);
+    g.lineTo(sx * 4 * s, 12 * s);
     g.closePath();
     g.fill();
     g.stroke();
   }
 
-  // Forelegs
+  // Haunches — wide predator rear
+  g.fillStyle = COLORS.fox;
+  g.beginPath();
+  g.moveTo(-28 * s, 0);
+  g.lineTo(-32 * s, 14 * s);
+  g.lineTo(0, 20 * s);
+  g.lineTo(32 * s, 14 * s);
+  g.lineTo(28 * s, 0);
+  g.lineTo(18 * s, -10 * s);
+  g.lineTo(0, -6 * s);
+  g.lineTo(-18 * s, -10 * s);
+  g.closePath();
+  g.fill();
+  g.stroke();
+
+  // Forelegs reaching up-trail under the ribs
   g.fillStyle = COLORS.foxMid;
   for (const [sx, leg] of [
     [-1, legR],
     [1, legL],
   ]) {
     g.beginPath();
-    g.moveTo(sx * 6 * s, 0);
-    g.lineTo(sx * 16 * s, 2 * s - leg * 0.15);
-    g.lineTo(sx * 14 * s, 14 * s - leg * 0.2);
-    g.lineTo(sx * 2 * s, 10 * s);
+    g.moveTo(sx * 4 * s, -4 * s);
+    g.lineTo(sx * 12 * s, -8 * s - Math.max(0, -leg) * 0.2);
+    g.lineTo(sx * 14 * s, 8 * s - leg * 0.15);
+    g.lineTo(sx * 2 * s, 6 * s);
     g.closePath();
     g.fill();
     g.stroke();
   }
 
-  // Angular torso (not a soft blob)
-  g.fillStyle = COLORS.fox;
-  g.beginPath();
-  g.moveTo(0, -18 * s);
-  g.lineTo(30 * s, -6 * s);
-  g.lineTo(26 * s, 14 * s);
-  g.lineTo(0, 18 * s);
-  g.lineTo(-26 * s, 14 * s);
-  g.lineTo(-30 * s, -6 * s);
-  g.closePath();
-  g.fill();
-  g.stroke();
-
-  // Spiked shoulder fur
-  g.fillStyle = COLORS.foxDark;
-  g.beginPath();
-  g.moveTo(-18 * s, -10 * s);
-  g.lineTo(-22 * s, -28 * s);
-  g.lineTo(-8 * s, -14 * s);
-  g.lineTo(0, -30 * s);
-  g.lineTo(8 * s, -14 * s);
-  g.lineTo(22 * s, -28 * s);
-  g.lineTo(18 * s, -10 * s);
-  g.closePath();
-  g.fill();
-  g.stroke();
-
-  // Head looking back — wedge shape
-  g.save();
-  g.translate(12 * s, -8 * s);
-  g.rotate(-0.4);
+  // Torso / shoulders farther up the path
   g.fillStyle = COLORS.foxMid;
   g.beginPath();
-  g.moveTo(-14 * s, -6 * s);
-  g.lineTo(4 * s, -16 * s);
-  g.lineTo(22 * s, -2 * s);
-  g.lineTo(16 * s, 12 * s);
-  g.lineTo(-8 * s, 10 * s);
+  g.moveTo(-16 * s, -8 * s);
+  g.lineTo(-12 * s, -22 * s);
+  g.lineTo(0, -26 * s);
+  g.lineTo(12 * s, -22 * s);
+  g.lineTo(16 * s, -8 * s);
+  g.lineTo(0, -2 * s);
   g.closePath();
   g.fill();
   g.stroke();
 
-  // Knife ears
+  // Spiked dorsal fur
   g.fillStyle = COLORS.foxDark;
   g.beginPath();
-  g.moveTo(-6 * s, -12 * s);
-  g.lineTo(-10 * s, -36 * s);
-  g.lineTo(4 * s, -14 * s);
+  g.moveTo(-10 * s, -14 * s);
+  g.lineTo(-8 * s, -32 * s);
+  g.lineTo(0, -20 * s);
+  g.lineTo(8 * s, -34 * s);
+  g.lineTo(10 * s, -14 * s);
   g.closePath();
-  g.moveTo(8 * s, -14 * s);
-  g.lineTo(18 * s, -38 * s);
-  g.lineTo(20 * s, -10 * s);
+  g.fill();
+
+  // Head facing AWAY (up trail) — back of skull + ear backs
+  g.fillStyle = COLORS.fox;
+  g.beginPath();
+  g.ellipse(0, -30 * s, 12 * s, 11 * s, 0, 0, Math.PI * 2);
+  g.fill();
+  g.stroke();
+
+  // Ear backs (tall points)
+  g.fillStyle = COLORS.foxDark;
+  g.beginPath();
+  g.moveTo(-8 * s, -34 * s);
+  g.lineTo(-12 * s, -54 * s);
+  g.lineTo(0, -38 * s);
+  g.closePath();
+  g.moveTo(8 * s, -34 * s);
+  g.lineTo(12 * s, -54 * s);
+  g.lineTo(0, -38 * s);
   g.closePath();
   g.fill();
   g.stroke();
 
-  // Small pale cheek only
-  g.fillStyle = COLORS.foxWhite;
-  g.beginPath();
-  g.moveTo(8 * s, 2 * s);
-  g.lineTo(20 * s, 0);
-  g.lineTo(18 * s, 8 * s);
-  g.closePath();
-  g.fill();
-
-  // Angry brow + tiny hot slits
-  g.strokeStyle = COLORS.ink;
-  g.lineWidth = Math.max(1.5, 2.4 * s);
-  g.beginPath();
-  g.moveTo(-4 * s, -6 * s);
-  g.lineTo(4 * s, -2 * s);
-  g.moveTo(8 * s, -8 * s);
-  g.lineTo(16 * s, -3 * s);
-  g.stroke();
-
-  g.fillStyle = COLORS.foxEyeGlow;
-  g.beginPath();
-  g.ellipse(0, -1 * s, 5 * s, 3 * s, 0, 0, Math.PI * 2);
-  g.ellipse(12 * s, -2 * s, 5 * s, 3 * s, 0, 0, Math.PI * 2);
-  g.fill();
-  g.fillStyle = COLORS.foxEye;
-  g.fillRect(-2.5 * s, -2.2 * s, 5 * s, 1.6 * s);
-  g.fillRect(9.5 * s, -3.2 * s, 5 * s, 1.6 * s);
-  g.fillStyle = COLORS.ink;
-  g.fillRect(-0.6 * s, -2.6 * s, 1.2 * s, 2.4 * s);
-  g.fillRect(11.4 * s, -3.6 * s, 1.2 * s, 2.4 * s);
-
-  // Open maw with fangs
-  const jaw = snarl ? 1 : 0.7;
-  g.fillStyle = '#1a0806';
-  g.beginPath();
-  g.moveTo(6 * s, 6 * s);
-  g.lineTo(20 * s, 4 * s);
-  g.lineTo(18 * s, (10 + 6 * jaw) * s);
-  g.lineTo(8 * s, (11 + 5 * jaw) * s);
-  g.closePath();
-  g.fill();
-  g.fillStyle = '#f0e8dc';
-  g.beginPath();
-  g.moveTo(8 * s, 6 * s);
-  g.lineTo(10.5 * s, 6 * s);
-  g.lineTo(9 * s, (6 + 7 * jaw) * s);
-  g.closePath();
-  g.fill();
-  g.beginPath();
-  g.moveTo(14 * s, 5 * s);
-  g.lineTo(16.5 * s, 5 * s);
-  g.lineTo(15.5 * s, (5 + 7 * jaw) * s);
-  g.closePath();
-  g.fill();
+  // When close: glance over right shoulder — slit eye + fang flash
   if (snarl) {
-    g.fillStyle = '#8a1818';
+    g.save();
+    g.translate(14 * s, -24 * s);
+    g.rotate(-0.55);
+    g.fillStyle = COLORS.foxMid;
     g.beginPath();
-    g.ellipse(13 * s, 12 * s, 4 * s, 2.2 * s, 0, 0, Math.PI * 2);
+    g.moveTo(-6 * s, -4 * s);
+    g.lineTo(10 * s, -8 * s);
+    g.lineTo(14 * s, 4 * s);
+    g.lineTo(0, 8 * s);
+    g.closePath();
     g.fill();
+    g.stroke();
+    g.fillStyle = COLORS.foxEyeGlow;
+    g.beginPath();
+    g.ellipse(4 * s, -1 * s, 5 * s, 3 * s, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = COLORS.foxEye;
+    g.fillRect(1.5 * s, -1.8 * s, 5 * s, 1.5 * s);
+    g.fillStyle = COLORS.ink;
+    g.fillRect(3.5 * s, -2.4 * s, 1.2 * s, 2.6 * s);
+    g.fillStyle = '#1a0806';
+    g.beginPath();
+    g.ellipse(8 * s, 5 * s, 5 * s, 3.5 * s, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#f0e8dc';
+    g.beginPath();
+    g.moveTo(5 * s, 3 * s);
+    g.lineTo(7 * s, 3 * s);
+    g.lineTo(6 * s, 9 * s);
+    g.closePath();
+    g.fill();
+    g.beginPath();
+    g.moveTo(9 * s, 3 * s);
+    g.lineTo(11 * s, 3 * s);
+    g.lineTo(10.5 * s, 9 * s);
+    g.closePath();
+    g.fill();
+    g.restore();
   }
-  g.restore();
-
-  // Long lashing tail
-  g.fillStyle = COLORS.foxDark;
-  g.beginPath();
-  g.moveTo(-22 * s, 2 * s);
-  g.quadraticCurveTo(-62 * s + tailLash, -20 * s, -56 * s, 24 * s + tailLash * 0.2);
-  g.quadraticCurveTo(-38 * s, 16 * s, -22 * s, 2 * s);
-  g.closePath();
-  g.fill();
-  g.strokeStyle = COLORS.ink;
-  g.lineWidth = Math.max(1.5, 2.2 * s);
-  g.stroke();
-  g.fillStyle = '#d8c8b0';
-  g.beginPath();
-  g.moveTo(-58 * s + tailLash * 0.2, 16 * s);
-  g.lineTo(-66 * s + tailLash * 0.2, 28 * s);
-  g.lineTo(-48 * s, 26 * s);
-  g.closePath();
-  g.fill();
 
   g.restore();
 }

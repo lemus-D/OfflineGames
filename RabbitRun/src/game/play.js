@@ -106,9 +106,10 @@ export class PlaySession {
       RUN.maxSpeed
     );
     this.distance += this.speed * dt;
-    const cadence = 9 + this.speed * 0.22;
+    // Slower, heavier gait so rear-view pumps read clearly.
+    const cadence = 6.2 + this.speed * 0.18;
     this.hopPhase += dt * cadence;
-    this.foxHop += dt * (cadence * 1.12);
+    this.foxHop += dt * (cadence * 1.05);
     if (this.flash > 0) this.flash = Math.max(0, this.flash - dt);
 
     // Lane change (one step per intent).

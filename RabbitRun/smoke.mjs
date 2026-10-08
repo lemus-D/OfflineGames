@@ -56,14 +56,14 @@ assert(Math.abs(b0 - b1) > 0.05, `path bends along trail (${b0} vs ${b1})`);
 
 // Run long enough to spawn content and gain score.
 const run = new PlaySession(42, {});
-for (let i = 0; i < 360; i++) {
+for (let i = 0; i < 480; i++) {
   const ctrl = {
     laneDelta: i % 40 === 0 ? (i % 80 === 0 ? -1 : 1) : 0,
     jump: i % 25 === 0,
   };
   run.step(1 / 60, ctrl);
 }
-assert(run.distance > 50, `distance accrued (${run.distance})`);
+assert(run.distance > 40, `distance accrued (${run.distance})`);
 assert(run.obstacles.length > 0, 'obstacles spawned');
 assert(run.pickups.length > 0, 'carrots spawned');
 assert(run.score > 0, 'score accrued');

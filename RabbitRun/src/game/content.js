@@ -4,17 +4,17 @@ export const LANES = 3;
 
 export const RUN = {
   /** Starting forward speed (world units / sec). */
-  baseSpeed: 14,
+  baseSpeed: 9.5,
   /** Extra speed gained per second of survival. */
-  accel: 0.35,
+  accel: 0.2,
   /** Soft cap so it stays readable. */
-  maxSpeed: 32,
+  maxSpeed: 20,
   /** How far ahead we keep segments spawned. */
   spawnAhead: 60,
   /** How far behind we cull. */
   cullBehind: 10,
   /** Spacing between obstacle/carrot rolls. */
-  segmentGap: 4.2,
+  segmentGap: 4.8,
   /** Jump: height peak and duration feel. */
   jumpHeight: 1.15,
   jumpDuration: 0.55,
@@ -39,9 +39,9 @@ export const RUN = {
 
 /** Obstacle kinds. tall = cannot jump over. */
 export const OBSTACLES = {
-  log: { id: 'log', tall: false, w: 0.85, h: 0.45 },
-  rock: { id: 'rock', tall: false, w: 0.7, h: 0.55 },
-  hedge: { id: 'hedge', tall: true, w: 0.95, h: 1.15 },
+  log: { id: 'log', tall: false, w: 1.15, h: 0.65 },
+  rock: { id: 'rock', tall: false, w: 1.0, h: 0.8 },
+  hedge: { id: 'hedge', tall: true, w: 1.25, h: 1.45 },
 };
 
 export const OBSTACLE_IDS = Object.keys(OBSTACLES);
