@@ -7,7 +7,15 @@ export const TABLE = {
   halfW: 112,
   halfH: 56,
   cushion: 5.2,
+  /** Visual pocket opening (drawing). */
   pocketR: 5.8,
+  /**
+   * Distance from pocket center the ball *center* must reach to drop.
+   * Much tighter than pocketR so grazing the rim does not count.
+   */
+  pocketMouth: 2.7,
+  /** Zone over the hole where cushions are open (funnel, no phantom rails). */
+  pocketJaw: 5.4,
   /** Corner / side pocket centers relative to rail insides. */
   pocketInset: 0.2,
   jaw: 3.2,
@@ -44,6 +52,8 @@ export const PHYSICS = {
   /** Screen pixels of drag that maps to max power. */
   maxPullPx: 170,
   minPullPx: 8,
+  /** Seconds for the pocket fall-in animation. */
+  pocketFallDur: 0.38,
 };
 
 /** Object ball rows: number, solid/stripe, color. Cue is separate. */

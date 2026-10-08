@@ -190,9 +190,8 @@ export class EnglishDial {
       this.hover = true;
       move(e);
     });
-    canvas.addEventListener('mouseleave', () => {
-      this.hover = false;
-    });
+    // Hover fade is owned by the spin panel wrapper in main.js
+    // (so moving between dial / hint does not flicker).
     addEventListener('mouseup', up);
     canvas.addEventListener('touchstart', down, { passive: false });
     canvas.addEventListener('touchmove', move, { passive: false });

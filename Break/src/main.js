@@ -21,15 +21,32 @@ const g = canvas.getContext('2d', { alpha: false, desynchronized: true });
 const cueInput = new CueInput(canvas);
 
 const spinCanvas = document.getElementById('spinDial');
+const spinPanel = document.getElementById('spinPanel');
 const spinCtx = spinCanvas.getContext('2d');
 const englishDial = new EnglishDial(spinCanvas, { maxEnglish: PHYSICS.maxEnglish });
 
-// Block table aim while using the English dial.
+function refreshSpinHot() {
+  if (!spinPanel) return;
+  spinPanel.classList.toggle('hot', !!(englishDial.hover || englishDial.dragging));
+}
+
+// Block table aim while using the English dial; keep panel lit while dragging.
+spinPanel?.addEventListener('pointerenter', () => {
+  englishDial.hover = true;
+  refreshSpinHot();
+});
+spinPanel?.addEventListener('pointerleave', () => {
+  if (!englishDial.dragging) englishDial.hover = false;
+  refreshSpinHot();
+});
 spinCanvas.addEventListener('pointerdown', () => {
   cueInput.blocked = true;
+  englishDial.hover = true;
+  refreshSpinHot();
 });
 addEventListener('pointerup', () => {
   cueInput.blocked = false;
+  refreshSpinHot();
 });
 
 let W = 0;
@@ -298,6 +315,7 @@ function drawPlay(dt) {
     });
   }
 
+  refreshSpinHot();
   drawEnglishDial(spinCtx, spinCanvas.width, englishDial.english, englishDial.hover || englishDial.dragging);
   updateHud();
 }

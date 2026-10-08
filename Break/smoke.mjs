@@ -2,7 +2,7 @@
 /* Headless smoke: rack, shoot, English, aim predict, no Math.random. */
 import { readFileSync } from 'node:fs';
 import { PlaySession } from './src/game/play.js';
-import { BALLS, RACK_ORDER, scoreClear, CUE_BALL, BALL_R, PHYSICS } from './src/game/content.js';
+import { BALLS, RACK_ORDER, scoreClear, CUE_BALL, BALL_R, PHYSICS, TABLE } from './src/game/content.js';
 import { anyMoving, applyCueShot, stepPhysics, createBall } from './src/game/physics.js';
 import { predictAim, ghostForStraight } from './src/game/aim.js';
 

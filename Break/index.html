@@ -174,8 +174,9 @@
 
   .spin-panel {
     position: absolute;
-    left: 12px;
-    bottom: 14px;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
     pointer-events: auto;
     background: rgba(8, 16, 12, 0.78);
     border: 1px solid var(--line);
@@ -184,13 +185,28 @@
     flex-direction: column;
     align-items: center;
     gap: 4px;
+    opacity: 0.12;
+    transition: opacity 0.28s ease;
+    z-index: 3;
+  }
+  /* Generous hover target so it is easy to find when faded. */
+  .spin-panel::before {
+    content: "";
+    position: absolute;
+    inset: -36px -18px;
+  }
+  .spin-panel:hover,
+  .spin-panel.hot {
+    opacity: 1;
   }
   .spin-panel .spin-label {
+    position: relative;
     font-size: 0.62rem;
     letter-spacing: 0.14em;
     color: var(--muted);
   }
   .spin-panel canvas {
+    position: relative;
     display: block;
     width: 88px;
     height: 88px;
@@ -198,6 +214,7 @@
     touch-action: none;
   }
   .spin-panel .spin-hint {
+    position: relative;
     font-size: 0.68rem;
     color: var(--muted);
     max-width: 96px;

@@ -19,13 +19,22 @@ export function createBall(def, x, y) {
     /** Forward spin: +follow / -draw. */
     forwardSpin: 0,
     pocketed: false,
+    /** Mid fall-into-pocket animation. */
+    falling: false,
+    fallAge: 0,
+    fallFromX: 0,
+    fallFromY: 0,
+    fallPocketX: 0,
+    fallPocketY: 0,
     r: BALL_R,
   };
 }
 
 export function anyMoving(balls) {
   const lim = PHYSICS.stopSpeed;
+  const fallDur = PHYSICS.pocketFallDur;
   for (const b of balls) {
+    if (b.falling && b.fallAge < fallDur) return true;
     if (b.pocketed) continue;
     if (Math.hypot(b.vx, b.vy) > lim) return true;
   }
@@ -52,7 +61,19 @@ export function settle(balls) {
  */
 export function stepPhysics(balls, dt) {
   const events = { pocketed: [], cushionHits: 0, ballHits: 0 };
-  const active = balls.filter((b) => !b.pocketed);
+
+  // Advance pocket drop animations (no collisions while falling).
+  for (const b of balls) {
+    if (!b.falling) continue;
+    b.fallAge += dt;
+    const t = Math.min(1, b.fallAge / PHYSICS.pocketFallDur);
+    const e = t * t * (3 - 2 * t); // smoothstep
+    b.x = b.fallFromX + (b.fallPocketX - b.fallFromX) * e;
+    b.y = b.fallFromY + (b.fallPocketY - b.fallFromY) * e;
+    if (t >= 1) b.falling = false;
+  }
+
+  const active = balls.filter((b) => !b.pocketed && !b.falling);
 
   for (const b of active) {
     integrateBall(b, dt);
@@ -74,7 +95,7 @@ export function stepPhysics(balls, dt) {
   }
 
   for (const b of active) {
-    if (tryPocket(b)) events.pocketed.push(b);
+    if (tryPocket(b, dt)) events.pocketed.push(b);
   }
 
   settle(balls);
@@ -172,8 +193,9 @@ function resolveCushions(b) {
   const maxY = TABLE.halfH - b.r;
   let hit = false;
 
+  // Only open the rails over the real jaw — not a huge rim that eats grazers.
   const nearPocket = pockets.some(
-    (p) => Math.hypot(b.x - p.x, b.y - p.y) < TABLE.pocketR + b.r * 0.9
+    (p) => Math.hypot(b.x - p.x, b.y - p.y) < TABLE.pocketJaw
   );
   if (nearPocket) return false;
 
@@ -224,17 +246,36 @@ function bounceRail(b, nx, ny) {
   b.forwardSpin *= 0.85;
 }
 
-function tryPocket(b) {
+function tryPocket(b, dt) {
   for (const p of pockets) {
-    const catchR = p.corner ? TABLE.pocketR : TABLE.pocketR * 0.9;
-    if (Math.hypot(b.x - p.x, b.y - p.y) < catchR) {
+    const dist = Math.hypot(b.x - p.x, b.y - p.y);
+    const mouth = p.corner ? TABLE.pocketMouth : TABLE.pocketMouth * 0.9;
+
+    // Soft funnel only when already driving into the hole — never magnets on a graze.
+    if (dist < TABLE.pocketJaw && dist > mouth) {
+      const inv = 1 / (dist || 1);
+      const nx = (p.x - b.x) * inv;
+      const ny = (p.y - b.y) * inv;
+      const toward = b.vx * nx + b.vy * ny;
+      if (toward > 10) {
+        b.vx += nx * 32 * dt;
+        b.vy += ny * 32 * dt;
+      }
+    }
+
+    // Drop only when the ball center is deep in the mouth (not just touching the rim).
+    if (dist < mouth) {
       b.pocketed = true;
+      b.falling = true;
+      b.fallAge = 0;
+      b.fallFromX = b.x;
+      b.fallFromY = b.y;
+      b.fallPocketX = p.x;
+      b.fallPocketY = p.y;
       b.vx = 0;
       b.vy = 0;
       b.sideSpin = 0;
       b.forwardSpin = 0;
-      b.x = p.x;
-      b.y = p.y;
       return true;
     }
   }
@@ -272,6 +313,8 @@ export function placeCueBall(cue, others, x, y) {
   cue.sideSpin = 0;
   cue.forwardSpin = 0;
   cue.pocketed = false;
+  cue.falling = false;
+  cue.fallAge = 0;
 }
 
 /**

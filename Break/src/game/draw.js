@@ -210,16 +210,38 @@ function roundRect(g, x, y, w, h, r) {
 }
 
 export function drawBall(g, ball, view) {
-  if (ball.pocketed && ball.id !== 0) return;
+  if (ball.pocketed && !ball.falling) return;
+
+  const fallT = ball.falling
+    ? Math.min(1, ball.fallAge / (PHYSICS.pocketFallDur || 0.38))
+    : 0;
+  // Ease into the hole: shrink, sink, fade.
+  const sink = fallT * fallT;
+  const scale = 1 - sink * 0.82;
+  const alpha = 1 - sink * 0.95;
+
   const s = tableToScreen(ball.x, ball.y, view);
-  const r = ball.r * view.scale;
+  const r = ball.r * view.scale * scale;
+  if (r < 0.4) return;
 
   g.save();
-  // Contact shadow
-  g.beginPath();
-  g.ellipse(s.x + r * 0.08, s.y + r * 0.55, r * 0.85, r * 0.28, 0, 0, Math.PI * 2);
-  g.fillStyle = 'rgba(0,0,0,0.32)';
-  g.fill();
+  g.globalAlpha = alpha;
+
+  // Contact shadow (shrinks with the fall)
+  if (!ball.falling || fallT < 0.85) {
+    g.beginPath();
+    g.ellipse(
+      s.x + r * 0.08,
+      s.y + r * 0.55 + sink * 6,
+      r * 0.85 * (1 - sink * 0.5),
+      r * 0.28 * (1 - sink * 0.5),
+      0,
+      0,
+      Math.PI * 2
+    );
+    g.fillStyle = `rgba(0,0,0,${0.32 * (1 - sink)})`;
+    g.fill();
+  }
 
   const body = g.createRadialGradient(
     s.x - r * 0.32,
