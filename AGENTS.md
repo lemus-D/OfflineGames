@@ -35,13 +35,18 @@ reference moves when a game earns it.
 ## Two workflows
 
 - **Starting a game from a pitch** → use the `new-game` skill
-  (`.cursor/skills/new-game/`). It settles the design in a short plan, copies
-  the scaffold from the reference game, and sets the build order.
+  (`.cursor/skills/new-game/`). It asks the owner a short questionnaire (the
+  **QC brief**: run length, inputs, sound level, tone, and so on), writes the
+  answers into the plan, copies the scaffold from the reference game, and sets
+  the build order. The brief is asked, never guessed.
 - **Before saying any game or change is done** → use the `game-qc` skill
   (`.cursor/skills/game-qc/`). It runs the mechanical gates, then plays the
-  game against `docs/QUALITY-BAR.md`, then does a feel pass. A game is not done
-  because it compiles; it is done when the gates pass and the claims in the PR
-  were observed.
+  game against `docs/QUALITY-BAR.md` and the game's QC brief, then does a feel
+  pass. A game is not done because it compiles; it is done when the gates pass
+  and the claims in the PR were observed.
+
+`CLAUDE.md` is a one-line pointer to this file so Claude Code reads the same
+instructions.
 
 ## Standards
 

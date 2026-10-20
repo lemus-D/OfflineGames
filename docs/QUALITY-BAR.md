@@ -13,6 +13,32 @@ the owner has to.
 
 ---
 
+## The QC brief — what the owner decides, not the agent
+
+Some of the bar depends on the game and on taste, and those parts are the
+owner's call. They are recorded in a `## QC brief` section of the game's
+`<GAME>PLAN.md`. The `new-game` skill asks for them before building; the
+`game-qc` skill reads them before scoring and **asks rather than guesses** if
+they are missing. An agent may propose defaults; it may not fill the brief in
+silently.
+
+| Field | What it decides | Default if the owner says "defaults" |
+|---|---|---|
+| `shape` | real-time arcade / turn-based / physics-puzzle. Turns off the timing items (F5 timing, `FIXED_DT`) for turn-based games. | real-time arcade |
+| `run_band` | The run length the game is tuned for, e.g. `45s–4min`. F5 and the bot proxies measure against this. | 45 s – 4 min |
+| `inputs` | Which input families gate 1 requires: `keyboard`, `touch`, or `both`. Families not listed are judged only under F7. | both |
+| `orientation` | `portrait`, `landscape` or `any`. Decides which viewports gate 1 fits. | any |
+| `sound` | `none` (F9 marked N/A for this version), `minimal` (action + reward + fail), or `full` (minimal + ambience). | minimal |
+| `done_pct` | The gate-2 percentage that counts as done for this version. | 70 % |
+| `tone` | One line of art direction: silly / serious, palette hint, references. Feeds F8. | — (must be asked) |
+| `persists` | What carries between runs. Feeds F6 and gate 1 persistence. | best score |
+| `non_goals` | What this version deliberately leaves out, so QC does not complain about it. | — |
+
+Everything not in this table is fixed by the bar and is not up for
+negotiation per game.
+
+---
+
 ## Three gates
 
 A game or a change passes through three gates in order. The first two are
@@ -24,9 +50,21 @@ pass/fail. The third is scored, and the score has to be backed by evidence.
 | **1 — A game** | Can a stranger open it and play a full loop? | Observed in a browser, with a recording or screenshots |
 | **2 — Fun** | Would they play a second run without being asked? | The rubric below, each line with a quoted observation |
 
-"Done" for an MVP means gates 0 and 1 pass and gate 2 scores at least **14/20**
-with no criterion at 0. "Approved" is a human decision made after that, and it
-is what moves the reference (see the end of this file).
+### How the gate-2 score works
+
+Gate 2 is ten criteria (F1–F10), each scored **0, 1 or 2**, so the maximum
+is 20. A criterion the brief marks N/A (for example `sound: none` → F9) is
+dropped from both the numerator and the denominator, so a game is never
+penalised for something the owner chose to leave out.
+
+"Done" for a version means gates 0 and 1 pass and gate 2 scores at least the
+brief's `done_pct` of the available points — the default 70 % is 14/20 with
+all ten in play, 13/18 with one N/A — **and** none of F1–F7 is a 0. Those
+seven are the ones that make a run unplayable or unfair when absent; F8–F10
+can be a 0 on an early version without the game being broken.
+
+"Approved" is a human decision made after that, and it is what moves the
+reference (see the end of this file).
 
 ---
 
@@ -67,13 +105,16 @@ or console transcript does not count.
   restart.
 - **The loop closes.** Start → play → fail or finish → summary → play again,
   without a reload.
-- **Both input families work.** Keyboard on desktop *and* touch on a
-  390 × 844 viewport. The delivery model is mobile-shaped (D1); a game you
-  cannot play with a thumb is not shippable. As of this writing `Apex/` fails
-  this and `Sharky/` passes it.
-- **It fits the phone.** At 390 × 844 portrait and 844 × 390 landscape nothing
-  essential is off-screen or under a thumb. `moon-rover`'s README has the
-  measured HUD coverage table to compare against (18–34 %).
+- **The required input families work.** Whatever the brief's `inputs` lists:
+  keyboard on desktop, touch on a 390 × 844 viewport, or both. The delivery
+  model is mobile-shaped (D1), so the default is both — but a version whose
+  brief says `keyboard` is not failed for lacking touch; touch is then judged
+  only under F7. As of this writing `Apex/` has keyboard only and `Sharky/`
+  has both.
+- **It fits the brief's orientation.** At 390 × 844 portrait and/or 844 × 390
+  landscape per `orientation`, nothing essential is off-screen or under a
+  thumb. `moon-rover`'s README has the measured HUD coverage table to compare
+  against (18–34 %).
 - **Something persists.** Best score, unlock, coins — a second visit knows the
   first one happened, and a fresh profile loads when the stored one is
   unreadable.
@@ -145,13 +186,15 @@ hazards *equal or smaller*.
 
 Within a run, pressure rises: a draining meter, a chasing predator,
 thickening hazards, rising speed. A run has a shape — an easy opening, a
-climb, a peak, an end — and ends in the band the genre wants. For these
-arcade games that is **45 seconds to 4 minutes**.
+climb, a peak, an end — and ends inside the brief's `run_band`. The band is
+the owner's number; the agent measures against it and does not invent one.
+For a turn-based `shape` the timing parts are N/A and only the "pressure
+rises" part is scored.
 
 *Test:* Drive the headless `PlaySession` with a reasonable scripted player
 over 20 seeds. Record run length, time to first reward, time to first danger.
-*Evidence:* the three numbers (median and spread) in the PR.
-*2:* median run in band, first reward < 5 s, first danger 10–30 s.
+*Evidence:* the three numbers (median and spread) in the PR, next to the band.
+*2:* median run inside `run_band`, first reward < 5 s, first danger 10–30 s.
 *1:* one of the three is off. *0:* runs are flat or unbounded.
 
 ### F6 — One more go
@@ -193,17 +236,18 @@ on the store page?
 
 ### F9 — It has a sound
 
-Procedural WebAudio, started on the first user gesture. Minimum set: an action
-sound, a reward sound, a danger or fail sound, and one ambient layer. Only
-`Sharky/` and `moon-rover` have audio at the time of writing; `Apex/`,
-`Yes-General/`, `Break/` and `RabbitRun/` are silent, and it is the first
-thing a player notices.
+Procedural WebAudio, started on the first user gesture. What counts is set by
+the brief's `sound` field: `none` makes this criterion N/A for the version;
+`minimal` is an action sound, a reward sound and a danger/fail sound; `full`
+adds an ambient layer. Only `Sharky/` and `moon-rover` have audio at the time
+of writing; `Apex/`, `Yes-General/`, `Break/` and `RabbitRun/` are silent.
+Silence is allowed when chosen, not when forgotten.
 
 *Test:* Count the distinct sounds in `audio.js` and map them to the F3 event
 list.
 *Evidence:* the mapping.
-*2:* the minimum set plus ambience, mixed so nothing clips. *1:* some events
-sound. *0:* silent.
+*2:* the brief's level is met and nothing clips. *1:* some events sound but
+the level is not met. *0:* silent while the brief asked for sound.
 
 ### F10 — Depth, not width
 
@@ -230,11 +274,11 @@ them in the PR.
 | Time to first reward | < 5 s | F1, F6 — the game says yes early |
 | Time to first danger | 10–30 s | F5 — a grace window, then pressure |
 | Idle run length | finite, < 30 s | F5 — doing nothing must lose |
-| Scripted-bot median run | 45 s – 4 min | F5 — run shape |
+| Scripted-bot median run | inside the brief's `run_band` | F5 — run shape |
 | Spread of run length (p10–p90) | within 3× | F4 — fair, not lottery |
 | Input → visible change | ≤ 1 frame | F7 |
 | Player hitbox / drawn radius | ≤ 0.85 | F4 |
-| Distinct sounds | ≥ 4 | F9 |
+| Distinct sounds | ≥ 3 (`minimal`) / ≥ 4 (`full`) / N/A (`none`) | F9 |
 | HUD coverage at 390 × 844 | ≤ 30 % | Gate 1, `moon-rover` table |
 | Console errors across a full loop | 0 | Gate 1 |
 

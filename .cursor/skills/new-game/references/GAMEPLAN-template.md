@@ -8,6 +8,24 @@ Headings marked **[decided]** came from the owner and are not to be changed
 without asking. Headings marked **[proposal]** are opening bids — implement,
 then tune by playing.
 
+## QC brief
+
+The owner's answers to the questionnaire in the `new-game` skill. `game-qc`
+scores against these. Mark each **[owner]** or **[default]**; never leave one
+blank — ask.
+
+| Field | Value | Source |
+|---|---|---|
+| shape | real-time arcade | [default] |
+| run_band | 45 s – 4 min | [default] |
+| inputs | both | [default] |
+| orientation | any | [default] |
+| sound | minimal | [default] |
+| done_pct | 70 % | [default] |
+| tone | | [owner] — no default |
+| persists | best score | [default] |
+| non_goals | | [owner] |
+
 ## The verb **[decided | proposal]**
 
 Four words or fewer. What the player does every second.
@@ -19,7 +37,7 @@ Four words or fewer. What the player does every second.
 3. The reward — what the player wants and how often it arrives (first one
    inside 5 s).
 4. The fail state.
-5. Target run length: ___ s to ___ min.
+5. Run length: the brief's `run_band`.
 
 ## One more go **[proposal]**
 
@@ -28,6 +46,8 @@ Four words or fewer. What the player does every second.
 - Restart is one tap.
 
 ## Controls **[proposal]**
+
+One line per family in the brief's `inputs`.
 
 - Keyboard:
 - Touch (390 × 844 portrait): where the thumb is, what it must not cover.
@@ -46,7 +66,8 @@ Rows that only change a number are stat padding; say so if you keep them.
 |---|---|---|
 | | | |
 
-Minimum sound set: action, reward, danger/fail, one ambient layer.
+Sound at the brief's level: `minimal` = action, reward, danger/fail;
+`full` adds one ambient layer; `none` leaves the column empty on purpose.
 
 ## Look **[proposal]**
 
@@ -59,8 +80,8 @@ silhouette distinct, what gives the background depth.
 
 ## Open questions
 
-Things the pitch did not settle. Ask only where a wrong guess wastes the
-build; otherwise pick and mark **[proposal]**.
+Things the pitch did not settle and the brief does not cover. Ask only where
+a wrong guess wastes the build; otherwise pick and mark **[proposal]**.
 
 ## Technical
 
