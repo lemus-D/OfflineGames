@@ -4,4 +4,6 @@ package.json
 UNFAIRPICKLEPLAN.md
 wrangler.toml
 .assetsignore
+.wrangler
 *.png
+*.md
