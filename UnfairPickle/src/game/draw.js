@@ -127,10 +127,11 @@ function drawReverse(g, x, y, time) {
 
 export function drawLevel(g, level, camX, camY, scale, time, viewW, viewH) {
   const g0 = level.grid;
+  // viewW/viewH are already in world units (CSS px / scale).
   const tx0 = Math.floor(camX / TILE) - 1;
   const ty0 = Math.floor(camY / TILE) - 1;
-  const tx1 = tx0 + Math.ceil(viewW / (TILE * scale)) + 3;
-  const ty1 = ty0 + Math.ceil(viewH / (TILE * scale)) + 3;
+  const tx1 = tx0 + Math.ceil(viewW / TILE) + 3;
+  const ty1 = ty0 + Math.ceil(viewH / TILE) + 3;
 
   for (let ty = Math.max(0, ty0); ty < Math.min(level.h, ty1); ty++) {
     for (let tx = Math.max(0, tx0); tx < Math.min(level.w, tx1); tx++) {
