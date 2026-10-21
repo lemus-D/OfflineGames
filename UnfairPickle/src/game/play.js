@@ -109,6 +109,7 @@ export class PlaySession {
       squish: 1,
       alive: true,
       anim: 0,
+      walkCycle: 0,
     };
   }
 
@@ -220,6 +221,9 @@ export class PlaySession {
     this.campaignTime += dt;
     const p = this.player;
     p.anim += dt;
+    if (p.onGround && Math.abs(p.vx) > 18) {
+      p.walkCycle += dt * (10 + Math.abs(p.vx) * 0.08);
+    }
 
     // Brine pressure — idle / stall loses.
     if (this.levelTime >= BRINE.grace) {

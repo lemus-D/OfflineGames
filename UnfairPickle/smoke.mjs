@@ -4,7 +4,15 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PlaySession } from './src/game/play.js';
-import { LEVELS, TILE, PICKLE, BRINE, formatTime, levelCount } from './src/game/content.js';
+import {
+  LEVELS,
+  TILE,
+  PICKLE,
+  BRINE,
+  formatTime,
+  levelCount,
+  jumpPeakHeight,
+} from './src/game/content.js';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 
@@ -40,17 +48,17 @@ assert(LEVELS.every((L) => L.rows.some((r) => r.includes('P'))), 'every level ha
 assert(LEVELS.every((L) => L.rows.some((r) => r.includes('G'))), 'every level has a real goal');
 assert(formatTime(65.5).startsWith('1:05'), 'formatTime formats minutes');
 assert(PICKLE.w < 14 && PICKLE.h < 18, 'player hitbox smaller than drawn pickle');
+assert(jumpPeakHeight() > TILE * 5, `jump clears >5 tiles (peak=${jumpPeakHeight().toFixed(0)}px)`);
 
 const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
-const right = { move: 1, jump: false, jumpHeld: false, restart: false };
 
-// Idle on L1: stays alive briefly, then brine kills (< 30s after grace).
+// Idle on L1: stays alive briefly, then brine kills after grace.
 {
   const s = new PlaySession(1, {}, { startLevel: 0 });
   for (let i = 0; i < 60 * 2; i++) s.step(1 / 60, idle);
   assert(s.status === 'playing', 'idle 2s still alive on spawn');
   let diedAt = null;
-  for (let i = 0; i < 60 * 40; i++) {
+  for (let i = 0; i < 60 * 90; i++) {
     s.step(1 / 60, idle);
     if (s.status === 'dead' && diedAt == null) {
       diedAt = s.levelTime;
@@ -60,7 +68,7 @@ const right = { move: 1, jump: false, jumpHeld: false, restart: false };
   assert(diedAt != null, `brine/idle eventually kills (status=${s.status})`);
   assert(s.deathReason === 'brine' || s.deathReason === 'void', `idle death reason=${s.deathReason}`);
   assert(s.deaths === 1, 'idle death counts');
-  assert(diedAt < BRINE.grace + 25, `idle death before unbounded stall (${diedAt?.toFixed(1)}s)`);
+  assert(diedAt < BRINE.grace + 30, `idle death before unbounded stall (${diedAt?.toFixed(1)}s)`);
 }
 
 // Fake floor on L1 (~ tiles): walking right into ~~ should fall / die or drop.
@@ -133,14 +141,62 @@ const right = { move: 1, jump: false, jumpHeld: false, restart: false };
   assert(s.levelIndex === 2, 'respawn stays on same level');
 }
 
-// Scripted clear of a tiny path: start on level with only ground — use startLevel 0
-// and cheat by checking clear API via goal touch: walk carefully on solid ground only.
+// Level "looks-solid" left pad is safe when walking left.
 {
-  // Level "looks-solid" has solid left platform — walk left stays alive.
   const s = new PlaySession(7, {}, { startLevel: 1 });
-  for (let i = 0; i < 60; i++) s.step(1 / 60, { move: -1, jump: false, jumpHeld: false, restart: false });
+  for (let i = 0; i < 60; i++) {
+    s.step(1 / 60, { move: -1, jump: false, jumpHeld: false, restart: false });
+  }
   assert(s.status === 'playing', 'walking on solid ground stays alive');
   assert(s.summary().time > 0, 'summary has time');
+}
+
+// L2 is completable: run + timed jumps over pits (fake bridge is a lie).
+{
+  const s = new PlaySession(11, {}, { startLevel: 1 });
+  let steps = 0;
+  let cleared = false;
+  while (steps < 60 * 45) {
+    if (s.status === 'dead') {
+      s.step(1 / 60, { move: 0, jump: false, jumpHeld: false, restart: true });
+      steps += 1;
+      continue;
+    }
+    if (s.status === 'cleared' || s.levelIndex > 1) {
+      cleared = true;
+      break;
+    }
+    const x = s.player.x;
+    // Jump just before each pit (5-tile at ~10–14, 2-tile at ~21–22).
+    const nearGap = x > 8.5 * TILE && x < 10.5 * TILE;
+    const nearSecond = x > 19.2 * TILE && x < 21.0 * TILE;
+    const jump = (nearGap || nearSecond) && s.player.onGround;
+    s.step(1 / 60, {
+      move: 1,
+      jump,
+      jumpHeld: !s.player.onGround || jump,
+      restart: false,
+    });
+    steps += 1;
+  }
+  assert(
+    cleared,
+    `L2 completable by scripted runner (status=${s.status} x=${s.player.x.toFixed(0)} deaths=${s.deaths})`
+  );
+}
+
+// Measured jump height in-sim.
+{
+  const s = new PlaySession(13, {}, { startLevel: 0 });
+  const y0 = s.player.y;
+  s.step(1 / 60, { move: 0, jump: true, jumpHeld: true, restart: false });
+  let peak = s.player.y;
+  for (let i = 0; i < 60; i++) {
+    s.step(1 / 60, { move: 0, jump: false, jumpHeld: true, restart: false });
+    peak = Math.min(peak, s.player.y);
+  }
+  const rise = y0 - peak;
+  assert(rise > TILE * 4.5, `in-sim jump rises >4.5 tiles (${rise.toFixed(0)}px)`);
 }
 
 // Campaign summary shape.

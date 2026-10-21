@@ -12,6 +12,7 @@ import {
   drawBrine,
   drawFx,
   drawFlash,
+  drawMenuGround,
 } from './game/draw.js';
 
 const canvas = document.getElementById('stage');
@@ -62,7 +63,7 @@ addEventListener('resize', resize);
 function clearFrame() {
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalAlpha = 1;
-  g.fillStyle = '#5ec4d4';
+  g.fillStyle = '#5BA8E8';
   g.fillRect(0, 0, canvas.width, canvas.height);
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.imageSmoothingEnabled = false;
@@ -208,19 +209,20 @@ function drawSession(playing) {
 function drawMenuBackdrop() {
   clearFrame();
   drawSky(g, W, H, animTime * 20, animTime);
-  // Demo pickle bounce
+  drawMenuGround(g, W, H, 3);
+  const walking = Math.sin(animTime * 3) > -0.2;
   const demo = {
-    x: 80,
-    y: 90 + Math.abs(Math.sin(animTime * 3)) * -18,
+    x: 100 + Math.sin(animTime * 0.7) * 30,
+    y: H / 3 - 24 - (walking ? 0 : Math.abs(Math.sin(animTime * 5)) * 28),
+    vx: walking ? 80 : 0,
+    vy: walking ? 0 : -200,
     facing: 1,
-    squish: 1 + Math.sin(animTime * 6) * 0.08,
+    onGround: walking,
+    walkCycle: animTime * 12,
+    squish: 1 + Math.sin(animTime * 6) * 0.06,
+    anim: animTime,
   };
   drawPickle(g, demo, 0, 0, 4, false);
-  // Fake brick strip
-  g.fillStyle = '#c45c38';
-  for (let i = 0; i < 20; i++) {
-    g.fillRect(i * 48, H - 48, 46, 48);
-  }
 }
 
 function frame(ts) {
