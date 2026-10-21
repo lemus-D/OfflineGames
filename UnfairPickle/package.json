@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "smoke": "node smoke.mjs"
+    "smoke": "node smoke.mjs",
+    "deploy": "wrangler deploy",
+    "deploy:temp": "wrangler deploy --temporary"
   }
 }
