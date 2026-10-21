@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Unfair Pickle</title>
+<meta name="description" content="An unfair Mario-style platformer. You are a dill pickle. Trust nothing." />
+<meta name="theme-color" content="#3d8a3a" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%235ec4d4'/><ellipse cx='16' cy='18' rx='9' ry='11' fill='%233d8a3a'/><ellipse cx='13' cy='14' rx='3' ry='4' fill='%236cbc4a'/><rect x='14' y='4' width='4' height='5' fill='%235a3a18'/></svg>" />
+<style>
+  :root {
+    --ink: #1a2418;
+    --muted: #4a5c48;
+    --deep: #1e3a2a;
+    --dill: #3d8a3a;
+    --leaf: #6cbc4a;
+    --brick: #c45c38;
+    --sky: #5ec4d4;
+    --panel: rgba(245, 252, 230, 0.92);
+    --line: rgba(30, 50, 30, 0.18);
+    --font-display: "Trebuchet MS", "Verdana", "Geneva", sans-serif;
+    --font-body: "Verdana", "Geneva", "Trebuchet MS", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--deep);
+    color: var(--ink);
+    font-family: var(--font-body);
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  #stage {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    touch-action: none;
+    background: var(--sky);
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  .hidden { display: none !important; }
+
+  .overlay {
+    position: fixed; inset: 0;
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-start;
+    pointer-events: none;
+  }
+  .overlay > * { pointer-events: auto; }
+
+  #menu .menu-panel {
+    width: min(420px, 92vw);
+    max-height: min(92vh, 900px);
+    overflow-y: auto;
+    margin: clamp(16px, 4vh, 48px) clamp(18px, 4vw, 48px);
+    padding: 24px 24px 20px;
+    background: var(--panel);
+    border: 3px solid var(--dill);
+    align-self: center;
+  }
+
+  .brand {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(2.4rem, 7vw, 3.6rem);
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    color: var(--dill);
+    margin: 0 0 8px;
+  }
+  .tag {
+    margin: 0 0 22px;
+    color: var(--muted);
+    font-size: 1.02rem;
+    line-height: 1.35;
+    max-width: 32ch;
+  }
+
+  .btn {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.05rem;
+    border: none;
+    cursor: pointer;
+    padding: 12px 18px;
+    color: #f5fce6;
+    background: var(--dill);
+    transition: transform 0.12s, filter 0.12s;
+  }
+  .btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary {
+    width: 100%;
+    background: linear-gradient(180deg, var(--leaf), var(--dill));
+    color: #f5fce6;
+  }
+  .btn.ghost {
+    background: transparent;
+    color: var(--dill);
+    border: 2px solid var(--dill);
+  }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+  .meta {
+    margin-top: 16px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .meta b { color: var(--ink); }
+
+  .hint {
+    margin: 14px 0 0;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  #hud {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    font-family: var(--font-display);
+  }
+  .hud-bar {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 10px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: rgba(245, 252, 230, 0.88);
+    border: 2px solid var(--dill);
+    padding: 8px 12px;
+    color: var(--ink);
+    font-size: 0.9rem;
+  }
+  .hud-bar b { color: var(--brick); }
+  .hud-hint {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    background: rgba(245, 252, 230, 0.88);
+    border: 2px solid var(--dill);
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    max-width: min(420px, 80vw);
+  }
+
+  #summary {
+    align-items: center;
+    justify-content: center;
+    background: rgba(30, 58, 42, 0.45);
+  }
+  .summary-panel {
+    width: min(420px, 92vw);
+    padding: 28px;
+    background: var(--panel);
+    border: 3px solid var(--dill);
+  }
+  .summary-panel h2 {
+    font-family: var(--font-display);
+    margin: 0 0 8px;
+    font-size: 2rem;
+    color: var(--dill);
+  }
+  .reason { margin: 0 0 14px; color: var(--muted); }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .stat-grid div {
+    background: rgba(61, 138, 58, 0.08);
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+  }
+  .stat-grid span {
+    display: block;
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .stat-grid b { font-family: var(--font-display); font-size: 1.35rem; }
+  .muted { color: var(--muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<canvas id="stage" aria-label="Unfair Pickle platformer"></canvas>
+
+<div id="menu" class="overlay">
+  <div class="menu-panel">
+    <h1 class="brand">Unfair Pickle</h1>
+    <p class="tag">Ten levels of troll platforms. You are a dill pickle. The first flag is a lie.</p>
+
+    <button class="btn primary" id="btnPlay">Start brining</button>
+    <p class="hint">← → / A D move · ↑ W Space jump · R retry after death</p>
+
+    <p class="meta">Best clear <b id="bestTime">—</b> · Fewest deaths <b id="bestDeaths">—</b></p>
+  </div>
+</div>
+
+<div id="hud" class="hidden">
+  <div class="hud-bar">
+    <span id="levelVal">1/10</span>
+    <span>Deaths <b id="deathVal">0</b></span>
+    <span>Time <b id="timeVal">0:00.00</b></span>
+  </div>
+  <div class="hud-hint" id="hintVal">Jump right. Trust nothing.</div>
+</div>
+
+<div id="summary" class="overlay hidden">
+  <div class="summary-panel">
+    <h2>Jar escaped</h2>
+    <div id="summaryBody"></div>
+    <div class="btn-row" style="margin-top:18px">
+      <button class="btn primary" id="btnAgain" style="flex:1">Brine again</button>
+      <button class="btn ghost" id="btnMenu">Menu</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
