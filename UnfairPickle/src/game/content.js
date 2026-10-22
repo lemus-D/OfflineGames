@@ -164,8 +164,8 @@ export const LEVELS = [
       '..............................................',
       '..............................................',
       '..............................................',
-      // Mist on solid ground, then normal controls for the gap + spikes.
-      '....P....RRRRRRRRRRRRRRRRRR........^^.G......',
+      // Mist on solid ground; short pit after mist ends (controls normal again).
+      '....P....RRRRRRRRRRRRRRRRRR...........G......',
       '##############################....############',
       '##############################....############',
     ],

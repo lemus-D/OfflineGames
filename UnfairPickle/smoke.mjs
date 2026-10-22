@@ -287,11 +287,10 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
     const inMist = !!(cell && cell.reverse);
     const move = inMist ? -1 : 1;
     const nearGap = x > 29.2 * TILE && x < 31.5 * TILE;
-    const nearSpike = x > 35.5 * TILE && x < 37.5 * TILE;
     let jump = false;
-    if ((nearGap || nearSpike) && s.player.onGround) {
+    if (nearGap && s.player.onGround) {
       jump = true;
-      hopFrames = 10;
+      hopFrames = 12;
     }
     const jumpHeld = hopFrames > 0;
     if (hopFrames > 0) hopFrames -= 1;
