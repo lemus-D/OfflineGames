@@ -378,6 +378,71 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
   );
 }
 
+// L10 (finale): spike pit, ~~, vanish, crumbly, fake F, ?, mist (flip), goal.
+{
+  const s = new PlaySession(11, {}, { startLevel: 9 });
+  let steps = 0;
+  let cleared = false;
+  let hopFrames = 0;
+  let mistSteps = 0;
+  while (steps < 60 * 45) {
+    if (s.status === 'dead') {
+      s.step(1 / 60, { move: 0, jump: false, jumpHeld: false, restart: true });
+      hopFrames = 0;
+      steps += 1;
+      continue;
+    }
+    if (s.status === 'cleared' || s.won || s.levelIndex > 9) {
+      cleared = true;
+      break;
+    }
+    const x = s.player.x / TILE;
+    let jump = false;
+    if (x > 5.2 && x < 6.8 && s.player.onGround) {
+      jump = true;
+      hopFrames = 18;
+    }
+    if (x > 14.5 && x < 16.5 && s.player.onGround) {
+      jump = true;
+      hopFrames = 14;
+    }
+    if (x > 21.5 && x < 23.5 && s.player.onGround) {
+      jump = true;
+      hopFrames = 14;
+    }
+    if (x > 28.2 && x < 29.8 && s.player.onGround) {
+      jump = true;
+      hopFrames = 16;
+    }
+    if (x > 32.5 && x < 34.5 && s.player.onGround) {
+      jump = true;
+      hopFrames = 14;
+    }
+    if (x > 38.5 && x < 40.5 && s.player.onGround) {
+      jump = true;
+      hopFrames = 14;
+    }
+    if (x > 41.5 && x < 43.5 && s.player.onGround) {
+      jump = true;
+      hopFrames = 14;
+    }
+    const tx = Math.floor(s.player.x / TILE);
+    const ty = Math.floor(s.player.y / TILE);
+    const inMist = !!(s.level.grid[ty]?.[tx]?.reverse);
+    if (inMist) mistSteps += 1;
+    const move = inMist ? -1 : 1;
+    const jumpHeld = hopFrames > 0;
+    if (hopFrames > 0) hopFrames -= 1;
+    s.step(1 / 60, { move, jump, jumpHeld, restart: false });
+    steps += 1;
+  }
+  assert(mistSteps > 10, `L10 walks through mist (${mistSteps} steps in R)`);
+  assert(
+    cleared,
+    `L10 completable (status=${s.status} x=${s.player.x.toFixed(0)} deaths=${s.deaths})`
+  );
+}
+
 // Measured jump height in-sim.
 {
   const s = new PlaySession(13, {}, { startLevel: 0 });
