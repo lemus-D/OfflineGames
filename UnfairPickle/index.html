@@ -124,19 +124,21 @@
 
   .level-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 6px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
     margin: 12px 0 4px;
+    width: 100%;
   }
   .level-grid .lvl {
     font-family: var(--font-display);
     font-weight: 700;
     font-size: 0.95rem;
-    padding: 10px 4px;
+    padding: 10px 6px;
     border: 2px solid var(--dill);
     background: rgba(61, 138, 58, 0.1);
     color: var(--ink);
     cursor: pointer;
+    min-width: 0;
     transition: transform 0.1s, filter 0.1s, background 0.1s;
   }
   .level-grid .lvl:hover:not(:disabled) {
@@ -156,14 +158,14 @@
   }
   .level-grid .lvl .nm {
     display: block;
-    font-size: 0.62rem;
+    font-size: 0.68rem;
     font-weight: 600;
     color: var(--muted);
     line-height: 1.2;
     margin-top: 2px;
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .dev-note {
     margin: 6px 0 0;

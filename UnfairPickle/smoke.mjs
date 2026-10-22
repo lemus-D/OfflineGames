@@ -224,6 +224,45 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
   );
 }
 
+// L6 (spring trap): jump the pits and over the spring — don't land on it.
+{
+  const s = new PlaySession(19, {}, { startLevel: 5 });
+  let steps = 0;
+  let cleared = false;
+  let hopFrames = 0;
+  while (steps < 60 * 30) {
+    if (s.status === 'dead') {
+      s.step(1 / 60, { move: 0, jump: false, jumpHeld: false, restart: true });
+      hopFrames = 0;
+      steps += 1;
+      continue;
+    }
+    if (s.status === 'cleared' || s.levelIndex > 5) {
+      cleared = true;
+      break;
+    }
+    const x = s.player.x;
+    const near =
+      (x > 5.3 * TILE && x < 6.8 * TILE) ||
+      (x > 11.0 * TILE && x < 14.2 * TILE) ||
+      (x > 19.3 * TILE && x < 20.8 * TILE) ||
+      (x > 25.3 * TILE && x < 26.8 * TILE);
+    let jump = false;
+    if (near && s.player.onGround) {
+      jump = true;
+      hopFrames = 12;
+    }
+    const jumpHeld = hopFrames > 0;
+    if (hopFrames > 0) hopFrames -= 1;
+    s.step(1 / 60, { move: 1, jump, jumpHeld, restart: false });
+    steps += 1;
+  }
+  assert(
+    cleared,
+    `L6 completable (status=${s.status} x=${s.player.x.toFixed(0)} deaths=${s.deaths})`
+  );
+}
+
 // Measured jump height in-sim.
 {
   const s = new PlaySession(13, {}, { startLevel: 0 });
