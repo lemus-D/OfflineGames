@@ -27,6 +27,89 @@ Gate 0 itself is fine. Keep it. Harden what surrounds it.
 
 ---
 
+## Why this is failing (before we build anything)
+
+The quality framework assumed agents would *execute* a long procedure. Repo
+history shows they execute the cheap, automatable part and treat the rest as
+optional narrative. That is the failure mode to design against — not “we need
+a smarter model.”
+
+### Evidence already in this repo
+
+**1. No merged game PR contains a QC report.**
+
+PRs #3 (Sharky), #4 (Yes-General), #5 (Apex), #8 (Apex hazards) all claim
+playable / MVP / ready enough to merge. None paste the gate-0 / gate-1 /
+gate-2 template from `game-qc/SKILL.md`. PR #9 *added* that template; every
+game merge either predates it or ignored it (#8 merged after #9 and still
+has no QC report). Drafts #6, #7, #10 also lack one.
+
+So the skill is not binding. Agents and merge decisions treat “smoke green +
+a screenshot” as done.
+
+**2. The bar already lists the failures — and they still shipped.**
+
+`docs/QUALITY-BAR.md` “Known weak spots” names: silent games, keyboard-only
+Apex, port collision (Break/RabbitRun both 5183), hint-text-only onboarding,
+summary screens without near-misses. Those are exactly F7 / F9 / F6 misses.
+The framework documented the disease after the patient left the hospital; it
+did not become a gate that blocked the next PR.
+
+**3. Gate 0 and “fun” were built for different audiences.**
+
+`check-game.mjs` answers: *did we lie about the house rules?* Smoke answers:
+*does the sim still step?* Neither answers: *would a stranger play a second
+run?* An agent optimizing for green checkmarks will stop at gate 0 because
+that is the only fail-closed step. Everything after is fail-open prose.
+
+**4. Self-grading is structurally soft.**
+
+The builder knows the intended verb, the hitboxes, the spawn grace it just
+wrote. When `game-qc` says “play five runs and write deaths in the player’s
+voice,” the builder already believes deaths are fair. A fresh agent that only
+sees the canvas does not. Without separation, the feel pass collapses into
+“tweak a constant I already like.”
+
+**5. Cost asymmetry.**
+
+| Step | Cost to agent | Cost of skipping |
+|---|---|---|
+| `check-game.mjs` | seconds, exits 1 | high — skill + PR say FAIL |
+| `npm run smoke` | seconds | medium — often run |
+| Playwright loop + offline kill | minutes, flaky setup | low — nobody fails the PR |
+| 20-seed feel bot | needs new code first | low — bar allows “add feel.mjs” then forget |
+| Honest F1–F10 with quotes | judgment + artifacts | low — scores can be invented |
+
+Agents follow cost. Fail-open steps get skipped. Any new step we add that is
+not fail-closed will fail the same way.
+
+**6. The brief is a gate that nobody trips.**
+
+`game-qc` says: if `## QC brief` is missing, run gate 0, ask the owner, stop.
+On `main`, Sharky / Apex / Yes-General still have no brief. Either agents are
+not running `game-qc` at all, or they skip the stop. Adding more procedure
+without a hard stop condition will not change that.
+
+### Failure modes for a playtest agent (so we don’t romanticize it)
+
+A second agent is not magic. It can still fail if we are sloppy:
+
+| Failure | What it looks like | Design counter |
+|---|---|---|
+| Critic that can edit | “fixes” while playing; report vanishes into a refactor | Playtest skill: **no source edits** |
+| Critic that reads `play.js` | grades intent, not feel | Skill: do not open sim/draw while scoring |
+| Critic with no brief | invents `run_band` / sound expectations | Orchestrator refuses spawn until brief exists |
+| Critic without artifacts | prose complaints, unverifiable | Require screenshots + checklist boxes |
+| Infinite polish loop | builder↔critic ping-pong for days | Max rounds, then escalate to owner |
+| Builder rewrites scores | “F4 was unfair, now it’s a 2” without re-play | Append-only PLAYTEST; re-spawn for new scores |
+| Spawn flaky / expensive | team falls back to no critic | Keep artifact contract (B) even when spawn fails |
+| Headless bot never added | F5 still vibes | Checker **fails** arcade games without proxy harness |
+
+If we ship a playtest skill that is only markdown, we will recreate today’s
+problem with a longer name.
+
+---
+
 ## Design goal
 
 An agent (or a human) cannot call a game **done** unless:
@@ -249,44 +332,224 @@ for an end-to-end playtest-agent trial once the skill exists.
 
 ---
 
-## Decisions needed
+## Decisions needed — elaborated
 
-Reply with numbers / short answers; defaults in brackets.
+Do not answer with vibes. Each choice is a bet about *which failure mode
+we are fixing first*. Defaults still in brackets at the end of each item.
 
-1. **Critic separation** — spawn a fresh playtest agent (A), or allow the
-   builder to fill `PLAYTEST.md` with mandatory artifacts (B), or both
-   (B now, A next)? **[both]**
-2. **Where the report lives** — committed `<Game>/PLAYTEST.md` (overwritten
-   each QC), or only PR artifacts / agent artifact store? **[commit
-   PLAYTEST.md so the next agent can read it]**
-3. **Smoke hardening** — fail arcade games missing determinism + idle-loses
-   + progress asserts? **[yes]**
-4. **CI** — add GitHub Action for gate 0 on PRs? **[yes, games touched only]**
-5. **Max critic rounds** before pinging you? **[3]**
-6. **First game to trial the new loop** — Apex (scaffold), Sharky (has
-   audio/touch), or UnfairPickle (has brief)? **[Apex or UnfairPickle]**
-7. **videoReview** on the recording as an extra critic pass? **[later]**
+### 1. Critic separation — A (fresh agent) vs B (same agent + artifacts) vs both
+
+**What is actually broken:** self-grading and skippable steps. A fixes
+self-grading. B fixes skippable steps. Neither alone fixes both.
+
+| Option | Fixes | Leaves broken | Cost |
+|---|---|---|---|
+| **A only** — must spawn a fresh playtest agent | Bias / “I know the hitboxes” | If spawn is flaky, QC collapses to nothing | Higher per PR (second agent) |
+| **B only** — builder fills `PLAYTEST.md` with required artifacts | “smoke green ⇒ playable” without evidence | Builder still soft-scores F1–F10 | Lower; same agent |
+| **Both (B contract, A when spawn works)** | Evidence always; bias when we can afford it | Slightly more process to document | Medium |
+
+**Why “both” is the default:** history shows agents skip prose. A mandatory
+artifact file is fail-closed (“no PLAYTEST.md ⇒ not done”) even when the
+orchestrator cannot spawn `computerUse`. The fresh agent is the quality
+upgrade on top of that contract, not a substitute for it.
+
+**Risk if we only build A:** first time spawn fails in cloud, the builder
+“playtests itself” again and we are back here.
+
+**Risk if we only build B:** we get prettier self-grades with screenshots —
+still the author grading the homework.
+
+**Ask:** A / B / both? **[both]**
 
 ---
 
-## Suggested implementation order (after decisions)
+### 2. Where does `PLAYTEST.md` live — committed vs artifact store only
 
-1. Lock output schema + AGENTS.md wording (small PR).
-2. Harden `check-game.mjs` smoke contract + Apex `feel.mjs` as the template.
-3. Add `game-playtest` skill; retarget `game-qc` to require its report.
-4. Run one live trial: builder finishes a small change → spawn playtest →
-   paste report in PR.
-5. Add CI for gate 0.
-6. Optional: videoReview pass; brief-aware static fails for audio/touch.
+**What is actually broken:** the next agent (or you) cannot see what the
+last critic said. PR bodies and Cursor artifact URLs rot; they are not in
+the tree the next session reads.
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Commit `<Game>/PLAYTEST.md`** | Next builder/playtest reads it; diff shows score churn; works offline | Noise in git; must keep it out of `sw.js` PRECACHE; stale if forgotten after a big rewrite |
+| **Agent/PR artifacts only** | Clean tree; large videos stay out of git | Next cloud agent often cannot see prior artifacts; no in-repo audit trail |
+| **Hybrid** — short `PLAYTEST.md` in git + videos in artifact store | Best of both | Two places to look |
+
+**Why commit the report (default):** skills and agents are file-driven. If
+the critic’s output is not a file in the worktree, the builder feel-pass
+will not reliably find it. Videos can stay in the artifact store; the
+markdown checklist and complaint list should be local.
+
+**Must decide with this:** `PLAYTEST.md` is **not a shipped game file**.
+`check-game.mjs` should ignore it (and must not require it in PRECACHE).
+Otherwise every QC run forces a pointless SW cache bump.
+
+**Ask:** commit / artifacts-only / hybrid? **[commit markdown; videos as artifacts]**
+
+---
+
+### 3. Smoke hardening — fail arcade games missing determinism + idle-loses + progress
+
+**What is actually broken:** smoke today means “agent wrote some asserts.”
+Sharky’s smoke proves a scripted chase can eat; it does **not** prove same
+seed ⇒ same state, or that idle eventually dies. The bar’s F5 proxies assume
+those properties. Agents will not add them unless the checker fails.
+
+| Option | Effect |
+|---|---|
+| **Keep warn** (`asserts < 8`) | Status quo — weak smokes stay green |
+| **Fail if missing four properties** (determinism, idle-loses, progress, run-ends) | Forces Apex/Sharky (and new arcade games) to grow real harnesses |
+| **Separate `feel.mjs` required by name** | Clearer separation: smoke = correctness, feel = proxies; more files |
+
+**Tension:** hardening smoke will temporarily make existing games fail gate 0
+until someone upgrades them. That is the point — but it blocks unrelated
+PRs if CI runs on all games.
+
+**Mitigation if we say yes:** phase it — warn for one PR cycle, then fail;
+or fail only when the PR touches that game’s `src/`.
+
+**Ask:** fail now / warn then fail / separate feel.mjs? **[fail when PR
+touches that game; warn-only on untouched games until upgraded]**
+
+---
+
+### 4. CI — GitHub Action for gate 0 on PRs
+
+**What is actually broken:** green is whoever remembered. Parallel agents
+already shipped a port collision because nothing ran `check-game` across
+the whole tree on merge.
+
+| Option | Fixes | Does not fix |
+|---|---|---|
+| **No CI** | — | Same as today |
+| **Gate 0 on games touched by the PR** | Broken syntax / Math.random / precache / port clash on that PR | Fun, browser, other games drifting |
+| **Gate 0 on every game every PR** | Cross-game port uniqueness always | Slower; unrelated failures block you |
+
+**Why “touched games only” is the default:** cheap, matches how agents work
+(one game per branch), and still catches the Break/RabbitRun class of bug
+*if* both dirs are in the PR. Cross-tree port check already looks at every
+`server.js` when you run the script on one game — so a RabbitRun-only PR
+still fails if 5183 is taken by Break on the same branch checkout.
+
+**CI will not run Playwright.** That is fine. CI’s job is fail-closed
+mechanics; playtest stays in the agent loop.
+
+**Ask:** no CI / touched games / all games? **[touched games]**
+
+---
+
+### 5. Max critic rounds before pinging you
+
+**What is actually broken:** without a cap, builder↔critic can burn a whole
+session polishing F8 while F1 is still a 1 — or loop forever on taste.
+
+| Cap | Meaning |
+|---|---|
+| **1** | One playtest, one feel pass, then you decide — cheap, may under-polish |
+| **3** | Matches “top three complaints” × roughly one round each |
+| **5** | Current feel-pass lever cap; expensive; risk of chasing content complaints |
+
+**Stop conditions matter more than the number:** stop early if gate 1 fails
+in a way that needs a design change (not a constant), or if remaining
+complaints are content (“more enemy types”). Escalate to you with the
+complaint list rather than inventing scope.
+
+**Ask:** 1 / 3 / 5? **[3]**
+
+---
+
+### 6. First game to trial the new loop
+
+We should learn whether the *workflow* works, not whether a game is fun.
+Pick the trial for what it teaches.
+
+| Game | Why trial it | Why not first |
+|---|---|---|
+| **Apex** | Scaffold reference; on `main`; richest smoke; no brief yet → tests “ask brief then stop” | Silent + keyboard-only; playtest will correctly complain about known gaps |
+| **Sharky** | Has audio + touch; hardest honest playtest | Heavier; weak smoke; no brief |
+| **UnfairPickle** (draft branch) | **Only game with a filled QC brief**; already claims gate 0 | Not on `main`; platformer shape stresses different bot proxies |
+| **Break / Rabbit Run** | Draft MVPs | Port collision + incomplete vs bar; noisy first trial |
+
+**Recommendation to discuss:** trial on **UnfairPickle** if the goal is
+“does brief → playtest → report work end-to-end,” or **Apex** if the goal
+is “harden the scaffold everyone copies.” Doing both in one week is how
+the workflow stays vapor.
+
+**Ask:** which one first? **[pick one: Apex *or* UnfairPickle]**
+
+---
+
+### 7. videoReview on the recording — now or later
+
+**What is actually broken:** screenshots miss motion (ghosting rocket,
+input lag, unfair off-screen deaths). A recording helps humans; a vision
+pass might help agents.
+
+| Option | Reality check |
+|---|---|
+| **Now** | Extra moving part before we know spawn + PLAYTEST.md work |
+| **Later** | Playwright checklist + human-watched recording may be enough for MVP QC |
+| **Never** | Accept that F4/F7 motion issues need a human or a careful Playwright trace |
+
+**Default later:** do not stack vision-model QC on top of an unproven critic
+loop. Add it when PLAYTEST.md exists and we still see motion bugs slip
+through.
+
+**Ask:** now / later / never? **[later]**
+
+---
+
+## How the choices interact (so we don’t pick an incoherent set)
+
+```
+Brief present? ──no──► stop and ask owner (already written; currently ignored)
+       │ yes
+       ▼
+Gate 0 (+ hardened smoke if we chose #3)
+       │
+       ▼
+PLAYTEST.md required (#2)  ◄── fail-closed even if spawn fails (#1 B)
+       │
+       ▼
+Spawn fresh critic if available (#1 A)
+       │
+       ▼
+Builder feel pass ≤ N rounds (#5)
+       │
+       ▼
+CI keeps gate 0 honest on the next PR (#4)
+```
+
+Incoherent combos to avoid:
+
+- Fresh agent **without** artifact contract → spawn flake ⇒ no evidence.
+- Hard smoke fail **on all games in CI** before upgrading Sharky → every PR
+  blocked for unrelated reasons.
+- Trial on three games at once → no clear signal whether the workflow failed
+  or the game did.
+
+---
+
+## Suggested implementation order (only after decisions)
+
+Still proposal — do not start until the seven answers land.
+
+1. Lock PLAYTEST schema + “not shipped / not precached” rule in the checker.
+2. Wire fail-closed “no PLAYTEST.md ⇒ cannot claim playable” into `game-qc`.
+3. Smoke/feel hardening for the **trial game only**, then generalize.
+4. Add `game-playtest` skill; one live spawn trial on the chosen game.
+5. CI for gate 0 on touched games.
+6. videoReview only if motion bugs still slip past PLAYTEST.
 
 ---
 
 ## Open questions (engineering, not taste)
 
 - Best spawn path in Cursor cloud: `Task` + `computerUse` vs Playwright MCP
-  in-process vs a second cloud agent on the same branch. Need one spike.
-- How PLAYTEST.md interacts with service-worker cache bumps (report should
-  not be precached — keep it out of `sw.js` PRECACHE; checker should ignore
-  it as a non-shipped file).
-- Whether playtest runs against the PR’s Cloudflare tunnel or only localhost
+  in-process vs a second cloud agent on the same branch. **Spike after we
+  pick #1 and #6 — not before.**
+- Whether playtest runs against a Cloudflare tunnel or only localhost
   (localhost is enough; tunnel is for humans).
+- How aggressively to backfill QC briefs on Sharky / Apex / Yes-General
+  (owner questionnaire once each) so `game-qc`’s “stop and ask” can become
+  real.
