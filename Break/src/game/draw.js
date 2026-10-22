@@ -78,131 +78,251 @@ function feltPattern(g, x, y, w, h) {
   g.fillRect(x, y, w, h);
 }
 
-function drawWoodFrame(g, left, top, tw, th, rail) {
-  const pad = 8;
-  const x = left - rail - pad;
-  const y = top - rail - pad;
-  const w = tw + rail * 2 + pad * 2;
-  const h = th + rail * 2 + pad * 2;
+/**
+ * Reference-style table: wood frame, pockets recessed into the rails,
+ * cushions with curved jaws that open into those off-felt holes.
+ */
+export function drawTable(g, view, animTime) {
+  const S = view.scale;
+  const rail = TABLE.cushion * S;
+  const face = (TABLE.cushionFace || 3.2) * S;
+  const gap = TABLE.railGap * S;
+  const left = view.cx - TABLE.halfW * S;
+  const top = view.cy - TABLE.halfH * S;
+  const tw = TABLE.halfW * 2 * S;
+  const th = TABLE.halfH * 2 * S;
+  const right = left + tw;
+  const bottom = top + th;
 
-  const outer = g.createLinearGradient(x, y, x + w, y + h);
-  outer.addColorStop(0, '#4a2e18');
-  outer.addColorStop(0.4, '#6b4224');
-  outer.addColorStop(1, '#3a2210');
-  g.fillStyle = outer;
+  // —— Outer wood apron (pockets live in this band) ——
+  const pad = 10;
+  const fx = left - rail - pad;
+  const fy = top - rail - pad;
+  const fw = tw + rail * 2 + pad * 2;
+  const fh = th + rail * 2 + pad * 2;
+  const wood = g.createLinearGradient(fx, fy, fx + fw, fy + fh);
+  wood.addColorStop(0, '#5a3a22');
+  wood.addColorStop(0.45, '#3e2614');
+  wood.addColorStop(1, '#2a180c');
+  g.fillStyle = wood;
   g.beginPath();
-  roundRect(g, x, y, w, h, 12);
+  roundRect(g, fx, fy, fw, fh, 14);
   g.fill();
-
-  // Inner bevel
-  g.strokeStyle = 'rgba(230, 190, 120, 0.22)';
+  g.strokeStyle = 'rgba(220, 180, 110, 0.2)';
   g.lineWidth = 2;
   g.beginPath();
-  roundRect(g, x + 3, y + 3, w - 6, h - 6, 10);
+  roundRect(g, fx + 3, fy + 3, fw - 6, fh - 6, 12);
   g.stroke();
 
-  // Rail cushions (green-edged wood)
-  const railGrad = g.createLinearGradient(0, top - rail, 0, top);
-  railGrad.addColorStop(0, '#3d2614');
-  railGrad.addColorStop(1, '#1e4a32');
-  g.fillStyle = '#2c1a0e';
-  g.fillRect(left - rail, top - rail, tw + rail * 2, rail);
-  g.fillRect(left - rail, top + th, tw + rail * 2, rail);
-  g.fillRect(left - rail, top, rail, th);
-  g.fillRect(left + tw, top, rail, th);
-
-  // Cloth lip on cushions
-  g.fillStyle = '#245a3a';
-  g.fillRect(left - 2, top - 3, tw + 4, 3);
-  g.fillRect(left - 2, top + th, tw + 4, 3);
-  g.fillRect(left - 3, top - 2, 3, th + 4);
-  g.fillRect(left + tw, top - 2, 3, th + 4);
-}
-
-function drawDiamonds(g, left, top, tw, th, rail) {
-  g.fillStyle = '#e8d2a0';
-  const places = [
-    // long rails — 3 diamonds each half
-    ...[0.25, 0.5, 0.75].map((t) => ({ x: left + tw * t, y: top - rail * 0.55 })),
-    ...[0.25, 0.5, 0.75].map((t) => ({ x: left + tw * t, y: top + th + rail * 0.55 })),
-    // short rails
-    ...[0.25, 0.5, 0.75].map((t) => ({ x: left - rail * 0.55, y: top + th * t })),
-    ...[0.25, 0.5, 0.75].map((t) => ({ x: left + tw + rail * 0.55, y: top + th * t })),
-  ];
-  for (const p of places) {
-    g.beginPath();
-    g.moveTo(p.x, p.y - 2.4);
-    g.lineTo(p.x + 2.2, p.y);
-    g.lineTo(p.x, p.y + 2.4);
-    g.lineTo(p.x - 2.2, p.y);
-    g.closePath();
-    g.fill();
-  }
-}
-
-export function drawTable(g, view, animTime) {
-  const rail = TABLE.cushion * view.scale;
-  const left = view.cx - TABLE.halfW * view.scale;
-  const top = view.cy - TABLE.halfH * view.scale;
-  const tw = TABLE.halfW * 2 * view.scale;
-  const th = TABLE.halfH * 2 * view.scale;
-
-  drawWoodFrame(g, left, top, tw, th, rail);
+  // —— Felt (clean playing rectangle) ——
   feltPattern(g, left, top, tw, th);
-  drawDiamonds(g, left, top, tw, th, rail);
+
+  // —— Cushion faces with curved jaws into off-table pockets ——
+  drawCushions(g, left, top, right, bottom, face, gap);
+
+  // —— Recessed pocket holes in the wood (outside the felt) ——
+  for (const p of pocketCenters()) {
+    drawRailPocket(g, tableToScreen(p.x, p.y, view), TABLE.pocketR * S * (p.corner ? 1.08 : 0.95));
+  }
+
+  // Sighting diamonds on the wood rails (between pocket mouths)
+  drawDiamonds(g, left, top, tw, th, rail, gap);
 
   // Head string + foot spot
   g.save();
-  g.strokeStyle = 'rgba(220, 230, 210, 0.2)';
+  g.strokeStyle = 'rgba(220, 230, 210, 0.22)';
   g.setLineDash([5, 7]);
   g.lineWidth = 1.2;
   g.beginPath();
-  g.moveTo(view.cx - TABLE.halfW * 0.5 * view.scale, top + 6);
-  g.lineTo(view.cx - TABLE.halfW * 0.5 * view.scale, top + th - 6);
+  g.moveTo(view.cx - TABLE.halfW * 0.5 * S, top + face + 2);
+  g.lineTo(view.cx - TABLE.halfW * 0.5 * S, bottom - face - 2);
   g.stroke();
   g.setLineDash([]);
-
   const spot = tableToScreen(TABLE.halfW * 0.35, 0, view);
   g.fillStyle = 'rgba(240, 230, 180, 0.5)';
   g.beginPath();
   g.arc(spot.x, spot.y, 2.4, 0, Math.PI * 2);
   g.fill();
-  g.strokeStyle = 'rgba(240, 230, 180, 0.35)';
-  g.beginPath();
-  g.arc(spot.x, spot.y, 4.5, 0, Math.PI * 2);
-  g.stroke();
   g.restore();
 
-  // Pockets sit beside the felt (in the apron), not on the cloth.
-  for (const p of pocketCenters()) {
-    const s = tableToScreen(p.x, p.y, view);
-    const pr = TABLE.pocketR * view.scale * (p.corner ? 1.05 : 0.92);
-    // Leather / cast rim outside the table edge
-    g.beginPath();
-    g.arc(s.x, s.y, pr + 3.2, 0, Math.PI * 2);
-    g.fillStyle = '#24160c';
-    g.fill();
-    g.strokeStyle = 'rgba(90, 60, 30, 0.7)';
-    g.lineWidth = 2;
-    g.stroke();
-    const hole = g.createRadialGradient(s.x - 1, s.y - 1, 1, s.x, s.y, pr);
-    hole.addColorStop(0, '#121810');
-    hole.addColorStop(0.5, '#050806');
-    hole.addColorStop(1, '#000');
-    g.beginPath();
-    g.arc(s.x, s.y, pr, 0, Math.PI * 2);
-    g.fillStyle = hole;
-    g.fill();
-  }
-
   g.save();
-  g.globalAlpha = 0.035 + Math.sin(animTime * 0.6) * 0.012;
+  g.globalAlpha = 0.03 + Math.sin(animTime * 0.6) * 0.01;
   const glow = g.createRadialGradient(view.cx, view.cy, 10, view.cx, view.cy, tw * 0.55);
   glow.addColorStop(0, '#d8f5d0');
   glow.addColorStop(1, 'transparent');
   g.fillStyle = glow;
   g.fillRect(left, top, tw, th);
   g.restore();
+}
+
+/** Cushion strips that stop at pocket jaws and curve into the openings. */
+function drawCushions(g, left, top, right, bottom, face, gap) {
+  const jaw = gap; // mouth half-width along the rail
+  const cushionFill = '#2f6b4a';
+  const cushionEdge = '#1e4a32';
+  const lip = '#3d8a5c';
+
+  // Helper: horizontal cushion segment from x0..x1 along top or bottom.
+  function hCushion(yInner, yOuter, x0, x1, atTop) {
+    if (x1 - x0 < 4) return;
+    g.beginPath();
+    if (atTop) {
+      g.moveTo(x0 + jaw * 0.15, yInner);
+      g.lineTo(x1 - jaw * 0.15, yInner);
+      // right jaw curves up/out toward pocket
+      g.quadraticCurveTo(x1, yInner, x1 + jaw * 0.05, yOuter);
+      g.lineTo(x0 - jaw * 0.05, yOuter);
+      g.quadraticCurveTo(x0, yInner, x0 + jaw * 0.15, yInner);
+    } else {
+      g.moveTo(x0 + jaw * 0.15, yInner);
+      g.lineTo(x1 - jaw * 0.15, yInner);
+      g.quadraticCurveTo(x1, yInner, x1 + jaw * 0.05, yOuter);
+      g.lineTo(x0 - jaw * 0.05, yOuter);
+      g.quadraticCurveTo(x0, yInner, x0 + jaw * 0.15, yInner);
+    }
+    g.closePath();
+    g.fillStyle = cushionFill;
+    g.fill();
+    g.strokeStyle = cushionEdge;
+    g.lineWidth = 1.2;
+    g.stroke();
+    // Bright lip on the playing edge
+    g.beginPath();
+    g.moveTo(x0 + jaw * 0.2, yInner);
+    g.lineTo(x1 - jaw * 0.2, yInner);
+    g.strokeStyle = lip;
+    g.lineWidth = 2;
+    g.stroke();
+  }
+
+  function vCushion(xInner, xOuter, y0, y1, atLeft) {
+    if (y1 - y0 < 4) return;
+    g.beginPath();
+    g.moveTo(xInner, y0 + jaw * 0.15);
+    g.lineTo(xInner, y1 - jaw * 0.15);
+    g.quadraticCurveTo(xInner, y1, xOuter, y1 + jaw * 0.05);
+    g.lineTo(xOuter, y0 - jaw * 0.05);
+    g.quadraticCurveTo(xInner, y0, xInner, y0 + jaw * 0.15);
+    g.closePath();
+    g.fillStyle = cushionFill;
+    g.fill();
+    g.strokeStyle = cushionEdge;
+    g.lineWidth = 1.2;
+    g.stroke();
+    g.beginPath();
+    g.moveTo(xInner, y0 + jaw * 0.2);
+    g.lineTo(xInner, y1 - jaw * 0.2);
+    g.strokeStyle = lip;
+    g.lineWidth = 2;
+    g.stroke();
+  }
+
+  // Top: left-of-side-pocket, right-of-side-pocket
+  const midX = (left + right) / 2;
+  hCushion(top, top - face, left + jaw, midX - jaw, true);
+  hCushion(top, top - face, midX + jaw, right - jaw, true);
+  // Bottom
+  hCushion(bottom, bottom + face, left + jaw, midX - jaw, false);
+  hCushion(bottom, bottom + face, midX + jaw, right - jaw, false);
+  // Left / right (only corner openings — no side pockets on short rails)
+  const midY = (top + bottom) / 2;
+  vCushion(left, left - face, top + jaw, bottom - jaw, true);
+  vCushion(right, right + face, top + jaw, bottom - jaw, false);
+
+  // Corner jaw wedges — little curved cushions pointing into each corner pocket
+  drawCornerJaw(g, left, top, face, jaw, 'tl', cushionFill, lip);
+  drawCornerJaw(g, right, top, face, jaw, 'tr', cushionFill, lip);
+  drawCornerJaw(g, left, bottom, face, jaw, 'bl', cushionFill, lip);
+  drawCornerJaw(g, right, bottom, face, jaw, 'br', cushionFill, lip);
+  // Side-pocket jaw tips on long rails
+  drawSideJaw(g, midX, top, face, jaw, 'top', cushionFill, lip);
+  drawSideJaw(g, midX, bottom, face, jaw, 'bottom', cushionFill, lip);
+}
+
+function drawCornerJaw(g, cx, cy, face, jaw, corner, fill, lip) {
+  // Small rounded tip of cushion at the felt corner, opening toward the off-table hole.
+  const sx = corner.includes('l') ? 1 : -1;
+  const sy = corner.includes('t') ? 1 : -1;
+  g.beginPath();
+  g.moveTo(cx + sx * jaw * 0.05, cy);
+  g.quadraticCurveTo(cx, cy, cx, cy + sy * jaw * 0.05);
+  g.quadraticCurveTo(cx - sx * face * 0.2, cy + sy * face * 0.85, cx + sx * jaw * 0.35, cy + sy * face);
+  g.quadraticCurveTo(cx + sx * jaw * 0.55, cy + sy * face * 0.35, cx + sx * jaw * 0.05, cy);
+  g.closePath();
+  g.fillStyle = fill;
+  g.fill();
+  g.strokeStyle = lip;
+  g.lineWidth = 1.2;
+  g.stroke();
+}
+
+function drawSideJaw(g, mx, y, face, jaw, side, fill, lip) {
+  const out = side === 'top' ? -1 : 1;
+  // Left tip
+  g.beginPath();
+  g.moveTo(mx - jaw, y);
+  g.quadraticCurveTo(mx - jaw * 0.55, y, mx - jaw * 0.35, y + out * face);
+  g.lineTo(mx - jaw * 0.85, y + out * face);
+  g.quadraticCurveTo(mx - jaw, y + out * face * 0.3, mx - jaw, y);
+  g.closePath();
+  g.fillStyle = fill;
+  g.fill();
+  // Right tip
+  g.beginPath();
+  g.moveTo(mx + jaw, y);
+  g.quadraticCurveTo(mx + jaw * 0.55, y, mx + jaw * 0.35, y + out * face);
+  g.lineTo(mx + jaw * 0.85, y + out * face);
+  g.quadraticCurveTo(mx + jaw, y + out * face * 0.3, mx + jaw, y);
+  g.closePath();
+  g.fill();
+  g.strokeStyle = lip;
+  g.lineWidth = 1;
+  g.stroke();
+}
+
+function drawRailPocket(g, s, pr) {
+  // Cast rim sitting in the wood
+  g.beginPath();
+  g.arc(s.x, s.y, pr + 3.5, 0, Math.PI * 2);
+  g.fillStyle = '#1a1008';
+  g.fill();
+  g.strokeStyle = 'rgba(180, 140, 80, 0.35)';
+  g.lineWidth = 1.5;
+  g.stroke();
+  const hole = g.createRadialGradient(s.x - 1, s.y - 1, 1, s.x, s.y, pr);
+  hole.addColorStop(0, '#1a2218');
+  hole.addColorStop(0.45, '#060806');
+  hole.addColorStop(1, '#000');
+  g.beginPath();
+  g.arc(s.x, s.y, pr, 0, Math.PI * 2);
+  g.fillStyle = hole;
+  g.fill();
+}
+
+function drawDiamonds(g, left, top, tw, th, rail, gap) {
+  g.fillStyle = '#d8c8a0';
+  const places = [];
+  // Long rails: two diamonds each half (skip pocket mouths)
+  for (const t of [0.2, 0.35, 0.65, 0.8]) {
+    places.push({ x: left + tw * t, y: top - rail * 0.55 });
+    places.push({ x: left + tw * t, y: top + th + rail * 0.55 });
+  }
+  for (const t of [0.28, 0.5, 0.72]) {
+    places.push({ x: left - rail * 0.55, y: top + th * t });
+    places.push({ x: left + tw + rail * 0.55, y: top + th * t });
+  }
+  for (const p of places) {
+    // Keep diamonds off pocket mouths
+    const midX = left + tw / 2;
+    if (Math.abs(p.x - midX) < gap * 0.85 && (p.y < top || p.y > top + th)) continue;
+    g.beginPath();
+    g.moveTo(p.x, p.y - 2.2);
+    g.lineTo(p.x + 2, p.y);
+    g.lineTo(p.x, p.y + 2.2);
+    g.lineTo(p.x - 2, p.y);
+    g.closePath();
+    g.fill();
+  }
 }
 
 function roundRect(g, x, y, w, h, r) {

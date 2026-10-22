@@ -17,13 +17,15 @@ export const TABLE = {
   /** Capture / funnel radius around off-table pocket centers. */
   pocketJaw: 7.2,
   /**
-   * How far outside the felt the pocket centers sit.
-   * Pockets are holes beside the table, not discs on the cloth.
+   * How far outside the felt the pocket centers sit (into the wood rail).
+   * Pockets are recessed holes in the frame, not discs on the cloth.
    */
-  pocketOut: 6.4,
-  pocketOutSide: 6.8,
-  /** Half-width of the rail opening that leads into each pocket. */
-  railGap: 7.2,
+  pocketOut: 7.6,
+  pocketOutSide: 7.8,
+  /** Half-width of the rail opening / cushion jaw into each pocket. */
+  railGap: 8.4,
+  /** Visual cushion thickness (drawn inside the wood rail). */
+  cushionFace: 3.4,
 };
 
 export const BALL_R = 2.85;
@@ -102,19 +104,23 @@ export const CUE_START = { x: -TABLE.halfW * 0.5, y: 0 };
 /** Apex of the rack (right side of table). */
 export const RACK_APEX = { x: TABLE.halfW * 0.35, y: 0 };
 
-/** Pocket centers sit just off the felt, in the rail / apron. */
+/**
+ * Pocket centers sit in the wood rails, outside the felt rectangle.
+ * Corner holes sit on the diagonal out from each corner; side holes
+ * sit centered on the long rails.
+ */
 export function pocketCenters() {
   const w = TABLE.halfW;
   const h = TABLE.halfH;
   const c = TABLE.pocketOut;
   const s = TABLE.pocketOutSide;
   return [
-    { x: -w - c * 0.72, y: -h - c * 0.72, corner: true },
-    { x: 0, y: -h - s, corner: false },
-    { x: w + c * 0.72, y: -h - c * 0.72, corner: true },
-    { x: -w - c * 0.72, y: h + c * 0.72, corner: true },
-    { x: 0, y: h + s, corner: false },
-    { x: w + c * 0.72, y: h + c * 0.72, corner: true },
+    { x: -w - c * 0.55, y: -h - c * 0.55, corner: true },
+    { x: 0, y: -h - s * 0.72, corner: false },
+    { x: w + c * 0.55, y: -h - c * 0.55, corner: true },
+    { x: -w - c * 0.55, y: h + c * 0.55, corner: true },
+    { x: 0, y: h + s * 0.72, corner: false },
+    { x: w + c * 0.55, y: h + c * 0.55, corner: true },
   ];
 }
 
