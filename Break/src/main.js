@@ -72,6 +72,8 @@ const els = {
   summary: document.getElementById('summary'),
   you: document.getElementById('youVal'),
   ai: document.getElementById('aiVal'),
+  youSuit: document.getElementById('youSuit'),
+  aiSuit: document.getElementById('aiSuit'),
   left: document.getElementById('leftVal'),
   turnLabel: document.getElementById('turnLabel'),
   msg: document.getElementById('msgVal'),
@@ -187,20 +189,26 @@ function endRun(cleared) {
   cueInput.enabled = false;
 
   let title = 'Match over';
-  let reason = '';
+  let reason = sum.winReason || '';
+  const youSuit = sum.suits?.player === 'solid' ? 'solids' : sum.suits?.player === 'stripe' ? 'stripes' : 'open';
+  const aiSuit = sum.suits?.ai === 'solid' ? 'solids' : sum.suits?.ai === 'stripe' ? 'stripes' : 'open';
   if (sum.mode === 'vsAi') {
     if (sum.winner === 'player') {
       title = 'You win';
-      reason = `Final ${sum.scores.player}–${sum.scores.ai} on ${DIFFICULTIES[sum.difficulty]?.name || 'AI'}.`;
+      if (!reason) {
+        reason = `Final ${sum.scores.player}–${sum.scores.ai} on ${DIFFICULTIES[sum.difficulty]?.name || 'AI'}.`;
+      }
     } else if (sum.winner === 'ai') {
       title = 'AI wins';
-      reason = `Final ${sum.scores.ai}–${sum.scores.player}. Try a softer difficulty — or don't.`;
+      if (!reason) {
+        reason = `Final ${sum.scores.ai}–${sum.scores.player}. Try a softer difficulty — or don't.`;
+      }
     } else if (sum.winner === 'draw') {
       title = 'Draw';
-      reason = `Even table ${sum.scores.player}–${sum.scores.ai}.`;
+      reason = reason || `Even table ${sum.scores.player}–${sum.scores.ai}.`;
     } else {
       title = 'Walk away';
-      reason = `You ${sum.scores.player} · AI ${sum.scores.ai} · ${sum.remaining} left.`;
+      reason = reason || `You ${sum.scores.player} · AI ${sum.scores.ai} · ${sum.remaining} left.`;
     }
   } else {
     title = sum.cleared ? 'Rack cleared' : 'Walk away';
@@ -212,8 +220,8 @@ function endRun(cleared) {
   els.summaryBody.innerHTML = `
     <p class="reason">${reason}</p>
     <div class="stat-grid">
-      <div><span>You</span><b>${sum.scores?.player ?? sum.pocketed}</b></div>
-      <div><span>AI</span><b>${sum.scores?.ai ?? 0}</b></div>
+      <div><span>You (${youSuit})</span><b>${sum.scores?.player ?? sum.pocketed}</b></div>
+      <div><span>AI (${aiSuit})</span><b>${sum.scores?.ai ?? 0}</b></div>
       <div><span>Shots</span><b>${sum.shots}</b></div>
       <div><span>Scratches</span><b>${sum.scratches}</b></div>
     </div>
@@ -228,6 +236,8 @@ function updateHud() {
   if (!session) return;
   if (els.you) els.you.textContent = String(session.scores.player);
   if (els.ai) els.ai.textContent = String(session.scores.ai);
+  if (els.youSuit) els.youSuit.textContent = session.suitHud('player');
+  if (els.aiSuit) els.aiSuit.textContent = session.suitHud('ai');
   if (els.left) els.left.textContent = String(session.remaining);
   if (els.turnLabel) {
     if (session.phase === 'rolling') {

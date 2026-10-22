@@ -115,7 +115,8 @@ export function pocketCenters() {
   const c = TABLE.pocketOut;
   const s = TABLE.pocketOutSide;
   // Corners sit just off the felt corner, still in the wood.
-  const k = 0.55;
+  // Lower k = closer to the cloth corner (easier to drop).
+  const k = 0.38;
   return [
     { x: -w - c * k, y: -h - c * k, corner: true },
     { x: 0, y: -h - s * 0.7, corner: false },

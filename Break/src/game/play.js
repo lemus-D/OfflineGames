@@ -1,4 +1,4 @@
-/* Match session: rack, turns, AI or solo. Fixed timestep. No Math.random(). */
+/* Match session: 8-ball suits, turns, AI. Fixed timestep. No Math.random(). */
 
 import { makeRNG } from '../core/rng.js';
 import {
@@ -23,6 +23,26 @@ import {
 function ballDef(id) {
   if (id === 0) return CUE_BALL;
   return BALLS.find((b) => b.id === id);
+}
+
+export function groupOf(ballOrId) {
+  if (ballOrId && typeof ballOrId === 'object') return ballOrId.kind;
+  if (ballOrId === 0) return 'cue';
+  if (ballOrId === 8) return 'eight';
+  if (ballOrId >= 1 && ballOrId <= 7) return 'solid';
+  if (ballOrId >= 9 && ballOrId <= 15) return 'stripe';
+  return null;
+}
+
+function other(who) {
+  return who === 'player' ? 'ai' : 'player';
+}
+
+export function suitLabel(suit) {
+  if (suit === 'solid') return 'solids';
+  if (suit === 'stripe') return 'stripes';
+  if (suit === 'eight') return '8-ball';
+  return 'open';
 }
 
 /** Build a tight triangle rack; tiny seeded jitter so breaks aren't identical. */
@@ -73,14 +93,19 @@ export class PlaySession {
     this.phase = 'aiming'; // aiming | rolling | ballInHand | won
     /** @type {'player'|'ai'} */
     this.turn = 'player';
+    /** Count of each side's group balls pocketed (0–7). */
     this.scores = { player: 0, ai: 0 };
+    /** @type {{ player: null|'solid'|'stripe', ai: null|'solid'|'stripe' }} */
+    this.suits = { player: null, ai: null };
+    this.openTable = true;
     /** @type {'player'|'ai'|'draw'|null} */
     this.winner = null;
+    this.winReason = '';
     this.lastPocketed = [];
     this.needsBallInHand = false;
     this.message =
       this.mode === 'vsAi'
-        ? `Your break · ${DIFFICULTIES[this.difficulty].name} AI.`
+        ? `Your break · ${DIFFICULTIES[this.difficulty].name} AI · table is open.`
         : 'Aim with the cursor · pull back away from the target for power.';
   }
 
@@ -104,6 +129,34 @@ export class PlaySession {
     return this.mode === 'vsAi' && this.turn === 'ai';
   }
 
+  remainingOf(suit) {
+    if (!suit || suit === 'eight') {
+      const eight = this.balls.find((b) => b.id === 8);
+      return eight && !eight.pocketed ? 1 : 0;
+    }
+    return this.objectBalls.filter((b) => !b.pocketed && b.kind === suit).length;
+  }
+
+  /** Balls the current shooter is allowed to target. */
+  legalTargets(who = this.turn) {
+    if (this.openTable || !this.suits[who]) {
+      return this.objectBalls.filter((b) => !b.pocketed && b.kind !== 'eight');
+    }
+    const suit = this.suits[who];
+    const group = this.objectBalls.filter((b) => !b.pocketed && b.kind === suit);
+    if (group.length) return group;
+    return this.objectBalls.filter((b) => !b.pocketed && b.kind === 'eight');
+  }
+
+  /** Short HUD label: YOU · SOLIDS / AI · 8 / etc. */
+  suitHud(who) {
+    const base = who === 'player' ? 'YOU' : 'AI';
+    if (this.openTable || !this.suits[who]) return `${base} · OPEN`;
+    const suit = this.suits[who];
+    if (this.remainingOf(suit) === 0) return `${base} · 8`;
+    return `${base} · ${suit === 'solid' ? 'SOLIDS' : 'STRIPES'}`;
+  }
+
   summary() {
     return {
       shots: this.shots,
@@ -115,7 +168,10 @@ export class PlaySession {
       mode: this.mode,
       difficulty: this.difficulty,
       scores: { ...this.scores },
+      suits: { ...this.suits },
+      openTable: this.openTable,
       winner: this.winner,
+      winReason: this.winReason,
       turn: this.turn,
     };
   }
@@ -139,7 +195,6 @@ export class PlaySession {
     return true;
   }
 
-  /** Place cue after a scratch (ball in hand, kitchen). */
   placeCue(x, y) {
     if (this.phase !== 'ballInHand') return false;
     placeCueBall(this.cue, this.balls, x, y);
@@ -152,7 +207,6 @@ export class PlaySession {
     return true;
   }
 
-  /** AI auto-places cue in the kitchen after a foul against it. */
   autoPlaceCue() {
     if (this.phase !== 'ballInHand') return false;
     const jx = (this.rng() - 0.5) * 8;
@@ -160,9 +214,6 @@ export class PlaySession {
     return this.placeCue(CUE_START.x + jx, CUE_START.y + jy);
   }
 
-  /**
-   * @param {number} frameDt
-   */
   step(frameDt) {
     if (this.phase === 'won') return;
     this.simAccum += Math.min(frameDt, 0.05);
@@ -187,28 +238,94 @@ export class PlaySession {
     this._resolveShot();
   }
 
+  _endGame(winner, reason) {
+    this.phase = 'won';
+    this.winner = winner;
+    this.winReason = reason;
+    this.message = reason;
+    this.hooks.onClear?.(this);
+  }
+
+  _assignSuits(shooter, pocketedIds) {
+    if (!this.openTable) return false;
+    const groups = new Set();
+    for (const id of pocketedIds) {
+      const g = groupOf(id);
+      if (g === 'solid' || g === 'stripe') groups.add(g);
+    }
+    // Both groups on one stroke (common on the break) — stay open.
+    if (groups.size !== 1) return false;
+    const g = [...groups][0];
+    this.suits[shooter] = g;
+    this.suits[other(shooter)] = g === 'solid' ? 'stripe' : 'solid';
+    this.openTable = false;
+    return true;
+  }
+
+  _countLegalFor(shooter, pocketedIds) {
+    if (this.openTable || !this.suits[shooter]) {
+      return pocketedIds.filter((id) => {
+        const g = groupOf(id);
+        return g === 'solid' || g === 'stripe';
+      }).length;
+    }
+    const suit = this.suits[shooter];
+    return pocketedIds.filter((id) => groupOf(id) === suit).length;
+  }
+
+  _tallyScores(pocketedIds) {
+    for (const id of pocketedIds) {
+      const g = groupOf(id);
+      if (g !== 'solid' && g !== 'stripe') continue;
+      if (this.suits.player === g) this.scores.player += 1;
+      else if (this.suits.ai === g) this.scores.ai += 1;
+    }
+    this.scores.player = Math.min(7, this.scores.player);
+    this.scores.ai = Math.min(7, this.scores.ai);
+  }
+
+  _onEightMessage(shooter) {
+    if (this.openTable || !this.suits[shooter]) return '';
+    if (this.remainingOf(this.suits[shooter]) > 0) return '';
+    if (shooter === 'player') {
+      return this.suits.player === 'solid'
+        ? 'Your solids are clear — shoot the 8.'
+        : 'Your stripes are clear — shoot the 8.';
+    }
+    return 'AI is on the 8.';
+  }
+
   _resolveShot() {
     const cue = this.cue;
-    const scratched = cue.pocketed;
-    const made = this.lastPocketed.length;
+    const scratched = !!(cue && cue.pocketed);
+    const pocketedIds = this.lastPocketed.slice();
+    const eightDown = pocketedIds.includes(8);
     const shooter = this.turn;
+    const opp = other(shooter);
 
+    // —— Scratch ——
     if (scratched) {
       this.scratches += 1;
-      // Foul: no points for any object balls on a scratch this stroke.
       placeCueBall(cue, this.balls, CUE_START.x, CUE_START.y);
+
+      // Scratch while pocketing the 8 is a loss.
+      if (eightDown) {
+        this._endGame(
+          this.mode === 'vsAi' ? opp : null,
+          `${labelWho(shooter)} scratched on the 8.`
+        );
+        return;
+      }
+
       if (this.mode === 'vsAi') {
-        this.turn = shooter === 'player' ? 'ai' : 'player';
+        this.turn = opp;
         this.needsBallInHand = true;
         this.phase = 'ballInHand';
         this.message =
           shooter === 'player'
             ? 'Scratch — AI ball in hand.'
             : 'AI scratched — your ball in hand. Tap the kitchen to place.';
-        // AI receives ball-in-hand → auto place next tick via main.
-        if (this.turn === 'ai') {
-          this.autoPlaceCue();
-        }
+        if (this.turn === 'ai') this.autoPlaceCue();
         this.hooks.onScratch?.(this);
         this.hooks.onTurn?.(this);
       } else {
@@ -220,55 +337,81 @@ export class PlaySession {
       return;
     }
 
-    if (made > 0) {
-      if (this.mode === 'vsAi') {
-        this.scores[shooter] += made;
-      }
-    }
-
-    if (this.remaining === 0) {
-      this.phase = 'won';
-      if (this.mode === 'vsAi') {
-        if (this.scores.player > this.scores.ai) this.winner = 'player';
-        else if (this.scores.ai > this.scores.player) this.winner = 'ai';
-        else this.winner = 'draw';
-        this.message =
-          this.winner === 'player'
-            ? `You win ${this.scores.player}–${this.scores.ai}.`
-            : this.winner === 'ai'
-              ? `AI wins ${this.scores.ai}–${this.scores.player}.`
-              : `Draw ${this.scores.player}–${this.scores.ai}.`;
+    // —— 8-ball outcomes ——
+    if (eightDown) {
+      const suit = this.suits[shooter];
+      // Early 8 if table still open, no suit yet, or group balls remain.
+      const early = this.openTable || !suit || this.remainingOf(suit) > 0;
+      if (early) {
+        this._endGame(
+          this.mode === 'vsAi' ? opp : null,
+          `${labelWho(shooter)} pocketed the 8 early.`
+        );
       } else {
-        this.winner = 'player';
-        this.message = `Table cleared in ${this.shots} shots.`;
+        this._endGame(
+          this.mode === 'vsAi' ? shooter : 'player',
+          `${labelWho(shooter)} wins — 8-ball.`
+        );
       }
-      this.hooks.onClear?.(this);
       return;
     }
 
+    // —— Suit assignment (open table) ——
+    const assigned = pocketedIds.length ? this._assignSuits(shooter, pocketedIds) : false;
+    this._tallyScores(pocketedIds);
+
+    const legal = this._countLegalFor(shooter, pocketedIds);
+    const keepTurn = legal > 0;
+
     if (this.mode === 'vsAi') {
-      if (made > 0) {
-        // Continue turn.
-        this.phase = 'aiming';
-        this.message =
-          shooter === 'player'
-            ? `You pocketed ${this.lastPocketed.join(', ')}. Shoot again.`
-            : `AI pocketed ${this.lastPocketed.join(', ')}.`;
+      this.phase = 'aiming';
+      if (keepTurn) {
+        let msg;
+        if (assigned) {
+          msg =
+            shooter === 'player'
+              ? `You are ${suitLabel(this.suits.player)} · AI is ${suitLabel(this.suits.ai)}. Shoot again.`
+              : `AI claims ${suitLabel(this.suits.ai)} · you are ${suitLabel(this.suits.player)}.`;
+        } else if (this.openTable) {
+          msg =
+            shooter === 'player'
+              ? `Pocketed ${pocketedIds.join(', ')}. Table still open. Shoot again.`
+              : `AI pocketed ${pocketedIds.join(', ')}.`;
+        } else {
+          msg =
+            shooter === 'player'
+              ? `Pocketed ${pocketedIds.join(', ')}. Shoot ${suitLabel(this.suits.player)} again.`
+              : `AI pocketed ${pocketedIds.join(', ')}.`;
+        }
+        const eightMsg = this._onEightMessage(shooter);
+        this.message = eightMsg || msg;
         this.hooks.onTurn?.(this);
       } else {
-        this.turn = shooter === 'player' ? 'ai' : 'player';
-        this.phase = 'aiming';
-        this.message =
-          this.turn === 'player' ? 'Your turn.' : 'AI thinking…';
+        this.turn = opp;
+        if (assigned && shooter === 'player') {
+          this.message = `You are ${suitLabel(this.suits.player)} · AI is ${suitLabel(this.suits.ai)}. AI thinking…`;
+        } else if (this.turn === 'player') {
+          this.message = this.openTable
+            ? 'Your turn — table is open.'
+            : `Your turn — shoot ${suitLabel(this.suits.player)}.`;
+        } else {
+          this.message = 'AI thinking…';
+        }
         this.hooks.onTurn?.(this);
       }
     } else {
       this.phase = 'aiming';
-      if (made > 0) {
-        this.message = `Pocketed ${this.lastPocketed.join(', ')}. ${this.remaining} left.`;
+      if (assigned) {
+        this.message = `You are ${suitLabel(this.suits.player)}.`;
       } else {
-        this.message = 'No pocket. Aim again.';
+        this.message = pocketedIds.length
+          ? `Pocketed ${pocketedIds.join(', ')}.`
+          : 'No pocket. Aim again.';
       }
     }
   }
+}
+
+function labelWho(who) {
+  return who === 'player' ? 'You' : 'AI';
 }

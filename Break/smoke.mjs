@@ -194,6 +194,8 @@ assert(
   assert(DIFFICULTIES.easy && DIFFICULTIES.medium && DIFFICULTIES.hard, 'three difficulties');
   const s = new PlaySession(11, {}, { mode: 'vsAi', difficulty: 'hard' });
   assert(s.mode === 'vsAi' && s.turn === 'player', 'vs AI starts on player turn');
+  assert(s.openTable, 'match starts with open table');
+  assert(s.legalTargets().every((b) => b.kind !== 'eight'), 'open table: 8 is not a legal target');
   const rng = makeRNG(99);
   for (const id of ['easy', 'medium', 'hard']) {
     const shot = chooseAiShot(s, id, rng);
@@ -208,6 +210,73 @@ assert(
     steps += 1;
   }
   assert(s.turn === 'ai' || s.phase === 'won' || s.lastPocketed.length > 0, 'miss or pocket resolved');
+}
+
+// 8-ball suit assignment: first group pocketed claims that suit.
+{
+  const s = new PlaySession(3, {}, { mode: 'vsAi', difficulty: 'easy' });
+  assert(s.openTable && !s.suits.player && !s.suits.ai, 'suits unset at start');
+  // Force a solid pocket without physics: mimic post-shot resolve inputs.
+  s.turn = 'player';
+  s.lastPocketed = [3]; // solid
+  s.phase = 'rolling';
+  // Drive resolve by calling private path via settled shot: pocket ball 3 in place.
+  const solid = s.balls.find((b) => b.id === 3);
+  const stripe = s.balls.find((b) => b.id === 11);
+  solid.pocketed = true;
+  solid.falling = false;
+  s.pocketedCount = 1;
+  s._resolveShot();
+  assert(!s.openTable, 'table closes after one group is made');
+  assert(s.suits.player === 'solid', 'player claims solids');
+  assert(s.suits.ai === 'stripe', 'AI gets stripes');
+  assert(s.scores.player === 1, 'solid pocket tallies for player');
+  assert(s.turn === 'player', 'legal pocket keeps the turn');
+  assert(
+    s.legalTargets().every((b) => b.kind === 'solid'),
+    'after claim, only solids are legal'
+  );
+
+  // Opponent's ball alone does not keep the turn.
+  s.lastPocketed = [11];
+  stripe.pocketed = true;
+  s.pocketedCount = 2;
+  s.phase = 'rolling';
+  s._resolveShot();
+  assert(s.scores.ai === 1, 'stripe credits AI');
+  assert(s.turn === 'ai', 'pocketing only opponent suit ends turn');
+  assert(
+    s.legalTargets('ai').every((b) => b.kind === 'stripe'),
+    'AI legal targets are stripes'
+  );
+}
+
+// Early 8 is a loss.
+{
+  const s = new PlaySession(5, {}, { mode: 'vsAi', difficulty: 'medium' });
+  s.openTable = false;
+  s.suits.player = 'solid';
+  s.suits.ai = 'stripe';
+  s.turn = 'player';
+  s.lastPocketed = [8];
+  const eight = s.balls.find((b) => b.id === 8);
+  eight.pocketed = true;
+  s.pocketedCount = 1;
+  s.phase = 'rolling';
+  s._resolveShot();
+  assert(s.phase === 'won' && s.winner === 'ai', 'early 8 loses to AI');
+}
+
+// Corner pockets sit closer to the cloth than the prior k=0.55 layout.
+{
+  const corners = pocketCenters().filter((p) => p.corner);
+  for (const p of corners) {
+    const outX = Math.abs(p.x) - TABLE.halfW;
+    const outY = Math.abs(p.y) - TABLE.halfH;
+    assert(outX > 0 && outY > 0, 'corner still outside felt');
+    assert(outX < TABLE.pocketOut * 0.5, `corner closer on x (out=${outX.toFixed(2)})`);
+    assert(outY < TABLE.pocketOut * 0.5, `corner closer on y (out=${outY.toFixed(2)})`);
+  }
 }
 
 if (failures) {

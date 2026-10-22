@@ -15,11 +15,15 @@ export function chooseAiShot(session, difficultyId, rng) {
   const pockets = pocketCenters();
   const candidates = [];
 
-  for (const ball of session.objectBalls) {
+  // Only shoot the shooter's legal group (or any color while the table is open).
+  const targets = session.legalTargets ? session.legalTargets() : session.objectBalls;
+  for (const ball of targets) {
     if (ball.pocketed || ball.falling) continue;
     for (const pocket of pockets) {
       const shot = lineUpShot(cue, ball, pocket, session.balls);
       if (!shot) continue;
+      // Prefer finishing the 8 when it is legal.
+      if (ball.kind === 'eight') shot.score += 12;
       candidates.push(shot);
     }
   }
@@ -134,7 +138,13 @@ function clearPath(x0, y0, x1, y1, radius, balls, ignoreA, ignoreB) {
 
 function scrambleShot(session, diff, rng) {
   const cue = session.cue;
-  const live = session.objectBalls.filter((b) => !b.pocketed && !b.falling);
+  const legal = session.legalTargets
+    ? session.legalTargets().filter((b) => !b.pocketed && !b.falling)
+    : [];
+  const live =
+    legal.length > 0
+      ? legal
+      : session.objectBalls.filter((b) => !b.pocketed && !b.falling && b.kind !== 'eight');
   let tx = TABLE.halfW * 0.35;
   let ty = 0;
   if (live.length) {

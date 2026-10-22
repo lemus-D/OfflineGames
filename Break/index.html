@@ -305,7 +305,7 @@
 <div id="menu" class="overlay">
   <div class="menu-panel">
     <h1 class="brand">Break</h1>
-    <p class="tag">Top-down pool vs AI. Pick a difficulty and clear more balls than the house.</p>
+    <p class="tag">8-ball vs AI. Pocket solids or stripes — that suit is yours for the rack. Finish with the 8.</p>
 
     <div class="diff-stack">
       <button class="btn diff" id="btnEasy" type="button" data-diff="easy">
@@ -321,7 +321,7 @@
         <span class="diff-blurb">Tight cuts, firm pace</span>
       </button>
     </div>
-    <p class="hint">Point to aim · pull back for power · English dial for spin. Pocket a ball to keep your turn.</p>
+    <p class="hint">Point to aim · pull back for power · English dial for spin. Pocket your suit to keep shooting.</p>
 
     <p class="meta">vs AI <b id="aiRecordVal">0–0</b> · Solo best clear <b id="bestVal">—</b></p>
   </div>
@@ -329,9 +329,9 @@
 
 <div id="hud" class="hidden">
   <div class="hud-bar">
-    <div class="hud-chip"><span>YOU</span><b id="youVal">0</b></div>
+    <div class="hud-chip"><span id="youSuit">YOU · OPEN</span><b id="youVal">0</b></div>
     <div class="hud-chip"><span id="turnLabel">YOUR TURN</span><b id="leftVal">15</b><span style="display:block;font-size:0.62rem;letter-spacing:0.12em;color:var(--muted);margin-top:2px">LEFT</span></div>
-    <div class="hud-chip"><span>AI</span><b id="aiVal">0</b></div>
+    <div class="hud-chip"><span id="aiSuit">AI · OPEN</span><b id="aiVal">0</b></div>
   </div>
   <div class="spin-panel" id="spinPanel">
     <div class="spin-label">ENGLISH</div>
