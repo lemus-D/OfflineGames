@@ -188,34 +188,87 @@ function resolveBallBall(a, b) {
   return true;
 }
 
+/** True when this rail has a cutout leading into an off-table pocket. */
+function railOpenAt(b, side) {
+  const gap = TABLE.railGap;
+  for (const p of pockets) {
+    if (side === 'left' && p.x < -1) {
+      const ey = Math.max(-TABLE.halfH, Math.min(TABLE.halfH, p.y));
+      if (Math.abs(b.y - ey) < gap) return true;
+    }
+    if (side === 'right' && p.x > 1) {
+      const ey = Math.max(-TABLE.halfH, Math.min(TABLE.halfH, p.y));
+      if (Math.abs(b.y - ey) < gap) return true;
+    }
+    if (side === 'top' && p.y < -1) {
+      const ex = Math.max(-TABLE.halfW, Math.min(TABLE.halfW, p.x));
+      if (Math.abs(b.x - ex) < gap) return true;
+    }
+    if (side === 'bottom' && p.y > 1) {
+      const ex = Math.max(-TABLE.halfW, Math.min(TABLE.halfW, p.x));
+      if (Math.abs(b.x - ex) < gap) return true;
+    }
+  }
+  return false;
+}
+
 function resolveCushions(b) {
   const maxX = TABLE.halfW - b.r;
   const maxY = TABLE.halfH - b.r;
   let hit = false;
 
-  // Only open the rails over the real jaw — not a huge rim that eats grazers.
-  const nearPocket = pockets.some(
-    (p) => Math.hypot(b.x - p.x, b.y - p.y) < TABLE.pocketJaw
-  );
-  if (nearPocket) return false;
-
+  // Off-felt pockets: skip the rail only at the cutout; otherwise bounce.
   if (b.x < -maxX) {
-    b.x = -maxX;
-    bounceRail(b, 1, 0);
-    hit = true;
+    if (railOpenAt(b, 'left')) {
+      // Free to leave toward the outside pocket; soft-catch if lost in the apron.
+      if (b.x < -TABLE.halfW - TABLE.pocketOut - TABLE.pocketR) {
+        b.x = -maxX;
+        bounceRail(b, 1, 0);
+        hit = true;
+      }
+    } else {
+      b.x = -maxX;
+      bounceRail(b, 1, 0);
+      hit = true;
+    }
   } else if (b.x > maxX) {
-    b.x = maxX;
-    bounceRail(b, -1, 0);
-    hit = true;
+    if (railOpenAt(b, 'right')) {
+      if (b.x > TABLE.halfW + TABLE.pocketOut + TABLE.pocketR) {
+        b.x = maxX;
+        bounceRail(b, -1, 0);
+        hit = true;
+      }
+    } else {
+      b.x = maxX;
+      bounceRail(b, -1, 0);
+      hit = true;
+    }
   }
+
   if (b.y < -maxY) {
-    b.y = -maxY;
-    bounceRail(b, 0, 1);
-    hit = true;
+    if (railOpenAt(b, 'top')) {
+      if (b.y < -TABLE.halfH - TABLE.pocketOutSide - TABLE.pocketR) {
+        b.y = -maxY;
+        bounceRail(b, 0, 1);
+        hit = true;
+      }
+    } else {
+      b.y = -maxY;
+      bounceRail(b, 0, 1);
+      hit = true;
+    }
   } else if (b.y > maxY) {
-    b.y = maxY;
-    bounceRail(b, 0, -1);
-    hit = true;
+    if (railOpenAt(b, 'bottom')) {
+      if (b.y > TABLE.halfH + TABLE.pocketOutSide + TABLE.pocketR) {
+        b.y = maxY;
+        bounceRail(b, 0, -1);
+        hit = true;
+      }
+    } else {
+      b.y = maxY;
+      bounceRail(b, 0, -1);
+      hit = true;
+    }
   }
   return hit;
 }

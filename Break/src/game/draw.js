@@ -18,10 +18,11 @@ export function screenToTable(sx, sy, view) {
 }
 
 export function fitView(W, H) {
-  const margin = 36;
+  const margin = 40;
   const rail = TABLE.cushion;
-  const worldW = (TABLE.halfW + rail) * 2;
-  const worldH = (TABLE.halfH + rail) * 2;
+  const out = Math.max(TABLE.pocketOut || 0, TABLE.pocketOutSide || 0) + TABLE.pocketR;
+  const worldW = (TABLE.halfW + rail + out * 0.35) * 2;
+  const worldH = (TABLE.halfH + rail + out * 0.35) * 2;
   const scale = Math.min((W - margin * 2) / worldW, (H - margin * 2) / worldH);
   return { cx: W * 0.5, cy: H * 0.5, scale };
 }
@@ -172,17 +173,21 @@ export function drawTable(g, view, animTime) {
   g.stroke();
   g.restore();
 
-  // Pockets with leather rims
+  // Pockets sit beside the felt (in the apron), not on the cloth.
   for (const p of pocketCenters()) {
     const s = tableToScreen(p.x, p.y, view);
-    const pr = TABLE.pocketR * view.scale * (p.corner ? 1.08 : 0.95);
+    const pr = TABLE.pocketR * view.scale * (p.corner ? 1.05 : 0.92);
+    // Leather / cast rim outside the table edge
     g.beginPath();
-    g.arc(s.x, s.y, pr + 2.5, 0, Math.PI * 2);
-    g.fillStyle = '#1a1008';
+    g.arc(s.x, s.y, pr + 3.2, 0, Math.PI * 2);
+    g.fillStyle = '#24160c';
     g.fill();
+    g.strokeStyle = 'rgba(90, 60, 30, 0.7)';
+    g.lineWidth = 2;
+    g.stroke();
     const hole = g.createRadialGradient(s.x - 1, s.y - 1, 1, s.x, s.y, pr);
-    hole.addColorStop(0, '#1a2218');
-    hole.addColorStop(0.55, '#050806');
+    hole.addColorStop(0, '#121810');
+    hole.addColorStop(0.5, '#050806');
     hole.addColorStop(1, '#000');
     g.beginPath();
     g.arc(s.x, s.y, pr, 0, Math.PI * 2);

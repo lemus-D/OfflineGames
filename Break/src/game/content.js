@@ -8,17 +8,22 @@ export const TABLE = {
   halfH: 56,
   cushion: 5.2,
   /** Visual pocket opening (drawing). */
-  pocketR: 5.8,
+  pocketR: 5.5,
   /**
    * Distance from pocket center the ball *center* must reach to drop.
    * Much tighter than pocketR so grazing the rim does not count.
    */
-  pocketMouth: 2.7,
-  /** Zone over the hole where cushions are open (funnel, no phantom rails). */
-  pocketJaw: 5.4,
-  /** Corner / side pocket centers relative to rail insides. */
-  pocketInset: 0.2,
-  jaw: 3.2,
+  pocketMouth: 2.75,
+  /** Capture / funnel radius around off-table pocket centers. */
+  pocketJaw: 7.2,
+  /**
+   * How far outside the felt the pocket centers sit.
+   * Pockets are holes beside the table, not discs on the cloth.
+   */
+  pocketOut: 6.4,
+  pocketOutSide: 6.8,
+  /** Half-width of the rail opening that leads into each pocket. */
+  railGap: 7.2,
 };
 
 export const BALL_R = 2.85;
@@ -97,17 +102,57 @@ export const CUE_START = { x: -TABLE.halfW * 0.5, y: 0 };
 /** Apex of the rack (right side of table). */
 export const RACK_APEX = { x: TABLE.halfW * 0.35, y: 0 };
 
+/** Pocket centers sit just off the felt, in the rail / apron. */
 export function pocketCenters() {
-  const { halfW: w, halfH: h, pocketInset: i } = TABLE;
+  const w = TABLE.halfW;
+  const h = TABLE.halfH;
+  const c = TABLE.pocketOut;
+  const s = TABLE.pocketOutSide;
   return [
-    { x: -w + i, y: -h + i, corner: true },
-    { x: 0, y: -h - 0.55, corner: false },
-    { x: w - i, y: -h + i, corner: true },
-    { x: -w + i, y: h - i, corner: true },
-    { x: 0, y: h + 0.55, corner: false },
-    { x: w - i, y: h - i, corner: true },
+    { x: -w - c * 0.72, y: -h - c * 0.72, corner: true },
+    { x: 0, y: -h - s, corner: false },
+    { x: w + c * 0.72, y: -h - c * 0.72, corner: true },
+    { x: -w - c * 0.72, y: h + c * 0.72, corner: true },
+    { x: 0, y: h + s, corner: false },
+    { x: w + c * 0.72, y: h + c * 0.72, corner: true },
   ];
 }
+
+/** AI difficulty rows — content, not logic. */
+export const DIFFICULTIES = {
+  easy: {
+    id: 'easy',
+    name: 'Easy',
+    blurb: 'Wobbly aim, soft breaks.',
+    aimJitter: 0.16,
+    powerJitter: 0.22,
+    powerMul: 0.72,
+    thinkSec: 0.85,
+    missBias: 0.45,
+  },
+  medium: {
+    id: 'medium',
+    name: 'Medium',
+    blurb: 'Decent lines, occasional miss.',
+    aimJitter: 0.07,
+    powerJitter: 0.12,
+    powerMul: 0.88,
+    thinkSec: 0.55,
+    missBias: 0.18,
+  },
+  hard: {
+    id: 'hard',
+    name: 'Hard',
+    blurb: 'Tight cuts, firm pace.',
+    aimJitter: 0.025,
+    powerJitter: 0.05,
+    powerMul: 0.98,
+    thinkSec: 0.35,
+    missBias: 0.04,
+  },
+};
+
+export const DIFFICULTY_IDS = ['easy', 'medium', 'hard'];
 
 export function scoreClear(shots, pocketed) {
   if (pocketed < 15) return Math.max(0, pocketed * 10 - shots);

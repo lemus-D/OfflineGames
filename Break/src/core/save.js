@@ -1,7 +1,9 @@
 /* Namespaced, versioned localStorage. Keys always start with break.v1. */
 
 const PROFILE_KEY = 'break.v1.profile';
-const SCHEMA = 1;
+const SCHEMA = 2;
+
+const emptyAi = () => ({ easy: 0, medium: 0, hard: 0 });
 
 const DEFAULT_PROFILE = () => ({
   schema: SCHEMA,
@@ -11,7 +13,19 @@ const DEFAULT_PROFILE = () => ({
   clears: 0,
   totalShots: 0,
   totalPocketed: 0,
+  /** Wins vs AI by difficulty id. */
+  aiWins: emptyAi(),
+  aiLoss: emptyAi(),
 });
+
+function normalizeAi(map) {
+  const base = emptyAi();
+  if (!map || typeof map !== 'object') return base;
+  for (const id of Object.keys(base)) {
+    base[id] = Math.max(0, Math.floor(Number(map[id]) || 0));
+  }
+  return base;
+}
 
 function migrate(raw) {
   if (!raw || typeof raw !== 'object') return DEFAULT_PROFILE();
@@ -26,6 +40,8 @@ function migrate(raw) {
     clears: Math.max(0, Math.floor(Number(raw.clears) || 0)),
     totalShots: Math.max(0, Math.floor(Number(raw.totalShots) || 0)),
     totalPocketed: Math.max(0, Math.floor(Number(raw.totalPocketed) || 0)),
+    aiWins: normalizeAi(raw.aiWins),
+    aiLosses: normalizeAi(raw.aiLosses),
   };
 }
 

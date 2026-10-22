@@ -1,4 +1,4 @@
-/* Match session: rack, shoot, pocket, clear. Fixed timestep. No Math.random(). */
+/* Match session: rack, turns, AI or solo. Fixed timestep. No Math.random(). */
 
 import { makeRNG } from '../core/rng.js';
 import {
@@ -10,6 +10,7 @@ import {
   RACK_APEX,
   BALL_R,
   scoreClear,
+  DIFFICULTIES,
 } from './content.js';
 import {
   createBall,
@@ -46,12 +47,16 @@ function rackPositions(rng) {
 export class PlaySession {
   /**
    * @param {number} seed
-   * @param {{ onClear?: Function, onScratch?: Function }} [hooks]
+   * @param {{ onClear?: Function, onScratch?: Function, onTurn?: Function }} [hooks]
+   * @param {{ mode?: 'solo'|'vsAi', difficulty?: string }} [opts]
    */
-  constructor(seed, hooks = {}) {
+  constructor(seed, hooks = {}, opts = {}) {
     this.seed = seed >>> 0;
     this.rng = makeRNG(this.seed);
     this.hooks = hooks;
+
+    this.mode = opts.mode === 'vsAi' ? 'vsAi' : 'solo';
+    this.difficulty = DIFFICULTIES[opts.difficulty] ? opts.difficulty : 'medium';
 
     this.balls = [];
     const cue = createBall(CUE_BALL, CUE_START.x, CUE_START.y);
@@ -66,9 +71,17 @@ export class PlaySession {
     this.time = 0;
     this.simAccum = 0;
     this.phase = 'aiming'; // aiming | rolling | ballInHand | won
-    this.message = 'Aim with the cursor · pull back away from the target for power.';
+    /** @type {'player'|'ai'} */
+    this.turn = 'player';
+    this.scores = { player: 0, ai: 0 };
+    /** @type {'player'|'ai'|'draw'|null} */
+    this.winner = null;
     this.lastPocketed = [];
     this.needsBallInHand = false;
+    this.message =
+      this.mode === 'vsAi'
+        ? `Your break · ${DIFFICULTIES[this.difficulty].name} AI.`
+        : 'Aim with the cursor · pull back away from the target for power.';
   }
 
   get cue() {
@@ -87,6 +100,10 @@ export class PlaySession {
     return anyMoving(this.balls);
   }
 
+  get isAiTurn() {
+    return this.mode === 'vsAi' && this.turn === 'ai';
+  }
+
   summary() {
     return {
       shots: this.shots,
@@ -95,13 +112,17 @@ export class PlaySession {
       scratches: this.scratches,
       cleared: this.phase === 'won',
       score: scoreClear(this.shots, this.pocketedCount),
+      mode: this.mode,
+      difficulty: this.difficulty,
+      scores: { ...this.scores },
+      winner: this.winner,
+      turn: this.turn,
     };
   }
 
   /**
    * Fire a shot. dir is world-space aim; power01 in [0,1].
-   * @param {{x:number,y:number}} [english] tip offset on the cue ball
-   * @returns {boolean} whether the shot was accepted
+   * @param {{x:number,y:number}} [english]
    */
   shoot(dirX, dirY, power01, english = { x: 0, y: 0 }) {
     if (this.phase !== 'aiming' && this.phase !== 'ballInHand') return false;
@@ -113,7 +134,7 @@ export class PlaySession {
     applyCueShot(cue, dirX, dirY, power01, english);
     this.shots += 1;
     this.phase = 'rolling';
-    this.message = '';
+    this.message = this.isAiTurn ? 'AI shooting…' : '';
     this.lastPocketed = [];
     return true;
   }
@@ -124,8 +145,19 @@ export class PlaySession {
     placeCueBall(this.cue, this.balls, x, y);
     this.phase = 'aiming';
     this.needsBallInHand = false;
-    this.message = 'Ball in hand. Aim your next shot.';
+    this.message = this.isAiTurn
+      ? 'AI ball in hand…'
+      : 'Ball in hand. Aim your next shot.';
+    this.hooks.onTurn?.(this);
     return true;
+  }
+
+  /** AI auto-places cue in the kitchen after a foul against it. */
+  autoPlaceCue() {
+    if (this.phase !== 'ballInHand') return false;
+    const jx = (this.rng() - 0.5) * 8;
+    const jy = (this.rng() - 0.5) * 10;
+    return this.placeCue(CUE_START.x + jx, CUE_START.y + jy);
   }
 
   /**
@@ -152,24 +184,87 @@ export class PlaySession {
     }
 
     if (this.moving) return;
+    this._resolveShot();
+  }
 
-    // Shot resolved.
+  _resolveShot() {
     const cue = this.cue;
     const scratched = cue.pocketed;
+    const made = this.lastPocketed.length;
+    const shooter = this.turn;
+
     if (scratched) {
       this.scratches += 1;
-      this.needsBallInHand = true;
-      this.phase = 'ballInHand';
+      // Foul: no points for any object balls on a scratch this stroke.
       placeCueBall(cue, this.balls, CUE_START.x, CUE_START.y);
-      this.message = 'Scratch — ball in hand. Tap the kitchen to place, then aim.';
-      this.hooks.onScratch?.(this);
-    } else if (this.remaining === 0) {
+      if (this.mode === 'vsAi') {
+        this.turn = shooter === 'player' ? 'ai' : 'player';
+        this.needsBallInHand = true;
+        this.phase = 'ballInHand';
+        this.message =
+          shooter === 'player'
+            ? 'Scratch — AI ball in hand.'
+            : 'AI scratched — your ball in hand. Tap the kitchen to place.';
+        // AI receives ball-in-hand → auto place next tick via main.
+        if (this.turn === 'ai') {
+          this.autoPlaceCue();
+        }
+        this.hooks.onScratch?.(this);
+        this.hooks.onTurn?.(this);
+      } else {
+        this.needsBallInHand = true;
+        this.phase = 'ballInHand';
+        this.message = 'Scratch — ball in hand. Tap the kitchen to place, then aim.';
+        this.hooks.onScratch?.(this);
+      }
+      return;
+    }
+
+    if (made > 0) {
+      if (this.mode === 'vsAi') {
+        this.scores[shooter] += made;
+      }
+    }
+
+    if (this.remaining === 0) {
       this.phase = 'won';
-      this.message = `Table cleared in ${this.shots} shots.`;
+      if (this.mode === 'vsAi') {
+        if (this.scores.player > this.scores.ai) this.winner = 'player';
+        else if (this.scores.ai > this.scores.player) this.winner = 'ai';
+        else this.winner = 'draw';
+        this.message =
+          this.winner === 'player'
+            ? `You win ${this.scores.player}–${this.scores.ai}.`
+            : this.winner === 'ai'
+              ? `AI wins ${this.scores.ai}–${this.scores.player}.`
+              : `Draw ${this.scores.player}–${this.scores.ai}.`;
+      } else {
+        this.winner = 'player';
+        this.message = `Table cleared in ${this.shots} shots.`;
+      }
       this.hooks.onClear?.(this);
+      return;
+    }
+
+    if (this.mode === 'vsAi') {
+      if (made > 0) {
+        // Continue turn.
+        this.phase = 'aiming';
+        this.message =
+          shooter === 'player'
+            ? `You pocketed ${this.lastPocketed.join(', ')}. Shoot again.`
+            : `AI pocketed ${this.lastPocketed.join(', ')}.`;
+        this.hooks.onTurn?.(this);
+      } else {
+        this.turn = shooter === 'player' ? 'ai' : 'player';
+        this.phase = 'aiming';
+        this.message =
+          this.turn === 'player' ? 'Your turn.' : 'AI thinking…';
+        this.hooks.onTurn?.(this);
+      }
     } else {
       this.phase = 'aiming';
-      if (this.lastPocketed.length) {
+      if (made > 0) {
         this.message = `Pocketed ${this.lastPocketed.join(', ')}. ${this.remaining} left.`;
       } else {
         this.message = 'No pocket. Aim again.';

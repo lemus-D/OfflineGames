@@ -2,9 +2,21 @@
 /* Headless smoke: rack, shoot, English, aim predict, no Math.random. */
 import { readFileSync } from 'node:fs';
 import { PlaySession } from './src/game/play.js';
-import { BALLS, RACK_ORDER, scoreClear, CUE_BALL, BALL_R, PHYSICS, TABLE } from './src/game/content.js';
+import {
+  BALLS,
+  RACK_ORDER,
+  scoreClear,
+  CUE_BALL,
+  BALL_R,
+  PHYSICS,
+  TABLE,
+  DIFFICULTIES,
+  pocketCenters,
+} from './src/game/content.js';
 import { anyMoving, applyCueShot, stepPhysics, createBall } from './src/game/physics.js';
 import { predictAim, ghostForStraight } from './src/game/aim.js';
+import { chooseAiShot } from './src/game/ai.js';
+import { makeRNG } from './src/core/rng.js';
 
 let failures = 0;
 function assert(cond, msg) {
@@ -21,6 +33,7 @@ for (const file of [
   'src/game/content.js',
   'src/game/physics.js',
   'src/game/aim.js',
+  'src/game/ai.js',
   'src/game/draw.js',
   'src/core/rng.js',
   'src/core/save.js',
@@ -150,6 +163,52 @@ assert(scoreClear(20, 15) > scoreClear(40, 15), 'fewer shots scores higher on a 
 }
 
 assert(BALL_R > 0 && PHYSICS.maxEnglish > 0, 'tunables sane');
+assert(TABLE.pocketMouth < TABLE.pocketR * 0.6, 'pocket mouth stricter than visual rim');
+assert(
+  pocketCenters().every(
+    (p) => Math.abs(p.x) >= TABLE.halfW - 0.01 || Math.abs(p.y) >= TABLE.halfH - 0.01
+  ),
+  'pockets sit at or outside the felt edge'
+);
+assert(
+  pocketCenters().every((p) => {
+    const outside =
+      Math.abs(p.x) > TABLE.halfW + 1 || Math.abs(p.y) > TABLE.halfH + 1;
+    return outside;
+  }),
+  'pocket centers are off the felt (holes beside the table)'
+);
+
+// Deep in an off-table mouth still pockets + animates.
+{
+  const p = pocketCenters()[0];
+  const deep = createBall(BALLS[1], p.x, p.y);
+  stepPhysics([deep], 1 / 180);
+  assert(deep.pocketed && deep.falling, 'center-in-mouth starts fall animation');
+  for (let i = 0; i < 180; i++) stepPhysics([deep], 1 / 180);
+  assert(!deep.falling, 'fall animation completes');
+}
+
+// AI difficulties exist and produce a legal shot.
+{
+  assert(DIFFICULTIES.easy && DIFFICULTIES.medium && DIFFICULTIES.hard, 'three difficulties');
+  const s = new PlaySession(11, {}, { mode: 'vsAi', difficulty: 'hard' });
+  assert(s.mode === 'vsAi' && s.turn === 'player', 'vs AI starts on player turn');
+  const rng = makeRNG(99);
+  for (const id of ['easy', 'medium', 'hard']) {
+    const shot = chooseAiShot(s, id, rng);
+    assert(shot && shot.power > 0.1, `${id} AI returns a shot`);
+    assert(Number.isFinite(shot.dx) && Number.isFinite(shot.dy), `${id} aim finite`);
+  }
+  // Simulate a miss → turn flips to AI.
+  s.shoot(0, 1, 0.3);
+  let steps = 0;
+  while ((s.moving || s.phase === 'rolling') && steps < 60 * 20) {
+    s.step(1 / 60);
+    steps += 1;
+  }
+  assert(s.turn === 'ai' || s.phase === 'won' || s.lastPocketed.length > 0, 'miss or pocket resolved');
+}
 
 if (failures) {
   console.error(`\n${failures} failure(s)`);
