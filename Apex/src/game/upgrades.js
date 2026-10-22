@@ -5,29 +5,29 @@ export const UPGRADES = {
     id: 'tank',
     name: 'Tanker',
     desc: 'Bigger tank. Launch with a full load.',
-    maxLevel: 5,
-    costs: [8, 18, 36, 70, 120],
+    maxLevel: 8,
+    costs: [5, 10, 18, 28, 42, 60, 85, 115],
   },
   thrust: {
     id: 'thrust',
     name: 'Thrusters',
     desc: 'Climb and cruise faster.',
-    maxLevel: 5,
-    costs: [8, 18, 36, 70, 120],
+    maxLevel: 8,
+    costs: [5, 10, 18, 28, 42, 60, 85, 115],
   },
   scoop: {
     id: 'scoop',
     name: 'Fuel Scoop',
     desc: 'Gas cans refill more.',
-    maxLevel: 5,
-    costs: [6, 14, 30, 60, 100],
+    maxLevel: 8,
+    costs: [4, 8, 14, 22, 34, 50, 70, 95],
   },
   hull: {
     id: 'hull',
     name: 'Hull Plating',
-    desc: 'Meteors steal less fuel.',
-    maxLevel: 5,
-    costs: [10, 20, 40, 80, 140],
+    desc: 'Asteroids chip less hull integrity.',
+    maxLevel: 8,
+    costs: [6, 12, 20, 32, 48, 68, 92, 125],
   },
 };
 
@@ -60,17 +60,22 @@ export function foldStats(upgrades = {}) {
   const scoop = u.scoop;
   const hull = u.hull;
 
-  const fuelMax = 1 + tank * 0.12; // 1.00 → 1.60
+  const fuelMax = 1 + tank * 0.1; // 1.00 → 1.80 at Lv8
+  const healthMax = 1 + hull * 0.07; // 1.00 → 1.56 at Lv8
   return {
     upgrades: u,
     fuelMax,
     fuelStart: fuelMax, // launch full
-    thrustMul: 1 + thrust * 0.06, // → 1.30
-    maxSpeedMul: 1 + thrust * 0.05, // → 1.25
-    maxClimbMul: 1 + thrust * 0.05,
-    fuelPickupMul: 1 + scoop * 0.12, // → 1.60
-    /** Multiplier on meteor fuel loss (negative gains). */
-    meteorDrainMul: Math.max(0.55, 1 - hull * 0.08), // → 0.60
+    healthMax,
+    healthStart: healthMax,
+    thrustMul: 1 + thrust * 0.05, // → 1.40
+    maxSpeedMul: 1 + thrust * 0.04, // → 1.32
+    maxClimbMul: 1 + thrust * 0.04,
+    fuelPickupMul: 1 + scoop * 0.1, // → 1.80
+    /** Multiplier on meteor fuel splash (negative gains). */
+    meteorDrainMul: Math.max(0.5, 1 - hull * 0.06), // → 0.52
+    /** Multiplier on asteroid hull damage. */
+    healthDamageMul: Math.max(0.45, 1 - hull * 0.07), // → 0.45
   };
 }
 

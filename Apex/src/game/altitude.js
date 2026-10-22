@@ -74,6 +74,7 @@ export const ATMO_LAYERS = [
 /**
  * Easter-egg bodies ordered by climb altitude (gameY ↑).
  * realKm ≈ typical / closest-approach distance from Earth.
+ * radiusKm ≈ mean planetary radius (for relative on-screen scale).
  * `art` selects the procedural sprite in draw.js.
  */
 export const CELESTIAL = [
@@ -82,6 +83,7 @@ export const CELESTIAL = [
     name: 'Moon',
     art: 'moon',
     realKm: 384400,
+    radiusKm: 1737,
     gameY: 14000,
     x: 140,
     label: 'MOON FLYBY',
@@ -91,6 +93,7 @@ export const CELESTIAL = [
     name: 'Venus',
     art: 'venus',
     realKm: 38000000,
+    radiusKm: 6052,
     gameY: 28000,
     x: -150,
     label: 'VENUS FLYBY',
@@ -100,6 +103,7 @@ export const CELESTIAL = [
     name: 'Mars',
     art: 'mars',
     realKm: 54600000, // closest approach ~54.6M km
+    radiusKm: 3390,
     gameY: 42000,
     x: 155,
     label: 'MARS FLYBY',
@@ -110,6 +114,7 @@ export const CELESTIAL = [
     art: 'mercury',
     // Closest approach ~77M km — farther than Venus/Mars at their closest.
     realKm: 77000000,
+    radiusKm: 2440,
     gameY: 52000,
     x: -120,
     label: 'MERCURY FLYBY',
@@ -119,6 +124,7 @@ export const CELESTIAL = [
     name: 'Sun',
     art: 'sun',
     realKm: 149600000, // 1 AU
+    radiusKm: 696340,
     gameY: 68000,
     x: -40,
     label: 'SOLAR APPROACH',
@@ -128,6 +134,7 @@ export const CELESTIAL = [
     name: 'Asteroid Belt',
     art: 'belt',
     realKm: 250000000,
+    radiusKm: 500,
     gameY: 90000,
     x: 0,
     label: 'ASTEROID BELT',
@@ -137,6 +144,7 @@ export const CELESTIAL = [
     name: 'Jupiter',
     art: 'jupiter',
     realKm: 588000000,
+    radiusKm: 69911,
     gameY: 120000,
     x: 170,
     label: 'JUPITER FLYBY',
@@ -146,6 +154,7 @@ export const CELESTIAL = [
     name: 'Saturn',
     art: 'saturn',
     realKm: 1200000000,
+    radiusKm: 58232,
     gameY: 155000,
     x: -175,
     label: 'SATURN FLYBY',
@@ -155,6 +164,7 @@ export const CELESTIAL = [
     name: 'Uranus',
     art: 'uranus',
     realKm: 2600000000,
+    radiusKm: 25362,
     gameY: 195000,
     x: 130,
     label: 'URANUS FLYBY',
@@ -164,6 +174,7 @@ export const CELESTIAL = [
     name: 'Neptune',
     art: 'neptune',
     realKm: 4300000000,
+    radiusKm: 24622,
     gameY: 240000,
     x: -140,
     label: 'NEPTUNE FLYBY',
@@ -173,11 +184,19 @@ export const CELESTIAL = [
     name: 'Pluto',
     art: 'pluto',
     realKm: 5000000000,
+    radiusKm: 1188,
     gameY: 290000,
     x: 90,
     label: 'PLUTO FLYBY',
   },
 ];
+
+/** Moon-relative visual scale; compressed so the Sun still fits the frame. */
+export function bodyVisualScale(radiusKm) {
+  const ref = 1737;
+  const r = Math.max(200, radiusKm || ref);
+  return Math.pow(r / ref, 0.34);
+}
 
 export const CELESTIAL_IDS = CELESTIAL.map((c) => c.id);
 

@@ -1,28 +1,35 @@
 /* Simulation: thrust-on-demand climb, free tilt, spawn pickups, collide.
-   Fixed timestep. No Math.random() — seeded RNG only. */
+   Fixed timestep. No Math.random() — seeded RNG only.
+   World X wraps (infinite side-to-side). Asteroids damage hull; black holes pull. */
 
 import { makeRNG, clamp } from '../core/rng.js';
 import {
   FIXED_DT,
   WORLD_HALF_W,
+  wrapX,
+  deltaX,
   ROCKET,
   PICKUPS,
   SPAWN,
+  pickupWeight,
+  bandItemBudget,
   scoreFromRun,
   wrapAngle,
 } from './content.js';
 import { foldStats } from './upgrades.js';
 
-function pickKind(rng) {
-  const entries = Object.values(PICKUPS);
+function pickKind(rng, bandY) {
+  const entries = Object.values(PICKUPS)
+    .map((e) => ({ e, w: pickupWeight(e, bandY) }))
+    .filter((row) => row.w > 0);
   let total = 0;
-  for (const e of entries) total += e.weight;
+  for (const row of entries) total += row.w;
   let roll = rng() * total;
-  for (const e of entries) {
-    roll -= e.weight;
-    if (roll <= 0) return e.id;
+  for (const row of entries) {
+    roll -= row.w;
+    if (roll <= 0) return row.e.id;
   }
-  return entries[entries.length - 1].id;
+  return entries[entries.length - 1].e.id;
 }
 
 export class PlaySession {
@@ -49,6 +56,8 @@ export class PlaySession {
       vy: 0,
       fuel: stats.fuelStart,
       fuelMax: stats.fuelMax,
+      health: stats.healthStart ?? ROCKET.startHealth,
+      healthMax: stats.healthMax ?? ROCKET.healthMax,
       alive: true,
       deathReason: null,
       tilt: 0, // radians, 0 = nose up; free wrap
@@ -62,14 +71,38 @@ export class PlaySession {
     this.pickupScore = 0;
     this.time = 0;
     this.simAccum = 0;
+    /** 0..1 leftover toward the next fixed step — used to smooth the camera. */
+    this.renderAlpha = 0;
+    this._prevX = this.player.x;
+    this._prevY = this.player.y;
+    this._prevTilt = this.player.tilt;
     this._nextId = 1;
     this.flash = 0;
     this.collectFx = [];
     this._meteorDrain = false;
+    this._hullBreach = false;
     /** @type {Set<number>} band indices that currently have pickups spawned */
     this._filledBands = new Set();
 
     this._ensureBandsAround(this.player.y);
+  }
+
+  /**
+   * Camera / draw pose interpolated between the last two fixed steps so
+   * display refresh (often ≠ 60 Hz) doesn't show stepped motion.
+   */
+  renderPose() {
+    const a = this.renderAlpha;
+    const p = this.player;
+    const dx = deltaX(this._prevX, p.x);
+    const dTilt = wrapAngle(p.tilt - this._prevTilt);
+    return {
+      x: wrapX(this._prevX + dx * a),
+      y: this._prevY + (p.y - this._prevY) * a,
+      tilt: wrapAngle(this._prevTilt + dTilt * a),
+      thrusting: p.thrusting,
+      alive: p.alive,
+    };
   }
 
   get altitude() {
@@ -85,13 +118,20 @@ export class PlaySession {
    * @param {{ steer: number, thrust: boolean }} controls
    */
   step(frameDt, controls) {
-    if (!this.player.alive) return;
+    if (!this.player.alive) {
+      this.renderAlpha = 0;
+      return;
+    }
     const c = controls || { steer: 0, thrust: false };
     this.simAccum += Math.min(frameDt, 0.05);
     while (this.simAccum >= FIXED_DT) {
+      this._prevX = this.player.x;
+      this._prevY = this.player.y;
+      this._prevTilt = this.player.tilt;
       this._fixedStep(FIXED_DT, c);
       this.simAccum -= FIXED_DT;
     }
+    this.renderAlpha = this.simAccum / FIXED_DT;
   }
 
   _fixedStep(dt, { steer = 0, thrust = false }) {
@@ -131,6 +171,9 @@ export class PlaySession {
       if (p.fuel < 0) p.fuel = 0;
     }
 
+    // Black-hole gravity before integrating position.
+    if (this._applyBlackHoles(dt)) return;
+
     p.vy -= ROCKET.gravity * dt;
 
     const maxClimb = ROCKET.maxClimbSpeed * st.maxClimbMul;
@@ -143,21 +186,19 @@ export class PlaySession {
     }
     p.vx *= Math.pow(ROCKET.drag, dt * 60);
 
-    p.x += p.vx * dt;
+    p.x = wrapX(p.x + p.vx * dt);
     p.y += p.vy * dt;
-
-    if (p.x < -WORLD_HALF_W) {
-      p.x = -WORLD_HALF_W;
-      p.vx = Math.abs(p.vx) * 0.35;
-    } else if (p.x > WORLD_HALF_W) {
-      p.x = WORLD_HALF_W;
-      p.vx = -Math.abs(p.vx) * 0.35;
-    }
 
     if (p.y <= 0) {
       p.y = 0;
       p.alive = false;
-      p.deathReason = this._meteorDrain ? 'meteor' : p.fuel <= 0 ? 'fuel' : 'crash';
+      p.deathReason = this._hullBreach
+        ? 'hull'
+        : this._meteorDrain
+          ? 'meteor'
+          : p.fuel <= 0
+            ? 'fuel'
+            : 'crash';
       this.hooks.onDeath?.(this.summary());
       return;
     }
@@ -169,10 +210,11 @@ export class PlaySession {
 
     for (const u of this.pickups) {
       if (u.kind === 'meteor') {
-        u.x += u.driftX * dt;
+        u.x = wrapX(u.x + u.driftX * dt);
         u.y += u.driftY * dt;
-        if (u.x < -WORLD_HALF_W - 40) u.x = WORLD_HALF_W + 40;
-        if (u.x > WORLD_HALF_W + 40) u.x = -WORLD_HALF_W - 40;
+      } else if (u.kind === 'blackhole') {
+        u.spin += u.spinRate * dt;
+        continue;
       }
       u.spin += u.spinRate * dt;
     }
@@ -185,6 +227,34 @@ export class PlaySession {
       this.collectFx[i].age += dt;
       if (this.collectFx[i].age >= this.collectFx[i].life) this.collectFx.splice(i, 1);
     }
+  }
+
+  /**
+   * Pull the ship toward nearby black holes. Returns true if the run ended.
+   */
+  _applyBlackHoles(dt) {
+    const p = this.player;
+    for (const u of this.pickups) {
+      if (u.kind !== 'blackhole') continue;
+      const def = PICKUPS.blackhole;
+      const dx = deltaX(p.x, u.x);
+      const dy = u.y - p.y;
+      const dist = Math.hypot(dx, dy);
+      const horizon = u.r * (def.horizonMul || 0.4);
+      if (dist < horizon + ROCKET.radius * 0.35) {
+        p.alive = false;
+        p.deathReason = 'blackhole';
+        this.flash = 0.35;
+        this.hooks.onDeath?.(this.summary());
+        return true;
+      }
+      if (dist < 1 || dist > u.r * 6.5) continue;
+      const pull = def.pull || 22000;
+      const accel = Math.min(def.pullCap || 900, pull / (dist * dist));
+      p.vx += (dx / dist) * accel * dt;
+      p.vy += (dy / dist) * accel * dt;
+    }
+    return false;
   }
 
   _bandIndex(y) {
@@ -202,29 +272,34 @@ export class PlaySession {
   }
 
   _spawnBandAt(bandY) {
-    const n =
-      SPAWN.perBandMin +
-      Math.floor(this.rng() * (SPAWN.perBandMax - SPAWN.perBandMin + 1));
+    const n = bandItemBudget(this.rng, bandY);
     const used = [];
     for (let i = 0; i < n; i++) {
-      const kind = pickKind(this.rng);
+      const kind = pickKind(this.rng, bandY);
       const def = PICKUPS[kind];
       let x = (this.rng() * 2 - 1) * WORLD_HALF_W * SPAWN.spread;
       for (let tries = 0; tries < 6; tries++) {
-        if (used.every((ux) => Math.abs(ux - x) > 36)) break;
+        if (used.every((ux) => Math.abs(deltaX(ux, x)) > 36)) break;
         x = (this.rng() * 2 - 1) * WORLD_HALF_W * SPAWN.spread;
       }
       used.push(x);
       const y = bandY + (this.rng() - 0.5) * 28;
       if (y < 40) continue; // keep clear of the pad
+      // Black holes need breathing room — skip crowded / low bands.
+      if (kind === 'blackhole' && y < (def.minY || 900)) continue;
       this.pickups.push({
         id: this._nextId++,
         kind,
-        x,
+        x: wrapX(x),
         y,
         r: def.radius * (0.85 + this.rng() * 0.3),
         spin: this.rng() * Math.PI * 2,
-        spinRate: kind === 'meteor' ? (this.rng() - 0.5) * 3 : 0,
+        spinRate:
+          kind === 'meteor'
+            ? (this.rng() - 0.5) * 3
+            : kind === 'blackhole'
+              ? 1.2 + this.rng() * 1.5
+              : 0,
         driftX: kind === 'meteor' ? (this.rng() - 0.5) * 40 : 0,
         driftY: kind === 'meteor' ? -20 - this.rng() * 40 : 0,
         band: this._bandIndex(bandY),
@@ -238,7 +313,10 @@ export class PlaySession {
     const pr = ROCKET.radius;
     for (let i = this.pickups.length - 1; i >= 0; i--) {
       const u = this.pickups[i];
-      const dx = u.x - p.x;
+      // Black holes are field hazards — handled in _applyBlackHoles.
+      if (u.kind === 'blackhole') continue;
+
+      const dx = deltaX(p.x, u.x);
       const dy = u.y - p.y;
       const hitR = pr + u.r * 0.75;
       if (dx * dx + dy * dy > hitR * hitR) continue;
@@ -248,6 +326,30 @@ export class PlaySession {
       if (gain > 0) gain *= st.fuelPickupMul;
       else if (gain < 0) gain *= st.meteorDrainMul;
       p.fuel = clamp(p.fuel + gain, 0, p.fuelMax);
+
+      if (def.healthDamage > 0) {
+        const dmg = def.healthDamage * (st.healthDamageMul ?? 1);
+        p.health = clamp(p.health - dmg, 0, p.healthMax);
+        this.flash = 0.22;
+        this._hullBreach = true;
+        this._meteorDrain = true;
+        this.hooks.onMeteor?.();
+        if (p.health <= 0) {
+          p.alive = false;
+          p.deathReason = 'hull';
+          this.collectFx.push({
+            x: u.x,
+            y: u.y,
+            kind: u.kind,
+            age: 0,
+            life: 0.35,
+          });
+          this.pickups.splice(i, 1);
+          this.hooks.onDeath?.(this.summary());
+          return;
+        }
+      }
+
       this.pickupScore += def.score;
       if (u.kind === 'coin') {
         this.coins += 1;
@@ -255,9 +357,12 @@ export class PlaySession {
       } else if (u.kind === 'fuel') {
         this.hooks.onFuel?.();
       } else if (u.kind === 'meteor') {
-        this.flash = 0.22;
-        this._meteorDrain = true;
-        this.hooks.onMeteor?.();
+        // flash / flags already set above when healthDamage applies
+        if (!(def.healthDamage > 0)) {
+          this.flash = 0.22;
+          this._meteorDrain = true;
+          this.hooks.onMeteor?.();
+        }
       }
 
       this.collectFx.push({

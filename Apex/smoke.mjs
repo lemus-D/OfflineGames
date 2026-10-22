@@ -1,8 +1,21 @@
 #!/usr/bin/env node
-/* Headless smoke: thrust climb, free tilt, fall collects, upgrades, no Math.random. */
+/* Headless smoke: thrust climb, free tilt, fall collects, upgrades, wrap, hull, holes. */
 import { readFileSync } from 'node:fs';
 import { PlaySession } from './src/game/play.js';
-import { ROCKET, PICKUPS, wrapAngle, tiltDegrees } from './src/game/content.js';
+import {
+  ROCKET,
+  PICKUPS,
+  WORLD_HALF_W,
+  wrapX,
+  deltaX,
+  wrapAngle,
+  tiltDegrees,
+  pickupWeight,
+  bandItemBudget,
+  HAZARD_SCALE,
+  SPAWN,
+} from './src/game/content.js';
+import { makeRNG } from './src/core/rng.js';
 import {
   gameToKm,
   CELESTIAL,
@@ -10,12 +23,14 @@ import {
   ATM_KM,
   layerAtKm,
   nextCelestial,
+  bodyVisualScale,
 } from './src/game/altitude.js';
 import {
   foldStats,
   buyUpgrade,
   emptyUpgrades,
   UPGRADES,
+  UPGRADE_IDS,
 } from './src/game/upgrades.js';
 
 let failures = 0;
@@ -48,6 +63,33 @@ for (const file of [
 assert(tiltDegrees(0) === 0, 'tiltDegrees upright is 0');
 assert(tiltDegrees(Math.PI) === 180, 'tiltDegrees π is 180');
 assert(Math.abs(wrapAngle(Math.PI * 3) - Math.PI) < 1e-9, 'wrapAngle wraps');
+
+assert(Math.abs(wrapX(WORLD_HALF_W) + WORLD_HALF_W) < 1e-9, 'wrapX at +half → -half');
+assert(Math.abs(wrapX(-WORLD_HALF_W - 10) - (WORLD_HALF_W - 10)) < 1e-6, 'wrapX negative side');
+assert(Math.abs(deltaX(-200, 200)) < Math.abs(200 - -200), 'deltaX prefers short wrap');
+assert(PICKUPS.meteor.healthDamage > 0, 'meteors deal hull damage');
+assert(PICKUPS.blackhole.pull > 0, 'black holes have pull');
+assert(PICKUPS.blackhole.minY > 0, 'black holes spawn above pad');
+
+{
+  const mLow = pickupWeight(PICKUPS.meteor, 0);
+  const mMid = pickupWeight(PICKUPS.meteor, (HAZARD_SCALE.meteorStartY + HAZARD_SCALE.meteorFullY) / 2);
+  const mHigh = pickupWeight(PICKUPS.meteor, HAZARD_SCALE.meteorFullY);
+  assert(mLow < mMid && mMid < mHigh, 'meteor weight ramps with altitude');
+  assert(pickupWeight(PICKUPS.blackhole, 100) === 0, 'no black holes near pad');
+  const bLow = pickupWeight(PICKUPS.blackhole, PICKUPS.blackhole.minY);
+  const bHigh = pickupWeight(PICKUPS.blackhole, HAZARD_SCALE.blackholeFullY);
+  assert(bLow < bHigh, 'blackhole weight ramps after unlock');
+  const rng = makeRNG(99);
+  let sawDense = false;
+  for (let i = 0; i < 80; i++) {
+    if (bandItemBudget(rng, HAZARD_SCALE.densifyFullY) > SPAWN.perBandMax) {
+      sawDense = true;
+      break;
+    }
+  }
+  assert(sawDense, 'high bands sometimes exceed low perBandMax');
+}
 
 assert(Math.abs(gameToKm(0)) < 0.01, 'sea level ~0 km');
 assert(Math.abs(gameToKm(ATM_GAME_UNITS) - ATM_KM) < 0.01, 'atm top maps to 100 km');
@@ -94,6 +136,21 @@ assert(gameToKm(100) < gameToKm(1000), 'gameToKm monotonic');
 assert(gameToKm(CELESTIAL[0].gameY) < gameToKm(CELESTIAL[CELESTIAL.length - 1].gameY), 'moon km < pluto km');
 
 {
+  const moon = CELESTIAL.find((c) => c.id === 'moon');
+  const jupiter = CELESTIAL.find((c) => c.id === 'jupiter');
+  const sun = CELESTIAL.find((c) => c.id === 'sun');
+  const pluto = CELESTIAL.find((c) => c.id === 'pluto');
+  assert(moon.radiusKm > 0 && jupiter.radiusKm > moon.radiusKm, 'Jupiter radius > Moon');
+  assert(sun.radiusKm > jupiter.radiusKm, 'Sun radius > Jupiter');
+  assert(
+    bodyVisualScale(sun.radiusKm) > bodyVisualScale(jupiter.radiusKm) &&
+      bodyVisualScale(jupiter.radiusKm) > bodyVisualScale(moon.radiusKm) &&
+      bodyVisualScale(moon.radiusKm) > bodyVisualScale(pluto.radiusKm),
+    'visual scales ordered Sun > Jupiter > Moon > Pluto'
+  );
+}
+
+{
   const fromPad = nextCelestial(0);
   assert(fromPad.body?.id === 'moon', 'from pad, next is Moon');
   assert(fromPad.remainKm > 1e5, 'Moon is far from the pad in story-km');
@@ -121,6 +178,115 @@ assert(gameToKm(CELESTIAL[0].gameY) < gameToKm(CELESTIAL[CELESTIAL.length - 1].g
   for (let i = 0; i < 60 * 3; i++) s.step(1 / 60, { steer: 1, thrust: false });
   assert(Number.isFinite(s.player.tilt), 'tilt stays finite after full spins');
   assert(s.player.tilt >= -Math.PI - 0.01 && s.player.tilt <= Math.PI + 0.01, 'tilt wrapped');
+}
+
+// Side-to-side wrap: fly hard sideways and stay inside world half-width.
+{
+  const s = new PlaySession(19);
+  for (let i = 0; i < 20; i++) s.step(1 / 60, { steer: 1, thrust: false });
+  for (let i = 0; i < 60 * 4; i++) s.step(1 / 60, { steer: 0, thrust: true });
+  assert(s.player.airborne, 'side fly left the pad');
+  assert(
+    s.player.x >= -WORLD_HALF_W - 0.01 && s.player.x < WORLD_HALF_W + 0.01,
+    `player X wrapped into band (x=${s.player.x.toFixed(1)})`
+  );
+}
+
+// Hull damage from asteroids ends the run when health hits 0.
+{
+  const s = new PlaySession(21);
+  s.player.airborne = true;
+  s.player.y = 200;
+  s.player.peakY = 200;
+  const before = s.player.health;
+  s.pickups = [
+    {
+      id: 999,
+      kind: 'meteor',
+      x: s.player.x,
+      y: s.player.y,
+      r: 20,
+      spin: 0,
+      spinRate: 0,
+      driftX: 0,
+      driftY: 0,
+      band: 0,
+    },
+  ];
+  s.step(1 / 60, idle);
+  assert(s.player.health < before, 'meteor chips hull');
+  // Stack enough hits to kill.
+  for (let i = 0; i < 8 && s.player.alive; i++) {
+    s.pickups.push({
+      id: 1000 + i,
+      kind: 'meteor',
+      x: s.player.x,
+      y: s.player.y,
+      r: 20,
+      spin: 0,
+      spinRate: 0,
+      driftX: 0,
+      driftY: 0,
+      band: 0,
+    });
+    s.step(1 / 60, idle);
+  }
+  assert(!s.player.alive, 'hull breach ends run');
+  assert(s.player.deathReason === 'hull', 'death reason is hull');
+}
+
+// Black hole pull + event-horizon kill.
+{
+  const s = new PlaySession(33);
+  s.player.airborne = true;
+  s.player.y = 1200;
+  s.player.peakY = 1200;
+  s.player.vx = 0;
+  s.player.vy = 0;
+  s.pickups = [
+    {
+      id: 1,
+      kind: 'blackhole',
+      x: s.player.x + 4,
+      y: s.player.y + 4,
+      r: 42,
+      spin: 0,
+      spinRate: 1,
+      driftX: 0,
+      driftY: 0,
+      band: 0,
+    },
+  ];
+  s.step(1 / 60, idle);
+  assert(!s.player.alive, 'event horizon kills');
+  assert(s.player.deathReason === 'blackhole', 'death reason is blackhole');
+}
+
+// Soft pull changes velocity when outside the horizon.
+{
+  const s = new PlaySession(34);
+  s.player.airborne = true;
+  s.player.y = 1200;
+  s.player.peakY = 1200;
+  s.player.vx = 0;
+  s.player.vy = 0;
+  s.pickups = [
+    {
+      id: 2,
+      kind: 'blackhole',
+      x: s.player.x + 90,
+      y: s.player.y,
+      r: 42,
+      spin: 0,
+      spinRate: 1,
+      driftX: 0,
+      driftY: 0,
+      band: 0,
+    },
+  ];
+  for (let i = 0; i < 8; i++) s.step(1 / 60, idle);
+  assert(s.player.alive, 'far from horizon stays alive');
+  assert(s.player.vx > 1, `black hole pulls sideways (vx=${s.player.vx.toFixed(2)})`);
 }
 
 // Thrust climbs; release falls; pickups still exist below while falling.
@@ -209,25 +375,41 @@ assert(
 {
   const base = foldStats(emptyUpgrades());
   assert(base.fuelMax === 1 && base.fuelStart === 1, 'stock tank is 1.0');
+  assert(base.healthMax === 1 && base.healthStart === 1, 'stock hull is 1.0');
   assert(base.thrustMul === 1, 'stock thrust mul is 1');
   assert(base.fuelPickupMul === 1, 'stock scoop mul is 1');
-  assert(base.meteorDrainMul === 1, 'stock hull mul is 1');
+  assert(base.meteorDrainMul === 1, 'stock meteor drain mul is 1');
+  assert(base.healthDamageMul === 1, 'stock health damage mul is 1');
 
-  const maxed = foldStats({ tank: 5, thrust: 5, scoop: 5, hull: 5 });
-  assert(maxed.fuelMax > base.fuelMax, 'tank upgrade raises fuelMax');
+  assert(
+    UPGRADE_IDS.every((id) => UPGRADES[id].maxLevel === 8),
+    'all upgrades cap at Lv8'
+  );
+  assert(
+    UPGRADE_IDS.every((id) => UPGRADES[id].costs.length === UPGRADES[id].maxLevel),
+    'cost rows match maxLevel'
+  );
+  assert(UPGRADES.tank.costs[0] <= 5, 'tank first level is cheap');
+
+  const mid = foldStats({ tank: 5, thrust: 5, scoop: 5, hull: 5 });
+  const maxed = foldStats({ tank: 8, thrust: 8, scoop: 8, hull: 8 });
+  assert(mid.fuelMax > base.fuelMax, 'tank upgrade raises fuelMax');
+  assert(maxed.fuelMax > mid.fuelMax, 'Lv8 tank stronger than Lv5');
   assert(maxed.thrustMul > base.thrustMul, 'thrust upgrade raises thrustMul');
   assert(maxed.fuelPickupMul > base.fuelPickupMul, 'scoop upgrade raises pickup');
   assert(maxed.meteorDrainMul < base.meteorDrainMul, 'hull upgrade lowers meteor drain');
+  assert(maxed.healthMax > base.healthMax, 'hull upgrade raises healthMax');
+  assert(maxed.healthDamageMul < base.healthDamageMul, 'hull upgrade lowers health damage');
 
   const stock = new PlaySession(55, {}, emptyUpgrades());
-  const tanker = new PlaySession(55, {}, { tank: 5 });
+  const tanker = new PlaySession(55, {}, { tank: 8 });
   assert(stock.player.fuel === 1, 'stock starts with 1 fuel');
-  assert(tanker.player.fuelMax === foldStats({ tank: 5 }).fuelMax, 'tanker fuelMax applied');
+  assert(tanker.player.fuelMax === foldStats({ tank: 8 }).fuelMax, 'tanker fuelMax applied');
   assert(tanker.player.fuel === tanker.player.fuelMax, 'tanker launches full');
 
   // Thrusters climb farther on the same seed / burn window.
   const slow = new PlaySession(77, {}, emptyUpgrades());
-  const fast = new PlaySession(77, {}, { thrust: 5 });
+  const fast = new PlaySession(77, {}, { thrust: 8 });
   for (let i = 0; i < 60 * 3; i++) {
     slow.step(1 / 60, boost);
     fast.step(1 / 60, boost);
@@ -235,14 +417,17 @@ assert(
   assert(fast.player.y > slow.player.y + 8, `thrust upgrade climbs higher (${fast.player.y.toFixed(0)} > ${slow.player.y.toFixed(0)})`);
 
   // Scoop: fuel pickup yields more absolute fuel.
-  const scoopStats = foldStats({ scoop: 5 });
+  const scoopStats = foldStats({ scoop: 8 });
   const scooped = PICKUPS.fuel.fuelGain * scoopStats.fuelPickupMul;
   assert(scooped > PICKUPS.fuel.fuelGain, 'scoop multiplies fuel gain');
 
-  // Hull: meteor takes less.
-  const hullStats = foldStats({ hull: 5 });
+  // Hull: meteor takes less fuel splash and less hull damage.
+  const hullStats = foldStats({ hull: 8 });
   const drained = Math.abs(PICKUPS.meteor.fuelGain * hullStats.meteorDrainMul);
   assert(drained < Math.abs(PICKUPS.meteor.fuelGain), 'hull reduces meteor fuel loss');
+  const dmg =
+    PICKUPS.meteor.healthDamage * hullStats.healthDamageMul;
+  assert(dmg < PICKUPS.meteor.healthDamage, 'hull reduces asteroid hull damage');
 
   // Buyer spends bank coins.
   const profile = {

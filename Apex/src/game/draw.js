@@ -1,9 +1,10 @@
-/* 8-bit procedural art: sky, stars, rocket, gas cans, coins, meteors.
-   No asset files. Snapped pixels, flat palette. Sky color follows altitude. */
+/* 8-bit procedural art: sky, stars, rocket, gas cans, coins, meteors, black holes.
+   No asset files. Snapped pixels, flat palette. Sky color follows altitude.
+   Camera tracks X+Y; world X wraps for an infinite side-to-side map. */
 
 import { clamp, hash2i } from '../core/rng.js';
-import { WORLD_HALF_W, PAD } from './content.js';
-import { gameToKm, skyColorAtKm, bodiesNear } from './altitude.js';
+import { WORLD_HALF_W, wrapX, PAD } from './content.js';
+import { gameToKm, skyColorAtKm, bodiesNear, bodyVisualScale } from './altitude.js';
 
 /** NES-ish palette */
 const P = {
@@ -52,12 +53,36 @@ const P = {
   mercuryLt: '#c8c0b4',
   rock: '#8a7060',
   rockLt: '#b09880',
+  void: '#05060c',
+  accretion: '#e07040',
+  accretionLt: '#ffc878',
+  disk: '#6a3a88',
 };
 
-export function worldToScreen(wx, wy, camY, W, H) {
+/**
+ * World → screen. camX/camY are camera world anchors; X is wrap-relative
+ * so the map reads as infinite side-to-side.
+ * Legacy call: worldToScreen(wx, wy, camY, W, H) still works (camX = 0).
+ */
+export function worldToScreen(wx, wy, camYOrCamX, WOrCamY, HOrW, maybeH) {
+  let camX = 0;
+  let camY;
+  let W;
+  let H;
+  if (maybeH !== undefined) {
+    camX = camYOrCamX;
+    camY = WOrCamY;
+    W = HOrW;
+    H = maybeH;
+  } else {
+    camY = camYOrCamX;
+    W = WOrCamY;
+    H = HOrW;
+  }
   const scale = Math.min(W, H) / (WORLD_HALF_W * 1.85);
+  const relX = wrapX(wx - camX);
   return {
-    x: W * 0.5 + wx * scale,
+    x: W * 0.5 + relX * scale,
     y: H * 0.62 - (wy - camY) * scale,
     scale,
   };
@@ -104,7 +129,8 @@ function spriteCanvas(key, rows, colors, px) {
   return c;
 }
 
-export function drawSky(g, W, H, altitude, time) {
+/** @param {number} [camX=0] camera world X — scrolls ground/stars horizontally */
+export function drawSky(g, W, H, altitude, time, camX = 0) {
   g.imageSmoothingEnabled = false;
   g.globalAlpha = 1;
   g.globalCompositeOperation = 'source-over';
@@ -113,6 +139,9 @@ export function drawSky(g, W, H, altitude, time) {
   const col = skyColorAtKm(km);
   g.fillStyle = rgb(col);
   g.fillRect(0, 0, W, H);
+
+  const scale = Math.min(W, H) / (WORLD_HALF_W * 1.85);
+  const xScroll = camX * scale;
 
   // Thermosphere aurora shimmer (very subtle).
   if (km > 85 && km < 600) {
@@ -127,21 +156,26 @@ export function drawSky(g, W, H, altitude, time) {
 
   // Ground + clouds only in low troposphere.
   if (km < 8) {
-    const gy = snap(H * 0.62 + altitude * (Math.min(W, H) / (WORLD_HALF_W * 1.85)));
+    const gy = snap(H * 0.62 + altitude * scale);
     if (gy < H && gy > 0) {
       g.fillStyle = P.groundDk;
       g.fillRect(0, gy, W, H - gy);
       g.fillStyle = P.ground;
       g.fillRect(0, gy, W, 8);
       g.fillStyle = P.green;
-      for (let x = 0; x < W; x += 12) {
-        if (hash2i(x, 3, 2) > 0.55) g.fillRect(x, gy - 4, 4, 4);
+      const grassOff = Math.floor(xScroll) % 12;
+      for (let x = -12; x < W + 12; x += 12) {
+        const gx = x - grassOff;
+        if (hash2i(Math.floor((gx + camX) / 12), 3, 2) > 0.55) {
+          g.fillRect(gx, gy - 4, 4, 4);
+        }
       }
     }
     g.fillStyle = P.cloud;
     g.globalAlpha = 0.3 * (1 - km / 8);
     for (let i = 0; i < 3; i++) {
-      const cx = snap((0.2 + i * 0.25) * W + Math.sin(time * 0.4 + i) * 8);
+      const base = (0.2 + i * 0.25) * W + Math.sin(time * 0.4 + i) * 8;
+      const cx = snap((((base - xScroll * 0.35) % (W + 80)) + W + 80) % (W + 80) - 40);
       const cy = snap(H * (0.55 + i * 0.08));
       g.fillRect(cx, cy, 44, 10);
       g.fillRect(cx + 10, cy - 8, 24, 8);
@@ -156,12 +190,13 @@ export function drawSky(g, W, H, altitude, time) {
     g.fillStyle = P.star;
     const cols = 16;
     const rows = 22;
-    const scroll = Math.floor(altitude / 28);
+    const scrollY = Math.floor(altitude / 28);
+    const scrollX = Math.floor(camX / 40);
     for (let iy = 0; iy < rows; iy++) {
       for (let ix = 0; ix < cols; ix++) {
-        const n = hash2i(ix, iy + scroll, 91);
+        const n = hash2i(ix + scrollX, iy + scrollY, 91);
         if (n < 0.78) continue;
-        const x = snap(((ix + 0.3) / cols) * W);
+        const x = snap(((((ix + 0.3) / cols) * W - xScroll * 0.15) % W + W) % W);
         const y = snap((((iy + (altitude * 0.003) % 1) / rows) * H + H) % H);
         const s = n > 0.93 ? 3 : 2;
         g.fillRect(x, y, s, s);
@@ -352,13 +387,13 @@ const BODY_ART = {
   pluto: { rows: PLUTO_SPRITE, colors: PLUTO_COLORS, halo: P.pluto },
 };
 
-function drawAsteroidBelt(g, body, camY, W, H, time, near) {
+function drawAsteroidBelt(g, body, camX, camY, W, H, time, near) {
   const count = 14;
   for (let i = 0; i < count; i++) {
     const n = hash2i(i, 7, 3);
     const ox = (n * 2 - 1) * 200;
     const oy = (hash2i(i, 11, 5) - 0.5) * 80;
-    const scr = worldToScreen(body.x + ox, body.gameY + oy, camY, W, H);
+    const scr = worldToScreen(body.x + ox, body.gameY + oy, camX, camY, W, H);
     const px = Math.max(2, Math.round(2 + near * 3 + n * 2));
     const bob = Math.sin(time * 1.2 + i) * 2;
     g.fillStyle = n > 0.55 ? P.rockLt : P.rock;
@@ -371,31 +406,36 @@ function drawAsteroidBelt(g, body, camY, W, H, time, near) {
 }
 
 /** Draw solar-system bodies when the camera is near their game altitude. */
-export function drawCelestials(g, W, H, camY, time) {
+export function drawCelestials(g, W, H, camY, time, camX = 0) {
   g.imageSmoothingEnabled = false;
-  for (const body of bodiesNear(camY, 1400)) {
+  for (const body of bodiesNear(camY, 1800)) {
     const dist = Math.abs(body.gameY - camY);
-    const near = 1 - clamp(dist / 1400, 0, 1);
+    const near = 1 - clamp(dist / 1800, 0, 1);
 
     if (body.art === 'belt') {
-      drawAsteroidBelt(g, body, camY, W, H, time, near);
+      drawAsteroidBelt(g, body, camX, camY, W, H, time, near);
       if (near > 0.45) {
         g.fillStyle = '#e8eef8';
         g.font = 'bold 12px Courier New, monospace';
         g.textAlign = 'center';
-        const scr = worldToScreen(body.x, body.gameY, camY, W, H);
+        const scr = worldToScreen(body.x, body.gameY, camX, camY, W, H);
         g.fillText(body.name.toUpperCase(), snap(scr.x), snap(scr.y + 40));
       }
       continue;
     }
 
     const art = BODY_ART[body.art] || BODY_ART.moon;
-    const scr = worldToScreen(body.x, body.gameY, camY, W, H);
-    const px = Math.max(3, Math.round(4 + near * 5 + (body.art === 'sun' || body.art === 'jupiter' ? 1 : 0)));
-    const sheet = spriteCanvas(body.art, art.rows, art.colors, px);
+    const scr = worldToScreen(body.x, body.gameY, camX, camY, W, H);
+    // Relative size from real mean radius (compressed power curve).
+    const sizeMul = bodyVisualScale(body.radiusKm);
+    const basePx = 3 + near * 3;
+    const px = Math.max(2, Math.round(basePx * sizeMul));
+    const sheet = spriteCanvas(`${body.art}@${px}`, art.rows, art.colors, px);
     const w = sheet.width;
     const h = sheet.height;
     if (scr.y < -h || scr.y > H + h) continue;
+    // Skip if wrapped far off the sides (keep a generous margin for giants).
+    if (scr.x < -w * 1.2 || scr.x > W + w * 1.2) continue;
 
     g.globalAlpha = 0.12 + near * 0.22;
     g.fillStyle = art.halo;
@@ -440,14 +480,14 @@ export function drawFlybyBanner(g, W, H, text, age, life) {
  * 8-bit launch pad at world (PAD.x, 0) with a deck at PAD.deckY.
  * Drawn when the camera is still near the ground.
  */
-export function drawLaunchPad(g, W, H, camY) {
+export function drawLaunchPad(g, W, H, camY, camX = 0) {
   if (camY > 520) return;
   g.imageSmoothingEnabled = false;
 
-  const deck = worldToScreen(PAD.x, PAD.deckY, camY, W, H);
-  const ground = worldToScreen(PAD.x, 0, camY, W, H);
-  const left = worldToScreen(PAD.x - PAD.halfW, PAD.deckY, camY, W, H);
-  const right = worldToScreen(PAD.x + PAD.halfW, PAD.deckY, camY, W, H);
+  const deck = worldToScreen(PAD.x, PAD.deckY, camX, camY, W, H);
+  const ground = worldToScreen(PAD.x, 0, camX, camY, W, H);
+  const left = worldToScreen(PAD.x - PAD.halfW, PAD.deckY, camX, camY, W, H);
+  const right = worldToScreen(PAD.x + PAD.halfW, PAD.deckY, camX, camY, W, H);
   const deckW = Math.max(8, right.x - left.x);
   const deckH = Math.max(4, Math.round(6 * deck.scale * 0.08));
   const legW = Math.max(3, Math.round(4 * deck.scale * 0.08));
@@ -577,6 +617,49 @@ const METEOR_COLORS = {
   o: P.orange,
 };
 
+function drawBlackHole(g, x, y, r, spin, time) {
+  const px = Math.max(2, Math.round(r / 5));
+  const cx = snap(x);
+  const cy = snap(y);
+  const outer = Math.max(10, snap(r));
+  const mid = Math.max(6, snap(r * 0.62));
+  const core = Math.max(3, snap(r * 0.28));
+
+  // Accretion disk (flat ellipse band).
+  g.save();
+  g.translate(cx, cy);
+  g.rotate(spin * 0.35 + time * 0.4);
+  g.fillStyle = P.disk;
+  g.globalAlpha = 0.55;
+  g.fillRect(-outer, -Math.max(2, px), outer * 2, Math.max(4, px * 2));
+  g.fillStyle = P.accretion;
+  g.globalAlpha = 0.85;
+  g.fillRect(-outer + px, -Math.max(2, px - 1), outer * 2 - px * 2, Math.max(3, px));
+  g.fillStyle = P.accretionLt;
+  g.globalAlpha = 0.7;
+  g.fillRect(-mid, -Math.max(1, px - 2), mid * 2, Math.max(2, px - 1));
+  g.restore();
+
+  // Event horizon + hot ring.
+  g.globalAlpha = 1;
+  g.fillStyle = P.void;
+  g.fillRect(cx - core, cy - core, core * 2, core * 2);
+  g.fillStyle = P.ink;
+  g.fillRect(cx - core + 1, cy - core + 1, Math.max(2, core * 2 - 2), Math.max(2, core * 2 - 2));
+  g.fillStyle = P.accretionLt;
+  g.fillRect(cx - mid, cy - 1, mid * 2, 2);
+  g.fillRect(cx - 1, cy - mid, 2, mid * 2);
+  // Photon-ring ticks.
+  g.fillStyle = P.accretion;
+  const tick = Math.max(2, px);
+  for (let i = 0; i < 6; i++) {
+    const a = spin + i * (Math.PI / 3) + time;
+    const tx = snap(cx + Math.cos(a) * mid);
+    const ty = snap(cy + Math.sin(a) * mid * 0.55);
+    g.fillRect(tx, ty, tick, tick);
+  }
+}
+
 export function drawPickup(g, kind, x, y, r, spin, time) {
   g.imageSmoothingEnabled = false;
   const px = Math.max(2, Math.round(r / 4));
@@ -593,6 +676,8 @@ export function drawPickup(g, kind, x, y, r, spin, time) {
   } else if (kind === 'coin') {
     const w = 8 * px;
     blit(g, x - w / 2, y - w / 2 + bob, px, COIN_SPRITE, COIN_COLORS);
+  } else if (kind === 'blackhole') {
+    drawBlackHole(g, x, y, r, spin, time);
   } else {
     const w = 8 * px;
     const frame = Math.floor(((spin % (Math.PI * 2)) + Math.PI * 2) / (Math.PI / 2)) % 2;
@@ -661,13 +746,19 @@ export function drawRocket(g, x, y, scale, tilt, time, thrusting) {
   g.restore();
 }
 
-export function drawCollectFx(g, fx, camY, W, H, time) {
+export function drawCollectFx(g, fx, camY, W, H, time, camX = 0) {
   const u = fx.age / fx.life;
-  const scr = worldToScreen(fx.x, fx.y, camY, W, H);
+  const scr = worldToScreen(fx.x, fx.y, camX, camY, W, H);
   const s = Math.max(2, Math.round((6 + u * 14) * scr.scale * 0.15));
   g.imageSmoothingEnabled = false;
   g.fillStyle =
-    fx.kind === 'meteor' ? P.orange : fx.kind === 'coin' ? P.yellow : P.red;
+    fx.kind === 'meteor'
+      ? P.orange
+      : fx.kind === 'blackhole'
+        ? P.accretion
+        : fx.kind === 'coin'
+          ? P.yellow
+          : P.red;
   g.globalAlpha = 1 - u;
   g.fillRect(snap(scr.x - s), snap(scr.y - s), s * 2, 2);
   g.fillRect(snap(scr.x - s), snap(scr.y + s), s * 2, 2);
