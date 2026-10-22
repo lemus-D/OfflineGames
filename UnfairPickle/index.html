@@ -121,6 +121,55 @@
     color: var(--muted);
   }
 
+  .level-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    margin: 12px 0 4px;
+  }
+  .level-grid .lvl {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.95rem;
+    padding: 10px 4px;
+    border: 2px solid var(--dill);
+    background: rgba(61, 138, 58, 0.1);
+    color: var(--ink);
+    cursor: pointer;
+    transition: transform 0.1s, filter 0.1s, background 0.1s;
+  }
+  .level-grid .lvl:hover:not(:disabled) {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+    background: rgba(76, 208, 80, 0.25);
+  }
+  .level-grid .lvl:disabled {
+    opacity: 0.35;
+    cursor: default;
+    border-color: var(--line);
+  }
+  .level-grid .lvl .n {
+    display: block;
+    font-size: 1.15rem;
+    color: var(--dill);
+  }
+  .level-grid .lvl .nm {
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--muted);
+    line-height: 1.2;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .dev-note {
+    margin: 6px 0 0;
+    font-size: 0.72rem;
+    color: var(--brick);
+  }
+
   #hud {
     position: fixed;
     inset: 0;
@@ -203,8 +252,12 @@
     <h1 class="brand">Unfair Pickle</h1>
     <p class="tag">Ten levels of troll platforms. You are a dill pickle. The first flag is a lie.</p>
 
-    <button class="btn primary" id="btnPlay">Start brining</button>
+    <button class="btn primary" id="btnPlay">Start from level 1</button>
     <p class="hint">← → / A D move · ↑ W Space jump · R retry after death</p>
+
+    <p class="meta" style="margin-bottom:4px">Level select</p>
+    <div class="level-grid" id="levelGrid" aria-label="Level select"></div>
+    <p class="dev-note" id="devUnlockNote"></p>
 
     <p class="meta">Best clear <b id="bestTime">—</b> · Fewest deaths <b id="bestDeaths">—</b></p>
   </div>

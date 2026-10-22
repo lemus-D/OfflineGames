@@ -372,7 +372,7 @@ export class PlaySession {
 
   _standOn(cell) {
     if (cell.vanish && cell.timer <= 0) {
-      cell.timer = 0.35;
+      cell.timer = 0.55; // tense, but long enough to hop off
     }
     if (cell.crumbly && cell.timer <= 0) {
       cell.timer = 0.55;

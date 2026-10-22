@@ -185,6 +185,45 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
   );
 }
 
+// L4 (vanish pads): hop the 2-tile pits, ignore the fake ~~ ledge.
+{
+  const s = new PlaySession(17, {}, { startLevel: 3 });
+  let steps = 0;
+  let cleared = false;
+  let hopFrames = 0;
+  while (steps < 60 * 25) {
+    if (s.status === 'dead') {
+      s.step(1 / 60, { move: 0, jump: false, jumpHeld: false, restart: true });
+      hopFrames = 0;
+      steps += 1;
+      continue;
+    }
+    if (s.status === 'cleared' || s.levelIndex > 3) {
+      cleared = true;
+      break;
+    }
+    const x = s.player.x;
+    const nearPit =
+      (x > 5.3 * TILE && x < 6.8 * TILE) ||
+      (x > 11.3 * TILE && x < 12.8 * TILE) ||
+      (x > 17.3 * TILE && x < 18.8 * TILE) ||
+      (x > 23.3 * TILE && x < 24.8 * TILE);
+    let jump = false;
+    if (nearPit && s.player.onGround) {
+      jump = true;
+      hopFrames = 8;
+    }
+    const jumpHeld = hopFrames > 0;
+    if (hopFrames > 0) hopFrames -= 1;
+    s.step(1 / 60, { move: 1, jump, jumpHeld, restart: false });
+    steps += 1;
+  }
+  assert(
+    cleared,
+    `L4 completable (status=${s.status} x=${s.player.x.toFixed(0)} deaths=${s.deaths})`
+  );
+}
+
 // Measured jump height in-sim.
 {
   const s = new PlaySession(13, {}, { startLevel: 0 });

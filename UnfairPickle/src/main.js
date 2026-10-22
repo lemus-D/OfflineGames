@@ -4,7 +4,7 @@ import { Input } from './core/input.js';
 import { Save } from './core/save.js';
 import { Audio } from './core/audio.js';
 import { PlaySession } from './game/play.js';
-import { LEVELS, formatTime, TILE } from './game/content.js';
+import { LEVELS, formatTime, TILE, DEV_UNLOCK_ALL } from './game/content.js';
 import {
   drawSky,
   drawLevel,
@@ -29,6 +29,8 @@ let profile = Save.loadProfile();
 let state = 'menu';
 /** @type {PlaySession|null} */
 let session = null;
+/** Level index used to restart from summary / again. */
+let lastStartLevel = 0;
 let animTime = 0;
 let lastTs = 0;
 const SCALE = 3;
@@ -47,6 +49,8 @@ const els = {
   btnPlay: document.getElementById('btnPlay'),
   btnAgain: document.getElementById('btnAgain'),
   btnMenu: document.getElementById('btnMenu'),
+  levelGrid: document.getElementById('levelGrid'),
+  devUnlockNote: document.getElementById('devUnlockNote'),
 };
 
 function resize() {
@@ -76,12 +80,39 @@ function hide(el) {
   el.classList.add('hidden');
 }
 
+function isUnlocked(index) {
+  if (DEV_UNLOCK_ALL) return true;
+  // Level 0 always open; each clear unlocks the next.
+  return index <= (profile.highestCleared ?? -1) + 1;
+}
+
+function refreshLevelGrid() {
+  if (!els.levelGrid) return;
+  els.levelGrid.innerHTML = '';
+  LEVELS.forEach((level, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'lvl';
+    btn.disabled = !isUnlocked(i);
+    btn.title = level.name;
+    btn.innerHTML = `<span class="n">${i + 1}</span><span class="nm">${level.name}</span>`;
+    btn.addEventListener('click', () => startRun(i));
+    els.levelGrid.appendChild(btn);
+  });
+  if (els.devUnlockNote) {
+    els.devUnlockNote.textContent = DEV_UNLOCK_ALL
+      ? 'Dev: all levels unlocked'
+      : '';
+  }
+}
+
 function refreshMenuMeta() {
   if (els.bestTime) els.bestTime.textContent = formatTime(profile.bestClearTime);
   if (els.bestDeaths) {
     els.bestDeaths.textContent =
       profile.fewestDeaths == null ? '—' : String(profile.fewestDeaths);
   }
+  refreshLevelGrid();
 }
 
 function armAudio() {
@@ -89,15 +120,36 @@ function armAudio() {
   audio.resume();
 }
 
-function startRun() {
+function markLevelCleared(levelIndex) {
+  if (levelIndex > (profile.highestCleared ?? -1)) {
+    profile.highestCleared = levelIndex;
+    Save.writeProfile(profile);
+  }
+}
+
+/**
+ * @param {number} [startLevel]
+ */
+function startRun(startLevel = 0) {
+  const idx = Math.max(0, Math.min(LEVELS.length - 1, startLevel | 0));
+  if (!isUnlocked(idx)) return;
   armAudio();
   audio.click();
+  lastStartLevel = idx;
   const seed = (Date.now() ^ (performance.now() * 1000)) >>> 0;
-  session = new PlaySession(seed, {
-    onWin(sum) {
-      endCampaign(sum);
+  session = new PlaySession(
+    seed,
+    {
+      onClear(sum) {
+        markLevelCleared(sum.levelIndex);
+      },
+      onWin(sum) {
+        markLevelCleared(LEVELS.length - 1);
+        endCampaign(sum);
+      },
     },
-  });
+    { startLevel: idx }
+  );
   profile.runs += 1;
   Save.writeProfile(profile);
   state = 'playing';
@@ -263,8 +315,8 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-els.btnPlay.addEventListener('click', startRun);
-els.btnAgain.addEventListener('click', startRun);
+els.btnPlay.addEventListener('click', () => startRun(0));
+els.btnAgain.addEventListener('click', () => startRun(lastStartLevel));
 els.btnMenu.addEventListener('click', () => {
   hide(els.summary);
   show(els.menu);
@@ -274,8 +326,8 @@ els.btnMenu.addEventListener('click', () => {
 });
 
 addEventListener('keydown', (e) => {
-  if (e.code === 'Enter' && state === 'menu') startRun();
-  if (e.code === 'Enter' && state === 'summary') startRun();
+  if (e.code === 'Enter' && state === 'menu') startRun(0);
+  if (e.code === 'Enter' && state === 'summary') startRun(lastStartLevel);
 });
 
 if ('serviceWorker' in navigator) {

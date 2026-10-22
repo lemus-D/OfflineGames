@@ -1,7 +1,9 @@
 /* Namespaced, versioned localStorage. Keys always start with unfair-pickle.v1. */
 
+import { LEVELS } from '../game/content.js';
+
 const PROFILE_KEY = 'unfair-pickle.v1.profile';
-const SCHEMA = 1;
+const SCHEMA = 2;
 
 const DEFAULT_PROFILE = () => ({
   schema: SCHEMA,
@@ -10,6 +12,8 @@ const DEFAULT_PROFILE = () => ({
   clears: 0,
   runs: 0,
   totalDeaths: 0,
+  /** Highest level index cleared (unlocked = this + 1, or 0 at start). */
+  highestCleared: -1,
 });
 
 function migrate(raw) {
@@ -19,6 +23,9 @@ function migrate(raw) {
   merged.clears = Math.max(0, Math.floor(Number(merged.clears) || 0));
   merged.runs = Math.max(0, Math.floor(Number(merged.runs) || 0));
   merged.totalDeaths = Math.max(0, Math.floor(Number(merged.totalDeaths) || 0));
+  let hc = Math.floor(Number(merged.highestCleared));
+  if (!Number.isFinite(hc)) hc = -1;
+  merged.highestCleared = Math.max(-1, Math.min(LEVELS.length - 1, hc));
   if (merged.bestClearTime != null) {
     const t = Number(merged.bestClearTime);
     merged.bestClearTime = Number.isFinite(t) && t > 0 ? t : null;
