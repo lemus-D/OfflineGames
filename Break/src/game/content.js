@@ -15,17 +15,17 @@ export const TABLE = {
    */
   pocketMouth: 2.75,
   /** Capture / funnel radius around off-table pocket centers. */
-  pocketJaw: 7.2,
+  pocketJaw: 6.8,
   /**
    * How far outside the felt the pocket centers sit (into the wood rail).
-   * Must clear pocketR so the hole itself does not sit on the cloth.
+   * Close enough that the mouth meets the corner, without the disc on the cloth.
    */
-  pocketOut: 9.2,
-  pocketOutSide: 8.6,
+  pocketOut: 6.2,
+  pocketOutSide: 6.4,
   /** Half-width of the rail opening / cushion jaw into each pocket. */
-  railGap: 8.8,
+  railGap: 7.6,
   /** Visual cushion thickness (drawn along the felt edge). */
-  cushionFace: 3.6,
+  cushionFace: 3.8,
 };
 
 export const BALL_R = 2.85;
@@ -43,7 +43,7 @@ export const PHYSICS = {
   cushionFriction: 0.42,
   ballRestitution: 0.94,
   /** Max cue impulse magnitude before mass (world units / sec). */
-  maxShotSpeed: 160,
+  maxShotSpeed: 220,
   /** How strongly tip English becomes stored spin. */
   englishToSpin: 0.55,
   /** Side spin kick on cushions. */
@@ -114,13 +114,15 @@ export function pocketCenters() {
   const h = TABLE.halfH;
   const c = TABLE.pocketOut;
   const s = TABLE.pocketOutSide;
+  // Corners sit just off the felt corner, still in the wood.
+  const k = 0.55;
   return [
-    { x: -w - c * 0.55, y: -h - c * 0.55, corner: true },
-    { x: 0, y: -h - s * 0.72, corner: false },
-    { x: w + c * 0.55, y: -h - c * 0.55, corner: true },
-    { x: -w - c * 0.55, y: h + c * 0.55, corner: true },
-    { x: 0, y: h + s * 0.72, corner: false },
-    { x: w + c * 0.55, y: h + c * 0.55, corner: true },
+    { x: -w - c * k, y: -h - c * k, corner: true },
+    { x: 0, y: -h - s * 0.7, corner: false },
+    { x: w + c * k, y: -h - c * k, corner: true },
+    { x: -w - c * k, y: h + c * k, corner: true },
+    { x: 0, y: h + s * 0.7, corner: false },
+    { x: w + c * k, y: h + c * k, corner: true },
   ];
 }
 

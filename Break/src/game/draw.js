@@ -79,8 +79,8 @@ function feltPattern(g, x, y, w, h) {
 }
 
 /**
- * Reference-style table: wood frame, pockets recessed into the rails,
- * cushions with curved jaws that open into those off-felt holes.
+ * Reference-style table: continuous rails, pockets recessed in the wood,
+ * cushion segments that open cleanly into each mouth (no green over the hole).
  */
 export function drawTable(g, view, animTime) {
   const S = view.scale;
@@ -93,9 +93,10 @@ export function drawTable(g, view, animTime) {
   const th = TABLE.halfH * 2 * S;
   const right = left + tw;
   const bottom = top + th;
+  const woodTone = '#2e1a0e';
 
-  // —— Outer wood apron (pockets live in this band; keep it wide enough) ——
-  const pad = Math.max(12, TABLE.pocketOut * S * 0.55);
+  // —— Outer wood apron ——
+  const pad = Math.max(14, TABLE.pocketOut * S * 0.75);
   const fx = left - rail - pad;
   const fy = top - rail - pad;
   const fw = tw + rail * 2 + pad * 2;
@@ -114,18 +115,31 @@ export function drawTable(g, view, animTime) {
   roundRect(g, fx + 3, fy + 3, fw - 6, fh - 6, 12);
   g.stroke();
 
-  // —— Felt (clean playing rectangle) ——
+  // Continuous dark rail band under the cushions (full loop)
+  g.fillStyle = '#24160c';
+  g.fillRect(left - rail, top - rail, tw + rail * 2, rail);
+  g.fillRect(left - rail, bottom, tw + rail * 2, rail);
+  g.fillRect(left - rail, top, rail, th);
+  g.fillRect(right, top, rail, th);
+
+  // —— Felt ——
   feltPattern(g, left, top, tw, th);
 
-  // —— Cushion faces with curved jaws into off-table pockets ——
+  // Cover felt that would show through pocket mouths (wood fill in the gaps)
+  punchPocketMouths(g, left, top, right, bottom, gap, face, rail, woodTone);
+
+  // —— Cushion faces (segments between mouths, rounded ends) ——
   drawCushions(g, left, top, right, bottom, face, gap);
 
-  // —— Recessed pocket holes in the wood (outside the felt) ——
+  // —— Pocket holes last so nothing paints over them ——
   for (const p of pocketCenters()) {
-    drawRailPocket(g, tableToScreen(p.x, p.y, view), TABLE.pocketR * S * (p.corner ? 1.08 : 0.95));
+    drawRailPocket(
+      g,
+      tableToScreen(p.x, p.y, view),
+      TABLE.pocketR * S * (p.corner ? 1.02 : 0.92)
+    );
   }
 
-  // Sighting diamonds on the wood rails (between pocket mouths)
   drawDiamonds(g, left, top, tw, th, rail, gap);
 
   // Head string + foot spot
@@ -155,138 +169,99 @@ export function drawTable(g, view, animTime) {
   g.restore();
 }
 
-/** Cushion strips that stop at pocket jaws and curve into the openings. */
+/** Fill rail gaps with wood so green felt never shows in a pocket mouth. */
+function punchPocketMouths(g, left, top, right, bottom, gap, face, rail, woodTone) {
+  const midX = (left + right) / 2;
+  g.fillStyle = woodTone;
+
+  // Side pockets — cover the mouth slot through felt edge + rail
+  g.fillRect(midX - gap, top - rail, gap * 2, rail + 2);
+  g.fillRect(midX - gap, bottom - 2, gap * 2, rail + 2);
+
+  // Corner mouths — small wood patches at each felt corner
+  const c = gap * 0.95;
+  g.fillRect(left - 2, top - 2, c, c);
+  g.fillRect(right - c + 2, top - 2, c, c);
+  g.fillRect(left - 2, bottom - c + 2, c, c);
+  g.fillRect(right - c + 2, bottom - c + 2, c, c);
+  // Also clear into the rail at corners
+  g.fillRect(left - rail, top - rail, c + rail * 0.35, c + rail * 0.35);
+  g.fillRect(right - c + rail * 0.65, top - rail, c + rail * 0.35, c + rail * 0.35);
+  g.fillRect(left - rail, bottom - c + rail * 0.65, c + rail * 0.35, c + rail * 0.35);
+  g.fillRect(right - c + rail * 0.65, bottom - c + rail * 0.65, c + rail * 0.35, c + rail * 0.35);
+}
+
+/** Cushion strips between pocket mouths — rounded ends, nothing over the holes. */
 function drawCushions(g, left, top, right, bottom, face, gap) {
-  const jaw = gap; // mouth half-width along the rail
+  const jaw = gap;
   const cushionFill = '#2f6b4a';
   const cushionEdge = '#1e4a32';
   const lip = '#3d8a5c';
-
-  // Helper: horizontal cushion segment from x0..x1 along top or bottom.
-  function hCushion(yInner, yOuter, x0, x1, atTop) {
-    if (x1 - x0 < 4) return;
-    g.beginPath();
-    if (atTop) {
-      g.moveTo(x0 + jaw * 0.15, yInner);
-      g.lineTo(x1 - jaw * 0.15, yInner);
-      // right jaw curves up/out toward pocket
-      g.quadraticCurveTo(x1, yInner, x1 + jaw * 0.05, yOuter);
-      g.lineTo(x0 - jaw * 0.05, yOuter);
-      g.quadraticCurveTo(x0, yInner, x0 + jaw * 0.15, yInner);
-    } else {
-      g.moveTo(x0 + jaw * 0.15, yInner);
-      g.lineTo(x1 - jaw * 0.15, yInner);
-      g.quadraticCurveTo(x1, yInner, x1 + jaw * 0.05, yOuter);
-      g.lineTo(x0 - jaw * 0.05, yOuter);
-      g.quadraticCurveTo(x0, yInner, x0 + jaw * 0.15, yInner);
-    }
-    g.closePath();
-    g.fillStyle = cushionFill;
-    g.fill();
-    g.strokeStyle = cushionEdge;
-    g.lineWidth = 1.2;
-    g.stroke();
-    // Bright lip on the playing edge
-    g.beginPath();
-    g.moveTo(x0 + jaw * 0.2, yInner);
-    g.lineTo(x1 - jaw * 0.2, yInner);
-    g.strokeStyle = lip;
-    g.lineWidth = 2;
-    g.stroke();
-  }
-
-  function vCushion(xInner, xOuter, y0, y1, atLeft) {
-    if (y1 - y0 < 4) return;
-    g.beginPath();
-    g.moveTo(xInner, y0 + jaw * 0.15);
-    g.lineTo(xInner, y1 - jaw * 0.15);
-    g.quadraticCurveTo(xInner, y1, xOuter, y1 + jaw * 0.05);
-    g.lineTo(xOuter, y0 - jaw * 0.05);
-    g.quadraticCurveTo(xInner, y0, xInner, y0 + jaw * 0.15);
-    g.closePath();
-    g.fillStyle = cushionFill;
-    g.fill();
-    g.strokeStyle = cushionEdge;
-    g.lineWidth = 1.2;
-    g.stroke();
-    g.beginPath();
-    g.moveTo(xInner, y0 + jaw * 0.2);
-    g.lineTo(xInner, y1 - jaw * 0.2);
-    g.strokeStyle = lip;
-    g.lineWidth = 2;
-    g.stroke();
-  }
-
-  // Top: left-of-side-pocket, right-of-side-pocket
   const midX = (left + right) / 2;
-  hCushion(top, top - face, left + jaw, midX - jaw, true);
-  hCushion(top, top - face, midX + jaw, right - jaw, true);
-  // Bottom
-  hCushion(bottom, bottom + face, left + jaw, midX - jaw, false);
-  hCushion(bottom, bottom + face, midX + jaw, right - jaw, false);
-  // Left / right (only corner openings — no side pockets on short rails)
-  const midY = (top + bottom) / 2;
-  vCushion(left, left - face, top + jaw, bottom - jaw, true);
-  vCushion(right, right + face, top + jaw, bottom - jaw, false);
 
-  // Corner jaw wedges — little curved cushions pointing into each corner pocket
-  drawCornerJaw(g, left, top, face, jaw, 'tl', cushionFill, lip);
-  drawCornerJaw(g, right, top, face, jaw, 'tr', cushionFill, lip);
-  drawCornerJaw(g, left, bottom, face, jaw, 'bl', cushionFill, lip);
-  drawCornerJaw(g, right, bottom, face, jaw, 'br', cushionFill, lip);
-  // Side-pocket jaw tips on long rails
-  drawSideJaw(g, midX, top, face, jaw, 'top', cushionFill, lip);
-  drawSideJaw(g, midX, bottom, face, jaw, 'bottom', cushionFill, lip);
-}
+  function hSeg(yInner, yOuter, x0, x1) {
+    if (x1 - x0 < 6) return;
+    const r = Math.min(face * 0.9, (x1 - x0) * 0.2);
+    g.beginPath();
+    g.moveTo(x0 + r, yInner);
+    g.lineTo(x1 - r, yInner);
+    // right end rounds out into the rail (toward pocket), not over it
+    g.quadraticCurveTo(x1, yInner, x1, yOuter);
+    g.lineTo(x0, yOuter);
+    g.quadraticCurveTo(x0, yInner, x0 + r, yInner);
+    g.closePath();
+    g.fillStyle = cushionFill;
+    g.fill();
+    g.strokeStyle = cushionEdge;
+    g.lineWidth = 1;
+    g.stroke();
+    g.beginPath();
+    g.moveTo(x0 + r * 0.6, yInner);
+    g.lineTo(x1 - r * 0.6, yInner);
+    g.strokeStyle = lip;
+    g.lineWidth = 2;
+    g.stroke();
+  }
 
-function drawCornerJaw(g, cx, cy, face, jaw, corner, fill, lip) {
-  // Small rounded tip of cushion at the felt corner, opening toward the off-table hole.
-  const sx = corner.includes('l') ? 1 : -1;
-  const sy = corner.includes('t') ? 1 : -1;
-  g.beginPath();
-  g.moveTo(cx + sx * jaw * 0.05, cy);
-  g.quadraticCurveTo(cx, cy, cx, cy + sy * jaw * 0.05);
-  g.quadraticCurveTo(cx - sx * face * 0.2, cy + sy * face * 0.85, cx + sx * jaw * 0.35, cy + sy * face);
-  g.quadraticCurveTo(cx + sx * jaw * 0.55, cy + sy * face * 0.35, cx + sx * jaw * 0.05, cy);
-  g.closePath();
-  g.fillStyle = fill;
-  g.fill();
-  g.strokeStyle = lip;
-  g.lineWidth = 1.2;
-  g.stroke();
-}
+  function vSeg(xInner, xOuter, y0, y1) {
+    if (y1 - y0 < 6) return;
+    const r = Math.min(face * 0.9, (y1 - y0) * 0.2);
+    g.beginPath();
+    g.moveTo(xInner, y0 + r);
+    g.lineTo(xInner, y1 - r);
+    g.quadraticCurveTo(xInner, y1, xOuter, y1);
+    g.lineTo(xOuter, y0);
+    g.quadraticCurveTo(xInner, y0, xInner, y0 + r);
+    g.closePath();
+    g.fillStyle = cushionFill;
+    g.fill();
+    g.strokeStyle = cushionEdge;
+    g.lineWidth = 1;
+    g.stroke();
+    g.beginPath();
+    g.moveTo(xInner, y0 + r * 0.6);
+    g.lineTo(xInner, y1 - r * 0.6);
+    g.strokeStyle = lip;
+    g.lineWidth = 2;
+    g.stroke();
+  }
 
-function drawSideJaw(g, mx, y, face, jaw, side, fill, lip) {
-  const out = side === 'top' ? -1 : 1;
-  // Left tip
-  g.beginPath();
-  g.moveTo(mx - jaw, y);
-  g.quadraticCurveTo(mx - jaw * 0.55, y, mx - jaw * 0.35, y + out * face);
-  g.lineTo(mx - jaw * 0.85, y + out * face);
-  g.quadraticCurveTo(mx - jaw, y + out * face * 0.3, mx - jaw, y);
-  g.closePath();
-  g.fillStyle = fill;
-  g.fill();
-  // Right tip
-  g.beginPath();
-  g.moveTo(mx + jaw, y);
-  g.quadraticCurveTo(mx + jaw * 0.55, y, mx + jaw * 0.35, y + out * face);
-  g.lineTo(mx + jaw * 0.85, y + out * face);
-  g.quadraticCurveTo(mx + jaw, y + out * face * 0.3, mx + jaw, y);
-  g.closePath();
-  g.fill();
-  g.strokeStyle = lip;
-  g.lineWidth = 1;
-  g.stroke();
+  // Long rails: two segments each (split by side pocket)
+  hSeg(top, top - face, left + jaw, midX - jaw);
+  hSeg(top, top - face, midX + jaw, right - jaw);
+  hSeg(bottom, bottom + face, left + jaw, midX - jaw);
+  hSeg(bottom, bottom + face, midX + jaw, right - jaw);
+  // Short rails: one segment each (corner mouths only)
+  vSeg(left, left - face, top + jaw, bottom - jaw);
+  vSeg(right, right + face, top + jaw, bottom - jaw);
 }
 
 function drawRailPocket(g, s, pr) {
-  // Cast rim sitting in the wood
   g.beginPath();
-  g.arc(s.x, s.y, pr + 3.5, 0, Math.PI * 2);
+  g.arc(s.x, s.y, pr + 3.2, 0, Math.PI * 2);
   g.fillStyle = '#1a1008';
   g.fill();
-  g.strokeStyle = 'rgba(180, 140, 80, 0.35)';
+  g.strokeStyle = 'rgba(180, 140, 80, 0.4)';
   g.lineWidth = 1.5;
   g.stroke();
   const hole = g.createRadialGradient(s.x - 1, s.y - 1, 1, s.x, s.y, pr);
