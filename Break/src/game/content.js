@@ -18,14 +18,14 @@ export const TABLE = {
   pocketJaw: 7.2,
   /**
    * How far outside the felt the pocket centers sit (into the wood rail).
-   * Pockets are recessed holes in the frame, not discs on the cloth.
+   * Must clear pocketR so the hole itself does not sit on the cloth.
    */
-  pocketOut: 7.6,
-  pocketOutSide: 7.8,
+  pocketOut: 9.2,
+  pocketOutSide: 8.6,
   /** Half-width of the rail opening / cushion jaw into each pocket. */
-  railGap: 8.4,
-  /** Visual cushion thickness (drawn inside the wood rail). */
-  cushionFace: 3.4,
+  railGap: 8.8,
+  /** Visual cushion thickness (drawn along the felt edge). */
+  cushionFace: 3.6,
 };
 
 export const BALL_R = 2.85;

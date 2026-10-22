@@ -94,8 +94,8 @@ export function drawTable(g, view, animTime) {
   const right = left + tw;
   const bottom = top + th;
 
-  // —— Outer wood apron (pockets live in this band) ——
-  const pad = 10;
+  // —— Outer wood apron (pockets live in this band; keep it wide enough) ——
+  const pad = Math.max(12, TABLE.pocketOut * S * 0.55);
   const fx = left - rail - pad;
   const fy = top - rail - pad;
   const fw = tw + rail * 2 + pad * 2;
