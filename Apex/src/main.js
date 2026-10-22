@@ -4,7 +4,7 @@ import { Input } from './core/input.js';
 import { Save } from './core/save.js';
 import { clamp } from './core/rng.js';
 import { PlaySession } from './game/play.js';
-import { tiltDegrees, ROCKET } from './game/content.js';
+import { tiltDegrees, ROCKET, WORLD_HALF_W } from './game/content.js';
 import {
   gameToKm,
   formatAltitudeKm,
@@ -48,6 +48,9 @@ let session = null;
 let animTime = 0;
 let lastTs = 0;
 let menuAltitude = 0;
+/** Throttle HUD DOM writes — full gauge refresh every frame causes jank. */
+let gaugeAccum = 0;
+const GAUGE_DT = 1 / 12;
 
 /** @type {{ text: string, age: number, life: number }|null} */
 let flyby = null;
@@ -192,6 +195,7 @@ function startRun() {
   );
   flyby = null;
   flybySeen.clear();
+  gaugeAccum = GAUGE_DT; // refresh gauges on the first play frame
   state = 'playing';
   hide(els.menu);
   hide(els.summary);
@@ -260,18 +264,26 @@ function checkFlybys(s, dt) {
 function drawSession(dt, playing) {
   const s = session;
   const p = s.player;
-  const camY = p.y;
-  const camX = p.x;
 
   if (playing) {
     s.step(dt, input.controls());
     checkFlybys(s, dt);
   }
 
+  // Interpolated camera (float) — rounding camY used to make the ship jitter
+  // by a pixel every frame when drawn relative to Math.round(player.y).
+  const pose = playing ? s.renderPose() : {
+    x: p.x,
+    y: p.y,
+    tilt: p.tilt,
+    thrusting: p.thrusting,
+    alive: p.alive,
+  };
+  const viewX = pose.x;
+  const viewY = pose.y;
+  const scale = Math.min(W, H) / (WORLD_HALF_W * 1.85);
+
   clearFrame();
-  // Integer camera keeps world scroll on whole pixels at high speed.
-  const viewY = Math.round(camY);
-  const viewX = camX;
   drawSky(g, W, H, viewY, animTime, viewX);
   drawLaunchPad(g, W, H, viewY, viewX);
   drawCelestials(g, W, H, viewY, animTime, viewX);
@@ -287,22 +299,27 @@ function drawSession(dt, playing) {
 
   for (const fx of s.collectFx) drawCollectFx(g, fx, viewY, W, H, animTime, viewX);
 
-  // Pin the player to screen center — camera follows X+Y (infinite sides).
-  const scr = worldToScreen(p.x, p.y, viewX, viewY, W, H);
+  // Pin rocket to a fixed screen anchor so camera/sim quanta can't nudge it.
   drawRocket(
     g,
-    scr.x,
-    scr.y,
-    scr.scale * 0.85,
-    p.tilt,
+    W * 0.5,
+    H * 0.62,
+    scale * 0.85,
+    pose.tilt,
     animTime,
-    playing ? p.thrusting : p.alive
+    playing ? pose.thrusting : pose.alive
   );
 
   drawHitFlash(g, W, H, s.flash);
   if (flyby) drawFlybyBanner(g, W, H, flyby.text, flyby.age, flyby.life);
 
-  if (playing) updateGauges(s);
+  if (playing) {
+    gaugeAccum += dt;
+    if (gaugeAccum >= GAUGE_DT) {
+      gaugeAccum = 0;
+      updateGauges(s);
+    }
+  }
 }
 
 function updateGauges(s) {

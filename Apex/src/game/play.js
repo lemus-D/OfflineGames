@@ -71,6 +71,11 @@ export class PlaySession {
     this.pickupScore = 0;
     this.time = 0;
     this.simAccum = 0;
+    /** 0..1 leftover toward the next fixed step — used to smooth the camera. */
+    this.renderAlpha = 0;
+    this._prevX = this.player.x;
+    this._prevY = this.player.y;
+    this._prevTilt = this.player.tilt;
     this._nextId = 1;
     this.flash = 0;
     this.collectFx = [];
@@ -80,6 +85,24 @@ export class PlaySession {
     this._filledBands = new Set();
 
     this._ensureBandsAround(this.player.y);
+  }
+
+  /**
+   * Camera / draw pose interpolated between the last two fixed steps so
+   * display refresh (often ≠ 60 Hz) doesn't show stepped motion.
+   */
+  renderPose() {
+    const a = this.renderAlpha;
+    const p = this.player;
+    const dx = deltaX(this._prevX, p.x);
+    const dTilt = wrapAngle(p.tilt - this._prevTilt);
+    return {
+      x: wrapX(this._prevX + dx * a),
+      y: this._prevY + (p.y - this._prevY) * a,
+      tilt: wrapAngle(this._prevTilt + dTilt * a),
+      thrusting: p.thrusting,
+      alive: p.alive,
+    };
   }
 
   get altitude() {
@@ -95,13 +118,20 @@ export class PlaySession {
    * @param {{ steer: number, thrust: boolean }} controls
    */
   step(frameDt, controls) {
-    if (!this.player.alive) return;
+    if (!this.player.alive) {
+      this.renderAlpha = 0;
+      return;
+    }
     const c = controls || { steer: 0, thrust: false };
     this.simAccum += Math.min(frameDt, 0.05);
     while (this.simAccum >= FIXED_DT) {
+      this._prevX = this.player.x;
+      this._prevY = this.player.y;
+      this._prevTilt = this.player.tilt;
       this._fixedStep(FIXED_DT, c);
       this.simAccum -= FIXED_DT;
     }
+    this.renderAlpha = this.simAccum / FIXED_DT;
   }
 
   _fixedStep(dt, { steer = 0, thrust = false }) {
