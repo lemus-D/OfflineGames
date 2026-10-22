@@ -1,5 +1,5 @@
 /* UnfairPickle service worker — precache, versioned cache name. */
-const CACHE = 'unfair-pickle-v6';
+const CACHE = 'unfair-pickle-v8';
 const PRECACHE = [
   './',
   './index.html',
