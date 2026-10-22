@@ -178,13 +178,31 @@ function drainAudio() {
 function cameraFor(s) {
   const viewW = W / SCALE;
   const viewH = H / SCALE;
+  const levelW = s.level.w * TILE;
+  const levelH = s.level.h * TILE;
+  const maxCamX = Math.max(0, levelW - viewW);
   let camX = s.player.x - viewW * 0.35;
-  let camY = s.player.y - viewH * 0.55;
-  camX = Math.max(0, Math.min(camX, s.level.w * TILE - viewW));
-  camY = Math.max(0, Math.min(camY, s.level.h * TILE - viewH + TILE));
+  camX = Math.max(0, Math.min(camX, maxCamX));
+
+  // Pin the level floor to the bottom of the screen.
+  // Short levels use a negative camY so ground isn't floating mid-view.
+  let camY;
+  if (levelH <= viewH) {
+    camY = levelH - viewH;
+  } else {
+    const maxCamY = levelH - viewH;
+    camY = s.player.y - viewH * 0.62;
+    camY = Math.max(0, Math.min(camY, maxCamY));
+  }
   if (s.shake > 0) {
     camX += Math.sin(animTime * 70) * s.shake * 6;
     camY += Math.cos(animTime * 55) * s.shake * 4;
+    camX = Math.max(0, Math.min(camX, maxCamX));
+    if (levelH > viewH) {
+      camY = Math.max(0, Math.min(camY, levelH - viewH));
+    } else {
+      camY = levelH - viewH;
+    }
   }
   return { camX, camY, viewW, viewH };
 }
