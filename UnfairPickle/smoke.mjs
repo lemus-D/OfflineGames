@@ -320,6 +320,64 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
   );
 }
 
+// L9 (combo): ground-row path; jump ~~, spike pit, fake flag, vanish, ghost.
+{
+  const s = new PlaySession(9, {}, { startLevel: 8 });
+  let steps = 0;
+  let cleared = false;
+  let hopFrames = 0;
+  while (steps < 60 * 40) {
+    if (s.status === 'dead') {
+      s.step(1 / 60, { move: 0, jump: false, jumpHeld: false, restart: true });
+      hopFrames = 0;
+      steps += 1;
+      continue;
+    }
+    if (s.status === 'cleared' || s.levelIndex > 8) {
+      cleared = true;
+      break;
+    }
+    const x = s.player.x / TILE;
+    let jump = false;
+    if (x > 5.2 && x < 6.8 && s.player.onGround) {
+      jump = true;
+      hopFrames = 12;
+    }
+    if (x > 10.5 && x < 12.0 && s.player.onGround) {
+      jump = true;
+      hopFrames = 14;
+    }
+    if (x > 16.8 && x < 18.5 && s.player.onGround) {
+      jump = true;
+      hopFrames = 18;
+    }
+    if (x > 24.5 && x < 26.2 && s.player.onGround) {
+      jump = true;
+      hopFrames = 16;
+    }
+    if (x > 29.0 && x < 31.0 && s.player.onGround) {
+      jump = true;
+      hopFrames = 14;
+    }
+    if (x > 34.5 && x < 36.5 && s.player.onGround) {
+      jump = true;
+      hopFrames = 14;
+    }
+    if (x > 37.0 && x < 39.0 && s.player.onGround) {
+      jump = true;
+      hopFrames = 14;
+    }
+    const jumpHeld = hopFrames > 0;
+    if (hopFrames > 0) hopFrames -= 1;
+    s.step(1 / 60, { move: 1, jump, jumpHeld, restart: false });
+    steps += 1;
+  }
+  assert(
+    cleared,
+    `L9 completable (status=${s.status} x=${s.player.x.toFixed(0)} deaths=${s.deaths})`
+  );
+}
+
 // Measured jump height in-sim.
 {
   const s = new PlaySession(13, {}, { startLevel: 0 });
