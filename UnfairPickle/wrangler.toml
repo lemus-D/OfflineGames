@@ -1,0 +1,12 @@
+# Cloudflare Workers static deploy for Unfair Pickle.
+# Temporary preview (no account):
+#   npx wrangler deploy --temporary
+# Your account (needs `wrangler login` or CLOUDFLARE_API_TOKEN):
+#   npx wrangler deploy
+
+name = "unfair-pickle"
+compatibility_date = "2024-10-01"
+
+[assets]
+directory = "."
+not_found_handling = "404-page"

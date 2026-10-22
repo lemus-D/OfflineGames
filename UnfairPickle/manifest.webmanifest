@@ -1,0 +1,18 @@
+{
+  "name": "Unfair Pickle",
+  "short_name": "Pickle",
+  "description": "An unfair Mario-style platformer. You are a dill pickle. Trust nothing.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1e3a2a",
+  "theme_color": "#3d8a3a",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'><rect width='128' height='128' fill='%235ec4d4'/><ellipse cx='64' cy='72' rx='36' ry='44' fill='%233d8a3a'/><ellipse cx='52' cy='56' rx='12' ry='16' fill='%236cbc4a'/><rect x='56' y='16' width='16' height='20' fill='%235a3a18'/><rect x='72' y='58' width='10' height='10' fill='%23fff'/><rect x='76' y='62' width='6' height='6' fill='%231a1810'/></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
