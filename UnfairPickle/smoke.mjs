@@ -263,6 +263,47 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
   );
 }
 
+// L8 (reverse mist): floor under mist; jump gap + spikes (controls flip in R).
+{
+  const s = new PlaySession(23, {}, { startLevel: 7 });
+  let steps = 0;
+  let cleared = false;
+  let hopFrames = 0;
+  while (steps < 60 * 35) {
+    if (s.status === 'dead') {
+      s.step(1 / 60, { move: 0, jump: false, jumpHeld: false, restart: true });
+      hopFrames = 0;
+      steps += 1;
+      continue;
+    }
+    if (s.status === 'cleared' || s.levelIndex > 7) {
+      cleared = true;
+      break;
+    }
+    const x = s.player.x;
+    const ty = Math.floor(s.player.y / TILE);
+    const tx = Math.floor(x / TILE);
+    const cell = s.level.grid[ty]?.[tx];
+    const inMist = !!(cell && cell.reverse);
+    const move = inMist ? -1 : 1;
+    const nearGap = x > 29.2 * TILE && x < 31.5 * TILE;
+    const nearSpike = x > 35.5 * TILE && x < 37.5 * TILE;
+    let jump = false;
+    if ((nearGap || nearSpike) && s.player.onGround) {
+      jump = true;
+      hopFrames = 10;
+    }
+    const jumpHeld = hopFrames > 0;
+    if (hopFrames > 0) hopFrames -= 1;
+    s.step(1 / 60, { move, jump, jumpHeld, restart: false });
+    steps += 1;
+  }
+  assert(
+    cleared,
+    `L8 completable (status=${s.status} x=${s.player.x.toFixed(0)} deaths=${s.deaths})`
+  );
+}
+
 // Measured jump height in-sim.
 {
   const s = new PlaySession(13, {}, { startLevel: 0 });
