@@ -46,6 +46,32 @@ for (const file of walkSrc(join(ROOT, 'src'))) {
 assert(levelCount() === 10, 'exactly 10 levels');
 assert(LEVELS.every((L) => L.rows.some((r) => r.includes('P'))), 'every level has a spawn');
 assert(LEVELS.every((L) => L.rows.some((r) => r.includes('G'))), 'every level has a real goal');
+{
+  // Reverse mist must never float over void — players read that as falling through.
+  const solid = new Set(['#', 'B', '=', '*', '?', 'C', 'S']);
+  let mistOk = true;
+  for (const L of LEVELS) {
+    const w = Math.max(...L.rows.map((r) => r.length));
+    const rows = L.rows.map((r) => r.padEnd(w, '.'));
+    for (let ty = 0; ty < rows.length; ty++) {
+      for (let tx = 0; tx < w; tx++) {
+        if (rows[ty][tx] !== 'R') continue;
+        let supported = false;
+        for (let y = ty + 1; y < rows.length; y++) {
+          if (solid.has(rows[y][tx])) {
+            supported = true;
+            break;
+          }
+        }
+        if (!supported) {
+          console.error(`FAIL: mist over void in ${L.id} at ${tx},${ty}`);
+          mistOk = false;
+        }
+      }
+    }
+  }
+  assert(mistOk, 'every reverse mist cell has solid ground below');
+}
 assert(formatTime(65.5).startsWith('1:05'), 'formatTime formats minutes');
 assert(PICKLE.w < 14 && PICKLE.h < 18, 'player hitbox smaller than drawn pickle');
 assert(jumpPeakHeight() > TILE * 5, `jump clears >5 tiles (peak=${jumpPeakHeight().toFixed(0)}px)`);
@@ -263,18 +289,15 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
   );
 }
 
-// L8 (reverse mist): floor under mist; jump gap + spikes (controls flip in R).
+// L8 (reverse mist): continuous floor under mist; flip move in R, walk to G.
 {
   const s = new PlaySession(23, {}, { startLevel: 7 });
   let steps = 0;
   let cleared = false;
-  let hopFrames = 0;
+  let mistSteps = 0;
   while (steps < 60 * 35) {
     if (s.status === 'dead') {
-      s.step(1 / 60, { move: 0, jump: false, jumpHeld: false, restart: true });
-      hopFrames = 0;
-      steps += 1;
-      continue;
+      assert(false, `L8 must not die on solid mist floor (reason=${s.deathReason})`);
     }
     if (s.status === 'cleared' || s.levelIndex > 7) {
       cleared = true;
@@ -285,18 +308,12 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
     const tx = Math.floor(x / TILE);
     const cell = s.level.grid[ty]?.[tx];
     const inMist = !!(cell && cell.reverse);
+    if (inMist) mistSteps += 1;
     const move = inMist ? -1 : 1;
-    const nearGap = x > 29.2 * TILE && x < 31.5 * TILE;
-    let jump = false;
-    if (nearGap && s.player.onGround) {
-      jump = true;
-      hopFrames = 12;
-    }
-    const jumpHeld = hopFrames > 0;
-    if (hopFrames > 0) hopFrames -= 1;
-    s.step(1 / 60, { move, jump, jumpHeld, restart: false });
+    s.step(1 / 60, { move, jump: false, jumpHeld: false, restart: false });
     steps += 1;
   }
+  assert(mistSteps > 30, `L8 walks through mist (${mistSteps} steps in R)`);
   assert(
     cleared,
     `L8 completable (status=${s.status} x=${s.player.x.toFixed(0)} deaths=${s.deaths})`
