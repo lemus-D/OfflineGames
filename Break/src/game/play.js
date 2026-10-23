@@ -106,7 +106,7 @@ export class PlaySession {
     this.message =
       this.mode === 'vsAi'
         ? `Your break · ${DIFFICULTIES[this.difficulty].name} AI · table is open.`
-        : 'Aim with the cursor · pull back away from the target for power.';
+        : 'Aim · pull back for power · drag sideways to fine-tune the line.';
   }
 
   get cue() {

@@ -163,7 +163,27 @@ assert(scoreClear(20, 15) > scoreClear(40, 15), 'fewer shots scores higher on a 
 }
 
 assert(BALL_R > 0 && PHYSICS.maxEnglish > 0, 'tunables sane');
+assert(PHYSICS.rollingDrag >= 20, 'cloth drag high enough to avoid ice glide');
+assert(PHYSICS.ballFriction > 0, 'ball–ball friction present');
 assert(TABLE.pocketMouth < TABLE.pocketR * 0.6, 'pocket mouth stricter than visual rim');
+
+// Firm stroke should die around one table length — not skate forever.
+{
+  const cue = createBall(CUE_BALL, 0, 0);
+  applyCueShot(cue, 1, 0, 0.85);
+  let dist = 0;
+  let steps = 0;
+  while (anyMoving([cue]) && steps < 180 * 40) {
+    const x0 = cue.x;
+    const y0 = cue.y;
+    stepPhysics([cue], 1 / 180);
+    dist += Math.hypot(cue.x - x0, cue.y - y0);
+    steps += 1;
+  }
+  const lengths = dist / (TABLE.halfW * 2);
+  assert(lengths > 0.55 && lengths < 1.35, `firm stroke ~1 table length (got ${lengths.toFixed(2)})`);
+  console.log(`ok: firm stroke travel ${lengths.toFixed(2)} table lengths in ${steps} steps`);
+}
 assert(
   pocketCenters().every(
     (p) => Math.abs(p.x) >= TABLE.halfW - 0.01 || Math.abs(p.y) >= TABLE.halfH - 0.01

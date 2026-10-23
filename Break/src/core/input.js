@@ -1,4 +1,4 @@
-/* Pointer aim + English dial. Hover aims; drag back for power (aim locked). */
+/* Pointer aim + English dial. Pull back for power; swivel to re-aim. */
 
 export class CueInput {
   constructor(canvas) {
@@ -18,14 +18,17 @@ export class CueInput {
     /** When true, table ignore events (spin dial capturing). */
     this.blocked = false;
     /**
-     * Aim direction locked at pull start (screen space, unit-ish).
-     * Shot goes along this; drag opposite increases power.
+     * Aim direction (screen space, unit). Shot goes along this;
+     * drag opposite increases power. Updated while pulling so you
+     * can swivel after drawing the cue back.
      */
     this.lockDx = 1;
     this.lockDy = 0;
     this.hasLock = false;
     /** Optional cue screen pos provider set by main each frame. */
     this.cueScreen = null;
+    /** Pull distance (px) before lateral drag starts rewriting aim. */
+    this.swivelPullPx = 16;
 
     const pos = (e) => {
       const r = canvas.getBoundingClientRect();
@@ -57,7 +60,7 @@ export class CueInput {
       this.hasPointer = true;
       this.mode = 'aiming';
 
-      // Lock aim: cue → pointer (hover aim). Fallback to last lock / right.
+      // Seed aim: cue → pointer (hover / touch). Fallback to last lock / right.
       if (this.cueScreen) {
         let adx = p.x - this.cueScreen.x;
         let ady = p.y - this.cueScreen.y;
@@ -102,24 +105,51 @@ export class CueInput {
   }
 
   /**
-   * While pulling: aim stays locked; power = how far you pull BACK
-   * (drag the pointer opposite the aim / away from the target).
+   * Pull back for power. Once drawn past a short deadzone, aim follows
+   * the pull vector so you can swivel left/right after drawing the cue.
    */
   aimScreen() {
     if (this.mode !== 'aiming') return null;
     const dragX = this.sx - this.cx;
     const dragY = this.sy - this.cy;
-    // drag = start − current. Pulling back (away from the target) makes
-    // drag point along the aim direction, so the projection is positive.
-    const along = this.hasLock
-      ? Math.max(0, dragX * this.lockDx + dragY * this.lockDy)
-      : Math.hypot(dragX, dragY);
-    const dx = this.hasLock ? this.lockDx * Math.max(along, 1) : dragX;
-    const dy = this.hasLock ? this.lockDy * Math.max(along, 1) : dragY;
+    const pull = Math.hypot(dragX, dragY);
+    const swivelAt = this.swivelPullPx;
+
+    if (this.pointerDown && pull >= swivelAt) {
+      // Aim = pull direction (finger dragged away from the target).
+      const ndx = dragX / pull;
+      const ndy = dragY / pull;
+      if (this.hasLock) {
+        // Blend a little so fat-finger jitter does not whip the cue.
+        const blend = 0.55;
+        let lx = this.lockDx + (ndx - this.lockDx) * blend;
+        let ly = this.lockDy + (ndy - this.lockDy) * blend;
+        const ll = Math.hypot(lx, ly) || 1;
+        this.lockDx = lx / ll;
+        this.lockDy = ly / ll;
+      } else {
+        this.lockDx = ndx;
+        this.lockDy = ndy;
+        this.hasLock = true;
+      }
+    }
+
+    // Power is full pull distance once swiveling; before that, project on lock.
+    let powerPull;
+    if (this.hasLock && pull >= swivelAt) {
+      powerPull = pull;
+    } else if (this.hasLock) {
+      powerPull = Math.max(0, dragX * this.lockDx + dragY * this.lockDy);
+    } else {
+      powerPull = pull;
+    }
+
+    const dx = this.hasLock ? this.lockDx * Math.max(powerPull, 1) : dragX;
+    const dy = this.hasLock ? this.lockDy * Math.max(powerPull, 1) : dragY;
     return {
       dx,
       dy,
-      powerPull: this.hasLock ? along : Math.hypot(dragX, dragY),
+      powerPull,
       released: !this.pointerDown,
       pulling: this.pointerDown,
     };

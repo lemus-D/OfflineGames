@@ -33,32 +33,42 @@ export const BALL_R = 2.85;
 export const PHYSICS = {
   /** Relative ball mass — higher = heavier (same cue stroke → less speed). */
   ballMass: 1.45,
-  /** Linear drag accel (units/s²) — slightly slicker cloth. */
-  rollingDrag: 15,
-  /** Extra drag while |spin| is high (sliding). */
-  slidingDrag: 8,
-  stopSpeed: 0.07,
-  cushionRestitution: 0.68,
+  /**
+   * Cloth drag (units/s²). Higher = less “ice”. Tuned so a firm stroke
+   * dies in about one table length, not a long glide.
+   */
+  rollingDrag: 22,
+  /** Extra drag while sliding (spin not matching travel). */
+  slidingDrag: 18,
+  /** Mild speed-proportional cloth bite (units/s per unit speed). */
+  rollingDragVel: 0.07,
+  /** Settle sooner so balls don’t creep forever. */
+  stopSpeed: 0.18,
+  cushionRestitution: 0.58,
   /** Fraction of tangent speed killed on rail. */
-  cushionFriction: 0.42,
-  ballRestitution: 0.94,
+  cushionFriction: 0.58,
+  /** Ball–ball normal restitution — a touch dead so packs calm down. */
+  ballRestitution: 0.9,
+  /** Tangential friction on ball–ball hits (kills skating past). */
+  ballFriction: 0.22,
   /** Max cue impulse magnitude before mass (world units / sec). */
-  maxShotSpeed: 220,
+  maxShotSpeed: 230,
   /** How strongly tip English becomes stored spin. */
-  englishToSpin: 0.55,
+  englishToSpin: 0.5,
   /** Side spin kick on cushions. */
-  sideOnCushion: 0.38,
+  sideOnCushion: 0.32,
   /** Throw: side spin nudges object ball on contact. */
-  throwFactor: 0.18,
+  throwFactor: 0.16,
   /** Follow / draw blend into cue residual after a hit. */
-  followFactor: 0.5,
-  drawFactor: 0.48,
-  spinDecay: 0.992,
+  followFactor: 0.42,
+  drawFactor: 0.4,
+  /** Per-step spin fade at 180 Hz — lower = cloth eats English faster. */
+  spinDecay: 0.982,
   /** Cap |english| tip offset. */
   maxEnglish: 0.88,
-  /** Screen pixels of drag that maps to max power. */
-  maxPullPx: 170,
-  minPullPx: 8,
+  /** Screen pixels of drag that maps to max power (room to swivel on touch). */
+  maxPullPx: 200,
+  minPullPx: 10,
   /** Seconds for the pocket fall-in animation. */
   pocketFallDur: 0.38,
 };

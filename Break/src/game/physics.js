@@ -108,30 +108,30 @@ function integrateBall(b, dt) {
 
   const spd = Math.hypot(b.vx, b.vy);
   if (spd > 1e-8) {
-    const sliding =
-      Math.abs(b.sideSpin) + Math.abs(b.forwardSpin) > spd * 0.15
-        ? PHYSICS.slidingDrag
-        : 0;
-    const drag = (PHYSICS.rollingDrag + sliding) * dt;
+    // High spin vs travel ⇒ still sliding on the cloth; bite harder.
+    const spinMag = Math.abs(b.sideSpin) + Math.abs(b.forwardSpin);
+    const sliding = spinMag > spd * 0.12 ? PHYSICS.slidingDrag : 0;
+    const velDrag = (PHYSICS.rollingDragVel || 0) * spd;
+    const drag = (PHYSICS.rollingDrag + sliding + velDrag) * dt;
     const newSpd = Math.max(0, spd - drag);
     b.vx *= newSpd / spd;
     b.vy *= newSpd / spd;
 
     // Mild curve from lingering side spin while moving (massé-lite).
     if (Math.abs(b.sideSpin) > 0.01 && newSpd > 1) {
-      const curve = b.sideSpin * 0.012 * dt;
+      const curve = b.sideSpin * 0.008 * dt;
       const nx = b.vx / (newSpd || 1);
       const ny = b.vy / (newSpd || 1);
       b.vx += -ny * curve * newSpd;
       b.vy += nx * curve * newSpd;
     }
 
-    // Follow/draw gently feeds into velocity along travel.
+    // Follow/draw gently feeds into velocity — keep small so cloth still wins.
     if (Math.abs(b.forwardSpin) > 0.01) {
-      const feed = b.forwardSpin * 0.08 * dt;
+      const feed = b.forwardSpin * 0.035 * dt;
       b.vx += (b.vx / spd) * feed;
       b.vy += (b.vy / spd) * feed;
-      b.forwardSpin *= 0.998;
+      b.forwardSpin *= 0.99;
     }
   }
 
@@ -165,6 +165,16 @@ function resolveBallBall(a, b) {
   a.vy -= impulse * ny;
   b.vx += impulse * nx;
   b.vy += impulse * ny;
+
+  // Tangential friction — stops balls skating past each other like ice.
+  const dvx2 = a.vx - b.vx;
+  const dvy2 = a.vy - b.vy;
+  const vt = dvx2 * -ny + dvy2 * nx;
+  const jf = vt * (PHYSICS.ballFriction || 0) * 0.5;
+  a.vx -= -ny * jf;
+  a.vy -= nx * jf;
+  b.vx += -ny * jf;
+  b.vy += nx * jf;
 
   // Throw from side English on the hitter.
   const throwSpin = a.sideSpin * PHYSICS.throwFactor;
