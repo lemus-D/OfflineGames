@@ -232,6 +232,43 @@ assert(
   console.log(`ok: corner jaw clip pocketed in ${steps} steps`);
 }
 
+// Through the wedge into the hole apron must sink — never slam back onto felt.
+{
+  const tr = pocketCenters().find((p) => p.corner && p.x > 0 && p.y < 0);
+  const cases = [
+    { x: TABLE.halfW - 2, y: -TABLE.halfH + 5, vx: 130, vy: -15 },
+    { x: TABLE.halfW - 1.5, y: -TABLE.halfH + 4, vx: 110, vy: -35 },
+    { x: 120, y: -55, vx: 30, vy: -30 }, // already past the hole in the apron
+    { x: 118, y: -62, vx: -10, vy: 10 }, // in the hole fleeing back
+  ];
+  for (const c of cases) {
+    const ball = createBall(BALLS[4], c.x, c.y);
+    ball.vx = c.vx;
+    ball.vy = c.vy;
+    let steps = 0;
+    let bouncedOut = false;
+    while (steps < 180 * 5) {
+      const wasOff = ball.x > TABLE.halfW || ball.y < -TABLE.halfH;
+      stepPhysics([ball], 1 / 180);
+      if (
+        wasOff &&
+        !ball.pocketed &&
+        ball.x < TABLE.halfW - 1 &&
+        ball.y > -TABLE.halfH + 1
+      ) {
+        bouncedOut = true;
+      }
+      if (ball.pocketed) break;
+      if (!anyMoving([ball]) && steps > 5) break;
+      steps += 1;
+    }
+    assert(ball.pocketed, `TR well sinks (${c.x},${c.y}) → pocket`);
+    assert(!bouncedOut, `TR well does not bounce out (${c.x},${c.y})`);
+  }
+  console.log(`ok: top-right pocket well captures ${cases.length} apron paths`);
+  assert(tr && tr.corner, 'top-right corner pocket exists');
+}
+
 // AI difficulties exist and produce a legal shot.
 {
   assert(DIFFICULTIES.easy && DIFFICULTIES.medium && DIFFICULTIES.hard, 'three difficulties');
