@@ -1,13 +1,48 @@
 # QC workflow brainstorm — playtest agents and harder gates
 
 > Branch: `cursor/qc-playtest-brainstorm-6c6d`
-> Status: **proposal only.** No skill or checker changes land in this commit.
-> Owner: pick options under [Decisions needed](#decisions-needed); then we implement.
+> Status: **decisions partly locked** (see below). Still no skill/checker code.
+> Open: smoke hardening (#3), CI (#4). Trial game TBD by owner.
 
 Why this exists: gate 0 (`check-game.mjs` + smoke) is honest about the house
 rules, but “playable / fun / done” still depends on the *same* coding agent
 reading a long procedure, half-doing browser steps, and scoring its own work.
 That is the weak joint. This note proposes a sharper workflow.
+
+---
+
+## Owner decisions (2026-10-23)
+
+| # | Topic | Decision | Notes |
+|---|---|---|---|
+| 1 | Critic | **Fresh agent, critical** | Sees the **original pitch/prompt** + plan/brief; judges the build against that intent, not against the builder’s excuses. Stance: skeptical player, not co-author. |
+| 2 | Report location | **Commit** `PLAYTEST.md` | Keep out of SW precache. Videos may still live in artifact store; checklist + complaints + scores in git. |
+| 3 | Smoke hardening | **Undecided** | See [Still open](#still-open-3-and-4). |
+| 4 | CI for gate 0 | **Undecided** | See [Still open](#still-open-3-and-4). |
+| 5 | Critic rounds | **3** | Design **and** content complaints are **in scope** — do not stop / ignore them as “not feel.” Escalate to owner only when a change needs a taste call the brief does not cover. |
+| 6 | Trial game | **Owner will pitch a new game** | Do not trial on Apex/Sharky/UnfairPickle first. New title exercises `new-game` → build → critic end-to-end. |
+| 7 | Recording / motion | **Required now** | Motion is the common fail. Playtest must record; a vision/`videoReview` pass on that recording is part of the critic loop, not a later nice-to-have. |
+
+### Implications for the playtest agent (from #1, #5, #7)
+
+The critic is not “run the gate-1 checklist and leave.” It is closer to:
+
+1. Read the **original user pitch** (verbatim in the plan), the QC brief, and
+   non-goals.
+2. Play without reading `play.js` / `draw.js`.
+3. Ask: *did we get the game that was asked for?* Verb, pressure, tone,
+   inputs, run shape — gaps are complaints even if the code is “correct.”
+4. Record 30–60 s (longer if needed); run a **motion-focused** review on the
+   video (ghosting, input lag, off-screen deaths, unreadable state in motion).
+5. Rank complaints across feel **and** design/content (missing audio that the
+   brief required, wrong verb, shallow upgrades, etc.).
+6. Stay critical: missing evidence → fail or `not checked`, never benefit of
+   the doubt for the builder.
+
+Builder then gets up to **3** rounds to respond (including content/design
+fixes that fit the brief). Re-playtest + re-record after material changes.
+Owner is pinged when the critic and builder disagree on intent, or when the
+fix would expand `non_goals`.
 
 ---
 
@@ -147,21 +182,22 @@ new-game  →  (build)  →  game-qc (orchestrator)
 scoring. Do not edit game code. Output only a report and artifacts.
 
 **Who runs it:** a *fresh* agent — preferably a Cursor `computerUse` (or
-Playwright) subagent spawned by the builder/orchestrator, with no prior
-build context. Prompt includes: game dir, port, path to QC brief, URL,
-and “you are not allowed to modify source.”
+Playwright) subagent spawned by the builder/orchestrator, with **no prior
+build context**. Prompt includes: the **original pitch** (from the plan),
+QC brief, game dir, port, URL, and “you are not allowed to modify source;
+be critical; compare the build to the pitch.”
 
 **Hard rules for the playtest agent:**
 
 - May start/stop the game’s `npm start` server.
-- May use browser / Playwright / screen recorder.
-- May write `<Game>/PLAYTEST.md` (or `artifacts/playtest-<sha>.md`) and
-  drop screenshots/video under a known artifacts path.
+- May use browser / Playwright / screen recorder + videoReview.
+- May write committed `<Game>/PLAYTEST.md` and reference recording paths.
 - Must not edit `src/`, `sw.js`, plans, or smoke.
 - Must not invent gate-2 scores without performing the written test for
   that criterion. Missing evidence → score 0 or `not checked`.
+- Must judge **intent match** (pitch + brief), not only mechanical boots.
 
-**Minimum playtest protocol (gate 1 + complaint list):**
+**Minimum playtest protocol (gate 1 + intent + motion):**
 
 1. Boot, console clean across load → start → 20 s play → die → restart.
 2. Required input family from the brief (keyboard and/or touch @ 390×844).
@@ -169,9 +205,10 @@ and “you are not allowed to modify source.”
 4. Persistence: value survives reload; garbage profile → fresh boot.
 5. Offline: second load, kill server, reload (same probe as
    `docs/PLATFORM-CONSTRAINTS.md`).
-6. Three full runs “as a player,” then a ranked complaint list (10 max),
-   player voice, no feature requests.
-7. Optional: 30–60 s recording as the headline artifact.
+6. Three full runs “as a player.”
+7. **Required** 30–60 s recording; vision/`videoReview` pass focused on
+   motion (lag, ghosting, unfair deaths, unreadable state while moving).
+8. Ranked complaint list (feel **and** design/content vs pitch/brief).
 
 **Output schema** (sketch — lock before implementing):
 
@@ -292,11 +329,13 @@ Defaults to propose:
 
 | Knob | Default | Notes |
 |---|---|---|
-| Max critic rounds before asking owner | 3 | Avoid infinite polish loops |
-| Max levers per round | 3 | Matches current feel-pass “top three” |
+| Max critic rounds before asking owner | 3 | Owner-locked |
+| Max levers / fixes per round | several OK if one theme | Prefer one lever for feel; content fixes may be larger |
 | Playtest may edit code | **no** | Critic stays clean |
 | Builder may edit PLAYTEST.md scores | **no** | Append only “Response” section |
-| When to stop | gate 1 pass AND gate 2 ≥ `done_pct` AND top complaint is content | Same as current feel-pass stop rule |
+| Design/content complaints | **in scope** | Do not discard as “not feel”; fix or ask owner if outside brief |
+| When to stop | gate 1 pass AND gate 2 ≥ `done_pct` AND critic’s top issues addressed or owner ruled | Or 3 rounds exhausted |
+| Recording | **required each playtest** | Motion review on the video each round |
 
 ---
 
@@ -309,8 +348,8 @@ Defaults to propose:
 - **Don’t** auto-promote a reference game from playtest scores.
 - **Don’t** require human play for every commit — only for “approved” and
   maybe for first MVP merge of a new title.
-- **Don’t** block on a perfect vision model. Start with Playwright actions +
-  screenshots; optional later: videoReview subagent on the recording.
+- **Don’t** skip recording because screenshots exist. Owner-locked: motion
+  review on video is required. Screenshots alone are not enough for F4/F7.
 
 ---
 
@@ -327,15 +366,49 @@ Defaults to propose:
 | `<Game>/feel.mjs` (per game, starting with Apex) | 20-seed proxy harness |
 | `.github/workflows/gate0.yml` (optional) | Run check-game on changed games |
 
-UnfairPickle already has a filled QC brief on its branch — good first victim
-for an end-to-end playtest-agent trial once the skill exists.
+Trial game is **not** UnfairPickle/Apex — owner will bring a new pitch so
+`new-game` → build → critic runs cold.
 
 ---
 
-## Decisions needed — elaborated
+## Still open: #3 and #4
 
-Do not answer with vibes. Each choice is a bet about *which failure mode
-we are fixing first*. Defaults still in brackets at the end of each item.
+Owner is unsure. Short framing so a pick is easy; no need to re-litigate
+the whole brainstorm.
+
+### #3 Smoke hardening — what you’d be choosing
+
+Smoke = `cd <Game> && npm run smoke` (headless Node, no browser).
+
+| Pick | What happens |
+|---|---|
+| **A. Leave as-is** | Checker keeps soft “warn if few asserts.” Playtest + recording carry quality. Fastest path to the new loop. |
+| **B. Harden later** | Ship critic/recording first on the new game; once that works, require determinism + idle-dies + progress in smoke for arcade titles. |
+| **C. Harden with the trial** | New game’s smoke must include those asserts from day one; old games untouched until edited. |
+
+**Lean recommendation:** **B** (or **C** for the new game only). The critic
+loop is the bigger miss; don’t block it on rewriting Sharky’s smoke. The
+new game can still ship a strong smoke because `new-game` already says to.
+
+### #4 CI — what you’d be choosing
+
+| Pick | What happens |
+|---|---|
+| **A. No CI** | Agents keep remembering (or not). Port collisions possible again. |
+| **B. Gate 0 on games the PR touches** | Cheap; catches Math.random / precache / port bugs on that PR. Does not play the game. |
+| **C. Gate 0 on every game every PR** | Strict; unrelated red builds annoy. |
+
+**Lean recommendation:** **B**, but it can land *after* the first
+playtest-agent trial. CI does not replace the critic.
+
+Reply `3=A|B|C` and `4=A|B|C` whenever ready; everything else is locked.
+
+---
+
+## Decisions — full elaboration (historical)
+
+Locked answers are in [Owner decisions](#owner-decisions-2026-10-23).
+The sections below remain as tradeoff notes.
 
 ### 1. Critic separation — A (fresh agent) vs B (same agent + artifacts) vs both
 
@@ -359,7 +432,9 @@ upgrade on top of that contract, not a substitute for it.
 **Risk if we only build B:** we get prettier self-grades with screenshots —
 still the author grading the homework.
 
-**Ask:** A / B / both? **[both]**
+**Owner (2026-10-23):** fresh critical agent that sees the original prompt —
+closer to A, with pitch-in-context (not only “both”). Artifact file still
+committed (#2).
 
 ---
 
@@ -530,16 +605,19 @@ Incoherent combos to avoid:
 
 ---
 
-## Suggested implementation order (only after decisions)
+## Suggested implementation order (when owner pitches the trial game)
 
-Still proposal — do not start until the seven answers land.
+Can start skill/docs work for locked items before #3/#4 resolve; do not
+block the critic on CI.
 
-1. Lock PLAYTEST schema + “not shipped / not precached” rule in the checker.
-2. Wire fail-closed “no PLAYTEST.md ⇒ cannot claim playable” into `game-qc`.
-3. Smoke/feel hardening for the **trial game only**, then generalize.
-4. Add `game-playtest` skill; one live spawn trial on the chosen game.
-5. CI for gate 0 on touched games.
-6. videoReview only if motion bugs still slip past PLAYTEST.
+1. Lock PLAYTEST schema (intent vs pitch, motion section, content complaints)
+   + “not shipped / not precached” in the checker.
+2. Add `game-playtest` skill: fresh agent, critical, pitch in prompt,
+   **required recording + videoReview**, commit `PLAYTEST.md`.
+3. Retarget `game-qc`: orchestrate builder → critic (≤3 rounds); content
+   complaints in scope; no “playable” claim without PLAYTEST + recording.
+4. Owner pitches new game → `new-game` → build → first real critic loop.
+5. Resolve #3/#4 (smoke / CI) in a small follow-up unless owner picks sooner.
 
 ---
 
