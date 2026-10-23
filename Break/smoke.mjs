@@ -11,6 +11,7 @@ import {
   PHYSICS,
   TABLE,
   DIFFICULTIES,
+  DIFFICULTY_IDS,
   pocketCenters,
 } from './src/game/content.js';
 import { anyMoving, applyCueShot, stepPhysics, createBall } from './src/game/physics.js';
@@ -271,13 +272,19 @@ assert(
 
 // AI difficulties exist and produce a legal shot.
 {
-  assert(DIFFICULTIES.easy && DIFFICULTIES.medium && DIFFICULTIES.hard, 'three difficulties');
+  assert(
+    DIFFICULTIES.easy && DIFFICULTIES.medium && DIFFICULTIES.hard && DIFFICULTIES.extraHard,
+    'four difficulties'
+  );
+  assert(DIFFICULTY_IDS.includes('extraHard'), 'extraHard in ids');
+  assert(DIFFICULTIES.hard.missBias < DIFFICULTIES.medium.missBias, 'hard tighter than medium');
+  assert(DIFFICULTIES.extraHard.missBias === 0, 'extraHard does not miss on purpose');
   const s = new PlaySession(11, {}, { mode: 'vsAi', difficulty: 'hard' });
   assert(s.mode === 'vsAi' && s.turn === 'player', 'vs AI starts on player turn');
   assert(s.openTable, 'match starts with open table');
   assert(s.legalTargets().every((b) => b.kind !== 'eight'), 'open table: 8 is not a legal target');
   const rng = makeRNG(99);
-  for (const id of ['easy', 'medium', 'hard']) {
+  for (const id of ['easy', 'medium', 'hard', 'extraHard']) {
     const shot = chooseAiShot(s, id, rng);
     assert(shot && shot.power > 0.1, `${id} AI returns a shot`);
     assert(Number.isFinite(shot.dx) && Number.isFinite(shot.dy), `${id} aim finite`);
@@ -345,6 +352,56 @@ assert(
   s.phase = 'rolling';
   s._resolveShot();
   assert(s.phase === 'won' && s.winner === 'ai', 'early 8 loses to AI');
+}
+
+// On the 8: must call a pocket; wrong pocket loses; called pocket wins.
+{
+  const s = new PlaySession(8, {}, { mode: 'vsAi', difficulty: 'easy' });
+  s.openTable = false;
+  s.suits.player = 'solid';
+  s.suits.ai = 'stripe';
+  // Clear solids so player is on the 8.
+  for (const b of s.balls) {
+    if (b.kind === 'solid') b.pocketed = true;
+  }
+  s.scores.player = 7;
+  assert(s.onTheEight('player'), 'player is on the 8');
+  assert(s.needsPocketCall('player'), 'must call before shooting');
+  assert(!s.shoot(1, 0, 0.5), 'cannot shoot 8 without a call');
+  assert(s.callPocket(2, 'player'), 'call top-right');
+  assert(!s.needsPocketCall('player'), 'call satisfied');
+  assert(s.isLegalTarget(8, 'player'), '8 is legal once on it');
+  assert(!s.isLegalTarget(9, 'player'), 'stripe is illegal for solids player');
+
+  // Wrong pocket → loss
+  s.turn = 'player';
+  s.lastPocketed = [8];
+  const eight = s.balls.find((b) => b.id === 8);
+  eight.pocketed = true;
+  eight.pocketIndex = 5; // bottom-right, not called 2
+  s.pocketedCount += 1;
+  s.phase = 'rolling';
+  s._resolveShot();
+  assert(s.phase === 'won' && s.winner === 'ai', 'wrong called pocket loses');
+
+  const s2 = new PlaySession(9, {}, { mode: 'vsAi', difficulty: 'easy' });
+  s2.openTable = false;
+  s2.suits.player = 'solid';
+  s2.suits.ai = 'stripe';
+  for (const b of s2.balls) {
+    if (b.kind === 'solid') b.pocketed = true;
+  }
+  s2.scores.player = 7;
+  s2.callPocket(2, 'player');
+  s2.turn = 'player';
+  s2.lastPocketed = [8];
+  const e2 = s2.balls.find((b) => b.id === 8);
+  e2.pocketed = true;
+  e2.pocketIndex = 2;
+  s2.pocketedCount += 1;
+  s2.phase = 'rolling';
+  s2._resolveShot();
+  assert(s2.phase === 'won' && s2.winner === 'player', 'called pocket wins');
 }
 
 // Corner pockets sit closer to the cloth than the prior k=0.55 layout.

@@ -131,12 +131,12 @@ export function pocketCenters() {
   // Lower k = closer to the cloth corner (easier to drop).
   const k = 0.38;
   return [
-    { x: -w - c * k, y: -h - c * k, corner: true },
-    { x: 0, y: -h - s * 0.7, corner: false },
-    { x: w + c * k, y: -h - c * k, corner: true },
-    { x: -w - c * k, y: h + c * k, corner: true },
-    { x: 0, y: h + s * 0.7, corner: false },
-    { x: w + c * k, y: h + c * k, corner: true },
+    { id: 0, key: 'tl', label: 'top-left', x: -w - c * k, y: -h - c * k, corner: true },
+    { id: 1, key: 'top', label: 'top side', x: 0, y: -h - s * 0.7, corner: false },
+    { id: 2, key: 'tr', label: 'top-right', x: w + c * k, y: -h - c * k, corner: true },
+    { id: 3, key: 'bl', label: 'bottom-left', x: -w - c * k, y: h + c * k, corner: true },
+    { id: 4, key: 'bot', label: 'bottom side', x: 0, y: h + s * 0.7, corner: false },
+    { id: 5, key: 'br', label: 'bottom-right', x: w + c * k, y: h + c * k, corner: true },
   ];
 }
 
@@ -165,16 +165,26 @@ export const DIFFICULTIES = {
   hard: {
     id: 'hard',
     name: 'Hard',
-    blurb: 'Tight cuts, firm pace.',
-    aimJitter: 0.025,
-    powerJitter: 0.05,
-    powerMul: 0.98,
-    thinkSec: 0.35,
-    missBias: 0.04,
+    blurb: 'Sharp aim, few gifts.',
+    aimJitter: 0.014,
+    powerJitter: 0.03,
+    powerMul: 1.0,
+    thinkSec: 0.28,
+    missBias: 0.012,
+  },
+  extraHard: {
+    id: 'extraHard',
+    name: 'Extra Hard',
+    blurb: 'Near-perfect lines. Good luck.',
+    aimJitter: 0.004,
+    powerJitter: 0.012,
+    powerMul: 1.0,
+    thinkSec: 0.18,
+    missBias: 0,
   },
 };
 
-export const DIFFICULTY_IDS = ['easy', 'medium', 'hard'];
+export const DIFFICULTY_IDS = ['easy', 'medium', 'hard', 'extraHard'];
 
 export function scoreClear(shots, pocketed) {
   if (pocketed < 15) return Math.max(0, pocketed * 10 - shots);

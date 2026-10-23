@@ -26,6 +26,8 @@ export function createBall(def, x, y) {
     fallFromY: 0,
     fallPocketX: 0,
     fallPocketY: 0,
+    /** Pocket id from content.pocketCenters when sunk; -1 if not. */
+    pocketIndex: -1,
     r: BALL_R,
   };
 }
@@ -420,6 +422,7 @@ function beginPocketFall(b, p) {
   b.fallFromY = b.y;
   b.fallPocketX = p.x;
   b.fallPocketY = p.y;
+  b.pocketIndex = typeof p.id === 'number' ? p.id : pockets.indexOf(p);
   b.vx = 0;
   b.vy = 0;
   b.sideSpin = 0;

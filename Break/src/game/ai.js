@@ -17,19 +17,29 @@ export function chooseAiShot(session, difficultyId, rng) {
 
   // Only shoot the shooter's legal group (or any color while the table is open).
   const targets = session.legalTargets ? session.legalTargets() : session.objectBalls;
+  const onEight = session.onTheEight && session.onTheEight('ai');
+
   for (const ball of targets) {
     if (ball.pocketed || ball.falling) continue;
     for (const pocket of pockets) {
       const shot = lineUpShot(cue, ball, pocket, session.balls);
       if (!shot) continue;
+      shot.pocketId = pocket.id;
       // Prefer finishing the 8 when it is legal.
-      if (ball.kind === 'eight') shot.score += 12;
+      if (ball.kind === 'eight') shot.score += 18;
+      // Extra Hard favors high-percentage lines even harder.
+      if (diff.id === 'extraHard') shot.score += shot.cut * 8;
       candidates.push(shot);
     }
   }
 
   // Break / scramble fallback — aim at pack centroid or nearest ball.
   if (!candidates.length) {
+    if (onEight) {
+      // Still must call something before a scramble at the 8.
+      const fallback = pockets[Math.floor(rng() * pockets.length)];
+      session.callPocket?.(fallback.id, 'ai');
+    }
     return scrambleShot(session, diff, rng);
   }
 
@@ -37,9 +47,14 @@ export function chooseAiShot(session, difficultyId, rng) {
 
   // Easy/medium sometimes skip the best line on purpose.
   let pick = candidates[0];
-  if (rng() < diff.missBias && candidates.length > 1) {
+  if (diff.missBias > 0 && rng() < diff.missBias && candidates.length > 1) {
     const idx = 1 + Math.floor(rng() * Math.min(4, candidates.length - 1));
     pick = candidates[idx];
+  }
+
+  // On the 8: call the pocket this line is aiming at before shooting.
+  if (onEight && pick.pocketId != null) {
+    session.callPocket?.(pick.pocketId, 'ai');
   }
 
   // Aim jitter (radians-ish via perpendicular offset).
@@ -56,10 +71,12 @@ export function chooseAiShot(session, difficultyId, rng) {
   power += (rng() - 0.5) * 2 * diff.powerJitter;
   power = Math.max(0.18, Math.min(1, power));
 
-  // Hard sometimes uses a touch of side; easy almost never.
+  // Harder difficulties use a touch of side english more often.
   const english = { x: 0, y: 0 };
-  if (diff.id === 'hard' && rng() < 0.35) {
-    english.x = (rng() - 0.5) * 0.35;
+  if (diff.id === 'extraHard' && rng() < 0.45) {
+    english.x = (rng() - 0.5) * 0.28;
+  } else if (diff.id === 'hard' && rng() < 0.4) {
+    english.x = (rng() - 0.5) * 0.32;
   } else if (diff.id === 'medium' && rng() < 0.15) {
     english.x = (rng() - 0.5) * 0.2;
   }
@@ -106,7 +123,7 @@ function lineUpShot(cue, ball, pocket, balls) {
   // Power scales with how far cue and object need to travel.
   const power = Math.max(0.28, Math.min(0.95, 0.22 + dist / 140 + pocketDist / 220));
 
-  return { nx, ny, power, score, ballId: ball.id };
+  return { nx, ny, power, score, ballId: ball.id, cut };
 }
 
 function clearPath(x0, y0, x1, y1, radius, balls, ignoreA, ignoreB) {

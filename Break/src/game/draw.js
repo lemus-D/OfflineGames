@@ -443,22 +443,28 @@ export function drawBall(g, ball, view) {
 
 /**
  * Cue stick, power, ghost ball, contact mark, object/cue leave angles.
+ * opts.legalIds: Set of ball ids that are legal to hit (wrong target → ✕).
  */
 export function drawCueAndAim(g, cue, balls, view, aim, english, opts = {}) {
   if (!cue || cue.pocketed || !aim) return;
   const pulling = !!opts.pulling;
   const power = opts.power || 0;
+  const legalIds = opts.legalIds || null;
   const ang = Math.atan2(aim.dy, aim.dx);
   const origin = tableToScreen(cue.x, cue.y, view);
 
   const pred = predictAim(cue, balls, aim.dx / view.scale, aim.dy / view.scale, english);
+  const illegal =
+    !!(pred && pred.target && legalIds && !legalIds.has(pred.target.id));
 
   g.save();
 
   // Aim guide to ghost / far end
   if (pred) {
     const end = tableToScreen(pred.aimEnd.x, pred.aimEnd.y, view);
-    g.strokeStyle = `rgba(244, 240, 220, ${0.22 + power * 0.35})`;
+    g.strokeStyle = illegal
+      ? `rgba(220, 80, 70, ${0.35 + power * 0.35})`
+      : `rgba(244, 240, 220, ${0.22 + power * 0.35})`;
     g.lineWidth = 1.4;
     g.setLineDash([5, 7]);
     g.beginPath();
@@ -474,12 +480,12 @@ export function drawCueAndAim(g, cue, balls, view, aim, english, opts = {}) {
       // Ghost ball (where cue center will be)
       g.beginPath();
       g.arc(gs.x, gs.y, gr, 0, Math.PI * 2);
-      g.strokeStyle = 'rgba(244, 240, 220, 0.75)';
+      g.strokeStyle = illegal ? 'rgba(220, 90, 80, 0.85)' : 'rgba(244, 240, 220, 0.75)';
       g.lineWidth = 1.6;
       g.setLineDash([3, 3]);
       g.stroke();
       g.setLineDash([]);
-      g.fillStyle = 'rgba(244, 240, 220, 0.08)';
+      g.fillStyle = illegal ? 'rgba(200, 50, 40, 0.12)' : 'rgba(244, 240, 220, 0.08)';
       g.fill();
 
       // Contact mark on the object ball
@@ -487,15 +493,15 @@ export function drawCueAndAim(g, cue, balls, view, aim, english, opts = {}) {
         const cs = tableToScreen(pred.contact.x, pred.contact.y, view);
         g.beginPath();
         g.arc(cs.x, cs.y, Math.max(3, gr * 0.28), 0, Math.PI * 2);
-        g.fillStyle = 'rgba(255, 220, 100, 0.9)';
+        g.fillStyle = illegal ? 'rgba(230, 90, 80, 0.95)' : 'rgba(255, 220, 100, 0.9)';
         g.fill();
         g.strokeStyle = 'rgba(40, 30, 10, 0.55)';
         g.lineWidth = 1;
         g.stroke();
       }
 
-      // Object ball leave path
-      if (pred.objectDir) {
+      // Object ball leave path — muted when illegal
+      if (pred.objectDir && !illegal) {
         const len = 70 * (view.scale / 3.2);
         const ts = tableToScreen(pred.target.x, pred.target.y, view);
         g.strokeStyle = 'rgba(120, 220, 160, 0.85)';
@@ -514,7 +520,7 @@ export function drawCueAndAim(g, cue, balls, view, aim, english, opts = {}) {
       }
 
       // Cue ball leave path (deflection / follow)
-      if (pred.cueDir) {
+      if (pred.cueDir && !illegal) {
         const len = 48 * (view.scale / 3.2);
         g.strokeStyle = 'rgba(240, 200, 120, 0.8)';
         g.lineWidth = 1.8;
@@ -526,8 +532,18 @@ export function drawCueAndAim(g, cue, balls, view, aim, english, opts = {}) {
         g.setLineDash([]);
       }
 
-      // Cut angle readout
-      if (pred.cutDeg != null) {
+      // Cut angle readout — or ✕ when aiming at a ball you shouldn't hit
+      if (illegal) {
+        const label = '✕';
+        g.font = '700 16px "Trebuchet MS", sans-serif';
+        const tw = Math.max(18, g.measureText(label).width);
+        g.fillStyle = 'rgba(40, 10, 10, 0.7)';
+        g.fillRect(gs.x - tw / 2 - 6, gs.y - gr - 24, tw + 12, 20);
+        g.fillStyle = '#f07060';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText(label, gs.x, gs.y - gr - 14);
+      } else if (pred.cutDeg != null) {
         g.fillStyle = 'rgba(10, 16, 12, 0.55)';
         const label = `${Math.round(pred.cutDeg)}° cut`;
         g.font = '600 11px "Trebuchet MS", sans-serif';
@@ -673,6 +689,39 @@ export function drawKitchenHint(g, view) {
   g.strokeStyle = 'rgba(212, 192, 120, 0.35)';
   g.setLineDash([5, 5]);
   g.strokeRect(left + 1, top + 1, w - 2, h - 2);
+  g.restore();
+}
+
+/**
+ * Highlight pockets when calling the 8. calledId may be null (pick mode).
+ */
+export function drawPocketCallHints(g, view, calledId, pulse = 0) {
+  const pockets = pocketCenters();
+  g.save();
+  for (const p of pockets) {
+    const s = tableToScreen(p.x, p.y, view);
+    const pr = TABLE.pocketR * view.scale * (p.corner ? 1.05 : 0.95);
+    const isCalled = calledId != null && p.id === calledId;
+    const glow = isCalled
+      ? 0.55 + Math.sin(pulse * 4) * 0.15
+      : calledId == null
+        ? 0.28 + Math.sin(pulse * 3 + p.id) * 0.08
+        : 0.1;
+    g.beginPath();
+    g.arc(s.x, s.y, pr + (isCalled ? 7 : 4), 0, Math.PI * 2);
+    g.strokeStyle = isCalled
+      ? `rgba(232, 200, 90, ${glow})`
+      : `rgba(200, 220, 180, ${glow})`;
+    g.lineWidth = isCalled ? 3 : 1.5;
+    g.stroke();
+    if (isCalled) {
+      g.font = '700 10px "Trebuchet MS", sans-serif';
+      g.fillStyle = 'rgba(232, 200, 90, 0.95)';
+      g.textAlign = 'center';
+      g.textBaseline = 'bottom';
+      g.fillText('CALLED', s.x, s.y - pr - 8);
+    }
+  }
   g.restore();
 }
 

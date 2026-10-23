@@ -11,6 +11,7 @@ import {
   BALL_R,
   scoreClear,
   DIFFICULTIES,
+  pocketCenters,
 } from './content.js';
 import {
   createBall,
@@ -103,6 +104,8 @@ export class PlaySession {
     this.winReason = '';
     this.lastPocketed = [];
     this.needsBallInHand = false;
+    /** Called pocket id for the 8 (per side). null until called. */
+    this.calledPocket = { player: null, ai: null };
     this.message =
       this.mode === 'vsAi'
         ? `Your break · ${DIFFICULTIES[this.difficulty].name} AI · table is open.`
@@ -157,6 +160,45 @@ export class PlaySession {
     return `${base} · ${suit === 'solid' ? 'SOLIDS' : 'STRIPES'}`;
   }
 
+  /** True when this side has cleared its group and must shoot the 8. */
+  onTheEight(who = this.turn) {
+    if (this.openTable || !this.suits[who]) return false;
+    return this.remainingOf(this.suits[who]) === 0 && this.remainingOf('eight') > 0;
+  }
+
+  /** Player/AI must call a pocket before firing the 8. */
+  needsPocketCall(who = this.turn) {
+    return this.onTheEight(who) && this.calledPocket[who] == null;
+  }
+
+  isLegalTarget(ballOrId, who = this.turn) {
+    const id = ballOrId && typeof ballOrId === 'object' ? ballOrId.id : ballOrId;
+    return this.legalTargets(who).some((b) => b.id === id);
+  }
+
+  /**
+   * Call a pocket for the 8-ball (id from pocketCenters).
+   * @returns {boolean}
+   */
+  callPocket(pocketId, who = this.turn) {
+    if (!this.onTheEight(who)) return false;
+    const pockets = pocketCenters();
+    const p = pockets.find((row) => row.id === pocketId);
+    if (!p) return false;
+    this.calledPocket[who] = pocketId;
+    this.message =
+      who === 'player'
+        ? `8 called in the ${p.label} pocket. Shoot.`
+        : `AI calls the ${p.label} pocket.`;
+    this.hooks.onTurn?.(this);
+    return true;
+  }
+
+  pocketLabel(pocketId) {
+    const p = pocketCenters().find((row) => row.id === pocketId);
+    return p ? p.label : 'pocket';
+  }
+
   summary() {
     return {
       shots: this.shots,
@@ -173,6 +215,7 @@ export class PlaySession {
       winner: this.winner,
       winReason: this.winReason,
       turn: this.turn,
+      calledPocket: { ...this.calledPocket },
     };
   }
 
@@ -186,6 +229,13 @@ export class PlaySession {
     const cue = this.cue;
     if (!cue || cue.pocketed) return false;
     if (power01 < 0.02) return false;
+    if (this.needsPocketCall(this.turn)) {
+      this.message =
+        this.turn === 'player'
+          ? 'Call a pocket for the 8 first — tap a hole.'
+          : 'AI must call a pocket…';
+      return false;
+    }
 
     applyCueShot(cue, dirX, dirY, power01, english);
     this.shots += 1;
@@ -285,14 +335,18 @@ export class PlaySession {
   }
 
   _onEightMessage(shooter) {
-    if (this.openTable || !this.suits[shooter]) return '';
-    if (this.remainingOf(this.suits[shooter]) > 0) return '';
+    if (!this.onTheEight(shooter)) return '';
+    const called = this.calledPocket[shooter];
     if (shooter === 'player') {
-      return this.suits.player === 'solid'
-        ? 'Your solids are clear — shoot the 8.'
-        : 'Your stripes are clear — shoot the 8.';
+      if (called == null) {
+        return this.suits.player === 'solid'
+          ? 'Solids clear — tap a pocket to call the 8.'
+          : 'Stripes clear — tap a pocket to call the 8.';
+      }
+      return `8 called ${this.pocketLabel(called)}. Shoot.`;
     }
-    return 'AI is on the 8.';
+    if (called == null) return 'AI is on the 8…';
+    return `AI called ${this.pocketLabel(called)}.`;
   }
 
   _resolveShot() {
@@ -347,10 +401,22 @@ export class PlaySession {
           this.mode === 'vsAi' ? opp : null,
           `${labelWho(shooter)} pocketed the 8 early.`
         );
+        return;
+      }
+      const eight = this.balls.find((b) => b.id === 8);
+      const sunkIn = eight ? eight.pocketIndex : -1;
+      const called = this.calledPocket[shooter];
+      if (called == null || sunkIn < 0 || sunkIn !== called) {
+        const where = sunkIn >= 0 ? this.pocketLabel(sunkIn) : 'a pocket';
+        const need = called != null ? this.pocketLabel(called) : 'the called pocket';
+        this._endGame(
+          this.mode === 'vsAi' ? opp : null,
+          `${labelWho(shooter)} missed the call — 8 went ${where} (needed ${need}).`
+        );
       } else {
         this._endGame(
           this.mode === 'vsAi' ? shooter : 'player',
-          `${labelWho(shooter)} wins — 8-ball.`
+          `${labelWho(shooter)} wins — 8 in the ${this.pocketLabel(called)}.`
         );
       }
       return;
@@ -391,11 +457,14 @@ export class PlaySession {
         if (assigned && shooter === 'player') {
           this.message = `You are ${suitLabel(this.suits.player)} · AI is ${suitLabel(this.suits.ai)}. AI thinking…`;
         } else if (this.turn === 'player') {
-          this.message = this.openTable
-            ? 'Your turn — table is open.'
-            : `Your turn — shoot ${suitLabel(this.suits.player)}.`;
+          const eightMsg = this._onEightMessage('player');
+          this.message =
+            eightMsg ||
+            (this.openTable
+              ? 'Your turn — table is open.'
+              : `Your turn — shoot ${suitLabel(this.suits.player)}.`);
         } else {
-          this.message = 'AI thinking…';
+          this.message = this.onTheEight('ai') ? 'AI is on the 8…' : 'AI thinking…';
         }
         this.hooks.onTurn?.(this);
       }

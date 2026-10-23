@@ -1,9 +1,9 @@
 /* Namespaced, versioned localStorage. Keys always start with break.v1. */
 
 const PROFILE_KEY = 'break.v1.profile';
-const SCHEMA = 2;
+const SCHEMA = 3;
 
-const emptyAi = () => ({ easy: 0, medium: 0, hard: 0 });
+const emptyAi = () => ({ easy: 0, medium: 0, hard: 0, extraHard: 0 });
 
 const DEFAULT_PROFILE = () => ({
   schema: SCHEMA,

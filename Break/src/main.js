@@ -3,7 +3,7 @@
 import { CueInput, EnglishDial } from './core/input.js';
 import { Save } from './core/save.js';
 import { clamp } from './core/rng.js';
-import { PHYSICS, DIFFICULTIES } from './game/content.js';
+import { PHYSICS, DIFFICULTIES, pocketCenters } from './game/content.js';
 import { PlaySession } from './game/play.js';
 import { chooseAiShot, difficultyThinkSec } from './game/ai.js';
 import {
@@ -13,6 +13,7 @@ import {
   drawCueAndAim,
   drawEnglishDial,
   drawKitchenHint,
+  drawPocketCallHints,
   screenToTable,
   tableToScreen,
 } from './game/draw.js';
@@ -86,6 +87,7 @@ const els = {
   btnEasy: document.getElementById('btnEasy'),
   btnMedium: document.getElementById('btnMedium'),
   btnHard: document.getElementById('btnHard'),
+  btnExtraHard: document.getElementById('btnExtraHard'),
 };
 
 function resize() {
@@ -127,11 +129,13 @@ function refreshMenuMeta() {
     const w =
       (profile.aiWins?.easy || 0) +
       (profile.aiWins?.medium || 0) +
-      (profile.aiWins?.hard || 0);
+      (profile.aiWins?.hard || 0) +
+      (profile.aiWins?.extraHard || 0);
     const l =
       (profile.aiLosses?.easy || 0) +
       (profile.aiLosses?.medium || 0) +
-      (profile.aiLosses?.hard || 0);
+      (profile.aiLosses?.hard || 0) +
+      (profile.aiLosses?.extraHard || 0);
     els.aiRecord.textContent = `${w}–${l}`;
   }
 }
@@ -168,8 +172,8 @@ function endRun(cleared) {
   profile.totalPocketed += sum.pocketed;
 
   if (sum.mode === 'vsAi' && sum.winner) {
-    profile.aiWins = profile.aiWins || { easy: 0, medium: 0, hard: 0 };
-    profile.aiLosses = profile.aiLosses || { easy: 0, medium: 0, hard: 0 };
+    profile.aiWins = profile.aiWins || { easy: 0, medium: 0, hard: 0, extraHard: 0 };
+    profile.aiLosses = profile.aiLosses || { easy: 0, medium: 0, hard: 0, extraHard: 0 };
     const d = sum.difficulty || selectedDifficulty;
     if (sum.winner === 'player') profile.aiWins[d] = (profile.aiWins[d] || 0) + 1;
     if (sum.winner === 'ai') profile.aiLosses[d] = (profile.aiLosses[d] || 0) + 1;
@@ -308,7 +312,19 @@ function resolveAim(view) {
       0,
       1
     );
+    // Soft tap near a pocket while on the 8 → call / re-call.
+    if (power < 0.02 && tryCallPocketAt(cueInput.cx, cueInput.cy, view)) {
+      cueInput.reset();
+      updateHud();
+      return null;
+    }
     if (power >= 0.02 && (drag.dx !== 0 || drag.dy !== 0)) {
+      if (session.needsPocketCall('player')) {
+        session.message = 'Call a pocket for the 8 first — tap a hole.';
+        cueInput.reset();
+        updateHud();
+        return null;
+      }
       pendingShot = {
         dx: drag.dx / view.scale,
         dy: drag.dy / view.scale,
@@ -399,6 +415,14 @@ function drawPlay(dt) {
 
   if (s.phase === 'ballInHand' && !s.isAiTurn) drawKitchenHint(g, view);
 
+  if (
+    s.phase === 'aiming' &&
+    !s.isAiTurn &&
+    s.onTheEight('player')
+  ) {
+    drawPocketCallHints(g, view, s.calledPocket.player, animTime);
+  }
+
   for (const b of s.balls) {
     if (b.id !== 0) drawBall(g, b, view);
   }
@@ -406,9 +430,11 @@ function drawPlay(dt) {
 
   const aim = resolveAim(view);
   if (aim && s.phase === 'aiming' && !s.isAiTurn) {
+    const legalIds = new Set(s.legalTargets('player').map((b) => b.id));
     drawCueAndAim(g, s.cue, s.balls, view, aim, englishDial.english, {
       pulling: aim.pulling,
       power: aim.power,
+      legalIds,
     });
   }
 
@@ -454,9 +480,29 @@ function bindDiff(btn, id) {
     startRun(id);
   });
 }
+function tryCallPocketAt(sx, sy, view) {
+  if (!session || session.isAiTurn || !session.onTheEight('player')) return false;
+  if (session.phase !== 'aiming' && session.phase !== 'ballInHand') return false;
+  const world = screenToTable(sx, sy, view);
+  const pockets = pocketCenters();
+  let best = -1;
+  let bestD = Infinity;
+  for (const p of pockets) {
+    const d = Math.hypot(world.x - p.x, world.y - p.y);
+    if (d < bestD) {
+      bestD = d;
+      best = p.id;
+    }
+  }
+  // Generous tap target around each mouth.
+  if (bestD > 16) return false;
+  return session.callPocket(best, 'player');
+}
+
 bindDiff(els.btnEasy, 'easy');
 bindDiff(els.btnMedium, 'medium');
 bindDiff(els.btnHard, 'hard');
+bindDiff(els.btnExtraHard, 'extraHard');
 
 els.btnAgain.addEventListener('click', () => {
   session = null;
