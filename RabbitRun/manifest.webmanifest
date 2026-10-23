@@ -1,0 +1,18 @@
+{
+  "name": "Rabbit Run",
+  "short_name": "Rabbit Run",
+  "description": "Dash down the trail. Grab carrots. Don't let the fox catch you.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#121820",
+  "theme_color": "#1b2a44",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'><rect width='128' height='128' fill='%232d5a27'/><ellipse cx='64' cy='78' rx='28' ry='22' fill='%23e8dcc8'/><ellipse cx='48' cy='38' rx='10' ry='28' fill='%23e8dcc8'/><ellipse cx='80' cy='38' rx='10' ry='28' fill='%23e8dcc8'/><circle cx='54' cy='74' r='4' fill='%232a2018'/><circle cx='74' cy='74' r='4' fill='%232a2018'/><ellipse cx='64' cy='86' rx='6' ry='4' fill='%23c47850'/></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
