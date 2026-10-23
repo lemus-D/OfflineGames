@@ -18,7 +18,7 @@ That is the weak joint. This note proposes a sharper workflow.
 | 1 | Critic | **Fresh agent, critical** | Sees the **original pitch/prompt** + plan/brief; judges the build against that intent, not against the builder’s excuses. Stance: skeptical player, not co-author. |
 | 2 | Report location | **Commit** `PLAYTEST.md` | Keep out of SW precache. Videos may still live in artifact store; checklist + complaints + scores in git. |
 | 3 | Smoke hardening | **Undecided** | See [Still open](#still-open-3-and-4). |
-| 4 | CI for gate 0 | **Undecided** | See [Still open](#still-open-3-and-4). |
+| 4 | CI for gate 0 | **Deferred** | Owner: ignore for now. Revisit after the critic loop works. |
 | 5 | Critic rounds | **3** | Design **and** content complaints are **in scope** — do not stop / ignore them as “not feel.” Escalate to owner only when a change needs a taste call the brief does not cover. |
 | 6 | Trial game | **Owner will pitch a new game** | Do not trial on Apex/Sharky/UnfairPickle first. New title exercises `new-game` → build → critic end-to-end. |
 | 7 | Recording / motion | **Required now** | Motion is the common fail. Playtest must record; a vision/`videoReview` pass on that recording is part of the critic loop, not a later nice-to-have. |
@@ -390,18 +390,12 @@ Smoke = `cd <Game> && npm run smoke` (headless Node, no browser).
 loop is the bigger miss; don’t block it on rewriting Sharky’s smoke. The
 new game can still ship a strong smoke because `new-game` already says to.
 
-### #4 CI — what you’d be choosing
+### #4 CI — deferred
 
-| Pick | What happens |
-|---|---|
-| **A. No CI** | Agents keep remembering (or not). Port collisions possible again. |
-| **B. Gate 0 on games the PR touches** | Cheap; catches Math.random / precache / port bugs on that PR. Does not play the game. |
-| **C. Gate 0 on every game every PR** | Strict; unrelated red builds annoy. |
+Owner: ignore for now. No GitHub Action until the playtest critic loop exists.
+Revisit later if mechanical regressions keep slipping through.
 
-**Lean recommendation:** **B**, but it can land *after* the first
-playtest-agent trial. CI does not replace the critic.
-
-Reply `3=A|B|C` and `4=A|B|C` whenever ready; everything else is locked.
+Reply `3=A|B|C` whenever ready for smoke; #4 is parked.
 
 ---
 
@@ -459,7 +453,7 @@ markdown checklist and complaint list should be local.
 `check-game.mjs` should ignore it (and must not require it in PRECACHE).
 Otherwise every QC run forces a pointless SW cache bump.
 
-**Ask:** commit / artifacts-only / hybrid? **[commit markdown; videos as artifacts]**
+**Owner (2026-10-23):** **commit** the report.
 
 ---
 
@@ -483,8 +477,7 @@ PRs if CI runs on all games.
 **Mitigation if we say yes:** phase it — warn for one PR cycle, then fail;
 or fail only when the PR touches that game’s `src/`.
 
-**Ask:** fail now / warn then fail / separate feel.mjs? **[fail when PR
-touches that game; warn-only on untouched games until upgraded]**
+**Owner (2026-10-23):** undecided — see [Still open](#still-open-3-and-4).
 
 ---
 
@@ -509,7 +502,7 @@ still fails if 5183 is taken by Break on the same branch checkout.
 **CI will not run Playwright.** That is fine. CI’s job is fail-closed
 mechanics; playtest stays in the agent loop.
 
-**Ask:** no CI / touched games / all games? **[touched games]**
+**Owner (2026-10-23):** undecided — see [Still open](#still-open-3-and-4).
 
 ---
 
@@ -529,7 +522,7 @@ in a way that needs a design change (not a constant), or if remaining
 complaints are content (“more enemy types”). Escalate to you with the
 complaint list rather than inventing scope.
 
-**Ask:** 1 / 3 / 5? **[3]**
+**Owner (2026-10-23):** **3**, and design/content complaints stay in scope.
 
 ---
 
@@ -550,7 +543,7 @@ Pick the trial for what it teaches.
 is “harden the scaffold everyone copies.” Doing both in one week is how
 the workflow stays vapor.
 
-**Ask:** which one first? **[pick one: Apex *or* UnfairPickle]**
+**Owner (2026-10-23):** will pitch a **new game** for the trial.
 
 ---
 
@@ -570,7 +563,7 @@ pass might help agents.
 loop. Add it when PLAYTEST.md exists and we still see motion bugs slip
 through.
 
-**Ask:** now / later / never? **[later]**
+**Owner (2026-10-23):** **now** — recording + motion review required.
 
 ---
 
