@@ -17,7 +17,7 @@ That is the weak joint. This note proposes a sharper workflow.
 |---|---|---|---|
 | 1 | Critic | **Fresh agent, critical** | Sees the **original pitch/prompt** + plan/brief; judges the build against that intent, not against the builder’s excuses. Stance: skeptical player, not co-author. |
 | 2 | Report location | **Commit** `PLAYTEST.md` | Keep out of SW precache. Videos may still live in artifact store; checklist + complaints + scores in git. |
-| 3 | Smoke hardening | **Undecided** | See [Still open](#still-open-3-and-4). |
+| 3 | Smoke hardening | **Leave alone** | Games differ (arcade vs turn-based). Do not force one arcade smoke contract. Critic + recording carry quality. |
 | 4 | CI for gate 0 | **Deferred** | Owner: ignore for now. Revisit after the critic loop works. |
 | 5 | Critic rounds | **3** | Design **and** content complaints are **in scope** — do not stop / ignore them as “not feel.” Escalate to owner only when a change needs a taste call the brief does not cover. |
 | 6 | Trial game | **Owner will pitch a new game** | Do not trial on Apex/Sharky/UnfairPickle first. New title exercises `new-game` → build → critic end-to-end. |
@@ -371,31 +371,21 @@ Trial game is **not** UnfairPickle/Apex — owner will bring a new pitch so
 
 ---
 
-## Still open: #3 and #4
+## Deferred: #3 and #4
 
-Owner is unsure. Short framing so a pick is easy; no need to re-litigate
-the whole brainstorm.
+### #3 Smoke — leave alone (locked)
 
-### #3 Smoke hardening — what you’d be choosing
+Do not harden `check-game.mjs` around an arcade-only smoke contract.
+Yes-General is turn-based; idle-loses / FIXED_DT proxies do not apply the
+same way. Per-game smoke stays as each game writes it. Gate 0 still runs
+whatever smoke exists and requires exit 0.
 
-Smoke = `cd <Game> && npm run smoke` (headless Node, no browser).
-
-| Pick | What happens |
-|---|---|
-| **A. Leave as-is** | Checker keeps soft “warn if few asserts.” Playtest + recording carry quality. Fastest path to the new loop. |
-| **B. Harden later** | Ship critic/recording first on the new game; once that works, require determinism + idle-dies + progress in smoke for arcade titles. |
-| **C. Harden with the trial** | New game’s smoke must include those asserts from day one; old games untouched until edited. |
-
-**Lean recommendation:** **B** (or **C** for the new game only). The critic
-loop is the bigger miss; don’t block it on rewriting Sharky’s smoke. The
-new game can still ship a strong smoke because `new-game` already says to.
+Quality for “is this the game we asked for / does motion feel right” is the
+playtest critic + recording, not smoke.
 
 ### #4 CI — deferred
 
-Owner: ignore for now. No GitHub Action until the playtest critic loop exists.
-Revisit later if mechanical regressions keep slipping through.
-
-Reply `3=A|B|C` whenever ready for smoke; #4 is parked.
+No GitHub Action for now. Revisit after the critic loop works.
 
 ---
 
@@ -477,7 +467,7 @@ PRs if CI runs on all games.
 **Mitigation if we say yes:** phase it — warn for one PR cycle, then fail;
 or fail only when the PR touches that game’s `src/`.
 
-**Owner (2026-10-23):** undecided — see [Still open](#still-open-3-and-4).
+**Owner (2026-10-23):** **leave alone** — mixed genres; no one-size smoke contract.
 
 ---
 
@@ -600,9 +590,6 @@ Incoherent combos to avoid:
 
 ## Suggested implementation order (when owner pitches the trial game)
 
-Can start skill/docs work for locked items before #3/#4 resolve; do not
-block the critic on CI.
-
 1. Lock PLAYTEST schema (intent vs pitch, motion section, content complaints)
    + “not shipped / not precached” in the checker.
 2. Add `game-playtest` skill: fresh agent, critical, pitch in prompt,
@@ -610,7 +597,7 @@ block the critic on CI.
 3. Retarget `game-qc`: orchestrate builder → critic (≤3 rounds); content
    complaints in scope; no “playable” claim without PLAYTEST + recording.
 4. Owner pitches new game → `new-game` → build → first real critic loop.
-5. Resolve #3/#4 (smoke / CI) in a small follow-up unless owner picks sooner.
+5. Smoke and CI stay as they are unless we revisit later.
 
 ---
 
