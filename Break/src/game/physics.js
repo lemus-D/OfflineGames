@@ -90,11 +90,20 @@ export function stepPhysics(balls, dt) {
     }
   }
 
+  // Capture before cushions so a jaw clip cannot bounce out of a mouth.
+  const stillActive = [];
   for (const b of active) {
+    if (tryPocket(b, dt)) events.pocketed.push(b);
+    else stillActive.push(b);
+  }
+
+  for (const b of stillActive) {
     if (resolveCushions(b)) events.cushionHits += 1;
   }
 
-  for (const b of active) {
+  // Second pass after rail motion — balls that cleared the tip into the hole.
+  for (const b of stillActive) {
+    if (b.pocketed || b.falling) continue;
     if (tryPocket(b, dt)) events.pocketed.push(b);
   }
 
@@ -198,10 +207,14 @@ function resolveBallBall(a, b) {
   return true;
 }
 
+function gapForPocket(p) {
+  return p.corner ? TABLE.railGapCorner || TABLE.railGap : TABLE.railGap;
+}
+
 /** True when this rail has a cutout leading into an off-table pocket. */
 function railOpenAt(b, side) {
-  const gap = TABLE.railGap;
   for (const p of pockets) {
+    const gap = gapForPocket(p);
     if (side === 'left' && p.x < -1) {
       const ey = Math.max(-TABLE.halfH, Math.min(TABLE.halfH, p.y));
       if (Math.abs(b.y - ey) < gap) return true;
@@ -222,14 +235,46 @@ function railOpenAt(b, side) {
   return false;
 }
 
+/** Nearest pocket within capture range, if any. */
+function nearestPocket(b, rangeMul = 1) {
+  let best = null;
+  for (const p of pockets) {
+    const dist = Math.hypot(b.x - p.x, b.y - p.y);
+    const range = (p.corner ? TABLE.pocketJaw * 1.12 : TABLE.pocketJaw) * rangeMul;
+    if (dist < range && (!best || dist < best.dist)) best = { p, dist };
+  }
+  return best;
+}
+
+/**
+ * At a pocket mouth, skip the hard cushion bounce when the ball is in the
+ * jaw and not clearly fleeing the hole — stops tip rejects that kick out.
+ */
+function shouldSkipRailForPocket(b) {
+  const near = nearestPocket(b, 1.05);
+  if (!near) return false;
+  const inv = 1 / (near.dist || 1);
+  const nx = (near.p.x - b.x) * inv;
+  const ny = (near.p.y - b.y) * inv;
+  const toward = b.vx * nx + b.vy * ny;
+  const mouth = near.p.corner
+    ? TABLE.pocketMouthCorner || TABLE.pocketMouth
+    : TABLE.pocketMouth;
+  // Already deep in the mouth, or drifting into / along the jaw.
+  if (near.dist < mouth * 2.4) return true;
+  if (toward > -8) return true;
+  return false;
+}
+
 function resolveCushions(b) {
   const maxX = TABLE.halfW - b.r;
   const maxY = TABLE.halfH - b.r;
   let hit = false;
+  const skipRail = shouldSkipRailForPocket(b);
 
   // Off-felt pockets: skip the rail only at the cutout; otherwise bounce.
   if (b.x < -maxX) {
-    if (railOpenAt(b, 'left')) {
+    if (railOpenAt(b, 'left') || skipRail) {
       // Free to leave toward the outside pocket; soft-catch if lost in the apron.
       if (b.x < -TABLE.halfW - TABLE.pocketOut - TABLE.pocketR) {
         b.x = -maxX;
@@ -242,7 +287,7 @@ function resolveCushions(b) {
       hit = true;
     }
   } else if (b.x > maxX) {
-    if (railOpenAt(b, 'right')) {
+    if (railOpenAt(b, 'right') || skipRail) {
       if (b.x > TABLE.halfW + TABLE.pocketOut + TABLE.pocketR) {
         b.x = maxX;
         bounceRail(b, -1, 0);
@@ -256,7 +301,7 @@ function resolveCushions(b) {
   }
 
   if (b.y < -maxY) {
-    if (railOpenAt(b, 'top')) {
+    if (railOpenAt(b, 'top') || skipRail) {
       if (b.y < -TABLE.halfH - TABLE.pocketOutSide - TABLE.pocketR) {
         b.y = -maxY;
         bounceRail(b, 0, 1);
@@ -268,7 +313,7 @@ function resolveCushions(b) {
       hit = true;
     }
   } else if (b.y > maxY) {
-    if (railOpenAt(b, 'bottom')) {
+    if (railOpenAt(b, 'bottom') || skipRail) {
       if (b.y > TABLE.halfH + TABLE.pocketOutSide + TABLE.pocketR) {
         b.y = maxY;
         bounceRail(b, 0, -1);
@@ -309,36 +354,60 @@ function bounceRail(b, nx, ny) {
   b.forwardSpin *= 0.85;
 }
 
+function beginPocketFall(b, p) {
+  b.pocketed = true;
+  b.falling = true;
+  b.fallAge = 0;
+  b.fallFromX = b.x;
+  b.fallFromY = b.y;
+  b.fallPocketX = p.x;
+  b.fallPocketY = p.y;
+  b.vx = 0;
+  b.vy = 0;
+  b.sideSpin = 0;
+  b.forwardSpin = 0;
+}
+
 function tryPocket(b, dt) {
   for (const p of pockets) {
     const dist = Math.hypot(b.x - p.x, b.y - p.y);
-    const mouth = p.corner ? TABLE.pocketMouth : TABLE.pocketMouth * 0.9;
+    const mouth = p.corner
+      ? TABLE.pocketMouthCorner || TABLE.pocketMouth
+      : TABLE.pocketMouth * 0.95;
+    const jaw = p.corner ? TABLE.pocketJaw * 1.1 : TABLE.pocketJaw;
 
-    // Soft funnel only when already driving into the hole — never magnets on a graze.
-    if (dist < TABLE.pocketJaw && dist > mouth) {
+    // Funnel into the hole when in the jaw — stronger near the tip so corner
+    // clips drop instead of rattling back onto the felt.
+    if (dist < jaw && dist > mouth) {
       const inv = 1 / (dist || 1);
       const nx = (p.x - b.x) * inv;
       const ny = (p.y - b.y) * inv;
       const toward = b.vx * nx + b.vy * ny;
-      if (toward > 10) {
-        b.vx += nx * 32 * dt;
-        b.vy += ny * 32 * dt;
+      const spd = Math.hypot(b.vx, b.vy);
+      // Pull in if heading in, grazing the jaw, or already past the felt edge.
+      const offFelt =
+        Math.abs(b.x) > TABLE.halfW - b.r * 0.35 ||
+        Math.abs(b.y) > TABLE.halfH - b.r * 0.35;
+      if (toward > 2 || (offFelt && toward > -18) || (spd < 12 && dist < jaw * 0.75)) {
+        const pull = p.corner ? 78 : 52;
+        b.vx += nx * pull * dt;
+        b.vy += ny * pull * dt;
+        // Kill fleeing speed so a tip graze cannot bounce out.
+        if (toward < 0 && offFelt) {
+          b.vx -= nx * toward * 0.85;
+          b.vy -= ny * toward * 0.85;
+        }
       }
     }
 
-    // Drop only when the ball center is deep in the mouth (not just touching the rim).
-    if (dist < mouth) {
-      b.pocketed = true;
-      b.falling = true;
-      b.fallAge = 0;
-      b.fallFromX = b.x;
-      b.fallFromY = b.y;
-      b.fallPocketX = p.x;
-      b.fallPocketY = p.y;
-      b.vx = 0;
-      b.vy = 0;
-      b.sideSpin = 0;
-      b.forwardSpin = 0;
+    // Drop when deep in the mouth, or when the ball has entered the hole
+    // aperture off the felt (generous corner capture).
+    const offTable =
+      Math.abs(b.x) > TABLE.halfW + 0.4 || Math.abs(b.y) > TABLE.halfH + 0.4;
+    const cornerCatch =
+      p.corner && offTable && dist < mouth * 1.35 && dist < jaw * 0.85;
+    if (dist < mouth || cornerCatch) {
+      beginPocketFall(b, p);
       return true;
     }
   }

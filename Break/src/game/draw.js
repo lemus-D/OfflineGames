@@ -246,14 +246,17 @@ function drawCushions(g, left, top, right, bottom, face, gap) {
     g.stroke();
   }
 
-  // Long rails: two segments each (split by side pocket)
-  hSeg(top, top - face, left + jaw, midX - jaw);
-  hSeg(top, top - face, midX + jaw, right - jaw);
-  hSeg(bottom, bottom + face, left + jaw, midX - jaw);
-  hSeg(bottom, bottom + face, midX + jaw, right - jaw);
+  // Corner mouths use a wider visual gap so the tip matches the forgiving physics.
+  const cJaw = gap * ((TABLE.railGapCorner || TABLE.railGap) / TABLE.railGap);
+
+  // Long rails: two segments each (split by side pocket) — corner ends use cJaw
+  hSeg(top, top - face, left + cJaw, midX - jaw);
+  hSeg(top, top - face, midX + jaw, right - cJaw);
+  hSeg(bottom, bottom + face, left + cJaw, midX - jaw);
+  hSeg(bottom, bottom + face, midX + jaw, right - cJaw);
   // Short rails: one segment each (corner mouths only)
-  vSeg(left, left - face, top + jaw, bottom - jaw);
-  vSeg(right, right + face, top + jaw, bottom - jaw);
+  vSeg(left, left - face, top + cJaw, bottom - cJaw);
+  vSeg(right, right + face, top + cJaw, bottom - cJaw);
 }
 
 function drawRailPocket(g, s, pr) {

@@ -166,6 +166,10 @@ assert(BALL_R > 0 && PHYSICS.maxEnglish > 0, 'tunables sane');
 assert(PHYSICS.rollingDrag >= 20, 'cloth drag high enough to avoid ice glide');
 assert(PHYSICS.ballFriction > 0, 'ball–ball friction present');
 assert(TABLE.pocketMouth < TABLE.pocketR * 0.6, 'pocket mouth stricter than visual rim');
+assert(
+  (TABLE.pocketMouthCorner || TABLE.pocketMouth) > TABLE.pocketMouth,
+  'corner mouth more forgiving than side'
+);
 
 // Firm stroke should die around one table length — not skate forever.
 {
@@ -207,6 +211,25 @@ assert(
   assert(deep.pocketed && deep.falling, 'center-in-mouth starts fall animation');
   for (let i = 0; i < 180; i++) stepPhysics([deep], 1 / 180);
   assert(!deep.falling, 'fall animation completes');
+}
+
+// Jaw clip into a corner pocket should drop, not bounce back onto the felt.
+{
+  const corner = pocketCenters().find((p) => p.corner && p.x > 0 && p.y > 0);
+  const ball = createBall(BALLS[2], TABLE.halfW - BALL_R * 2.2, TABLE.halfH - BALL_R * 3.4);
+  // Aim just off-center into the mouth — classic tip-reject line.
+  const dx = corner.x - ball.x;
+  const dy = corner.y - ball.y + 1.8;
+  const len = Math.hypot(dx, dy) || 1;
+  ball.vx = (dx / len) * 78;
+  ball.vy = (dy / len) * 78;
+  let steps = 0;
+  while (!ball.pocketed && anyMoving([ball]) && steps < 180 * 8) {
+    stepPhysics([ball], 1 / 180);
+    steps += 1;
+  }
+  assert(ball.pocketed, `corner jaw clip pockets (dist left=${Math.hypot(ball.x - corner.x, ball.y - corner.y).toFixed(2)}, steps=${steps})`);
+  console.log(`ok: corner jaw clip pocketed in ${steps} steps`);
 }
 
 // AI difficulties exist and produce a legal shot.

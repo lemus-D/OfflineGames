@@ -1,5 +1,5 @@
 /* Break service worker — precache, versioned cache name. */
-const CACHE = 'break-v12';
+const CACHE = 'break-v13';
 const PRECACHE = [
   './',
   './index.html',

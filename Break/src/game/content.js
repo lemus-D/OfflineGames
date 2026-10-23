@@ -11,11 +11,12 @@ export const TABLE = {
   pocketR: 5.5,
   /**
    * Distance from pocket center the ball *center* must reach to drop.
-   * Much tighter than pocketR so grazing the rim does not count.
+   * Corners use a slightly wider mouth so jaw clips fall instead of kicking out.
    */
-  pocketMouth: 2.75,
+  pocketMouth: 2.95,
+  pocketMouthCorner: 3.55,
   /** Capture / funnel radius around off-table pocket centers. */
-  pocketJaw: 6.8,
+  pocketJaw: 8.4,
   /**
    * How far outside the felt the pocket centers sit (into the wood rail).
    * Close enough that the mouth meets the corner, without the disc on the cloth.
@@ -23,7 +24,9 @@ export const TABLE = {
   pocketOut: 6.2,
   pocketOutSide: 6.4,
   /** Half-width of the rail opening / cushion jaw into each pocket. */
-  railGap: 7.6,
+  railGap: 8.8,
+  /** Extra rail opening at corners so the tip does not reject near-misses. */
+  railGapCorner: 10.5,
   /** Visual cushion thickness (drawn along the felt edge). */
   cushionFace: 3.8,
 };
