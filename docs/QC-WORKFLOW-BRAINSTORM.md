@@ -1,8 +1,8 @@
 # QC workflow brainstorm — playtest agents and harder gates
 
 > Branch: `cursor/qc-playtest-brainstorm-6c6d`
-> Status: **decisions partly locked** (see below). Still no skill/checker code.
-> Open: smoke hardening (#3), CI (#4). Trial game TBD by owner.
+> Status: **owner decisions locked** (see below). Still no skill/checker code.
+> Deferred: smoke hardening (#3), CI (#4). Trial game TBD by owner.
 
 Why this exists: gate 0 (`check-game.mjs` + smoke) is honest about the house
 rules, but “playable / fun / done” still depends on the *same* coding agent
