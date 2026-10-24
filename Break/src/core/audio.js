@@ -144,56 +144,75 @@ export function playCueStrike(power01) {
 }
 
 /**
- * Ball–ball clack — mid thump + short noise so phone speakers can hear it.
+ * Ball–ball crack — sharp transient like ivory meeting ivory.
  * @param {number} impactSpeed relative normal speed from physics
  */
 export function playBallHit(impactSpeed) {
   if (!alive()) return;
   const tMs = performance.now();
-  // Allow a dense break pack to click, but not scream every substep.
-  if (tMs - lastBallAt < 18) return;
+  // Dense break packs still crack; don't smear into one tone.
+  if (tMs - lastBallAt < 14) return;
   lastBallAt = tMs;
 
-  const s = Math.max(0.12, Math.min(1, (Number(impactSpeed) || 20) / 70));
+  const s = Math.max(0.2, Math.min(1, (Number(impactSpeed) || 30) / 55));
   const t = now();
 
-  // Body thump (what you hear on a table)
-  const thump = ctx.createOscillator();
-  thump.type = 'sine';
-  thump.frequency.setValueAtTime(190 + s * 120, t);
-  thump.frequency.exponentialRampToValueAtTime(90, t + 0.09);
+  // 1) Crack transient — bright noise spike (the "crack")
+  const crack = ctx.createBufferSource();
+  crack.buffer = getNoise();
+  const crackHp = ctx.createBiquadFilter();
+  crackHp.type = 'highpass';
+  crackHp.frequency.value = 1800 + s * 1200;
+  crackHp.Q.value = 0.7;
+  const crackBp = ctx.createBiquadFilter();
+  crackBp.type = 'peaking';
+  crackBp.frequency.value = 3200 + s * 800;
+  crackBp.Q.value = 2.2;
+  crackBp.gain.value = 10;
+  const crackG = ctx.createGain();
+  crackG.gain.setValueAtTime(0.0001, t);
+  crackG.gain.exponentialRampToValueAtTime(0.95 * s + 0.35, t + 0.0008);
+  crackG.gain.exponentialRampToValueAtTime(0.0001, t + 0.028);
+  crack.connect(crackHp);
+  crackHp.connect(crackBp);
+  crackBp.connect(crackG);
+  crackG.connect(sfxGain);
 
-  // Bright click layer
-  const click = ctx.createOscillator();
-  click.type = 'triangle';
-  click.frequency.setValueAtTime(620 + s * 280, t);
-  click.frequency.exponentialRampToValueAtTime(240, t + 0.05);
+  // 2) Snap tone — hard edge that dies almost immediately
+  const snap = ctx.createOscillator();
+  snap.type = 'square';
+  snap.frequency.setValueAtTime(1400 + s * 900, t);
+  snap.frequency.exponentialRampToValueAtTime(380, t + 0.035);
+  const snapF = ctx.createBiquadFilter();
+  snapF.type = 'bandpass';
+  snapF.frequency.value = 1600 + s * 700;
+  snapF.Q.value = 1.4;
+  const snapG = ctx.createGain();
+  snapG.gain.setValueAtTime(0.0001, t);
+  snapG.gain.exponentialRampToValueAtTime(0.55 * s + 0.2, t + 0.0006);
+  snapG.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+  snap.connect(snapF);
+  snapF.connect(snapG);
+  snapG.connect(sfxGain);
 
-  const noise = ctx.createBufferSource();
-  noise.buffer = getNoise();
-  const nf = ctx.createBiquadFilter();
-  nf.type = 'bandpass';
-  nf.frequency.value = 900 + s * 500;
-  nf.Q.value = 0.8;
+  // 3) Tiny body — just enough weight under the crack
+  const body = ctx.createOscillator();
+  body.type = 'sine';
+  body.frequency.setValueAtTime(280 + s * 100, t);
+  body.frequency.exponentialRampToValueAtTime(120, t + 0.05);
+  const bodyG = ctx.createGain();
+  bodyG.gain.setValueAtTime(0.0001, t);
+  bodyG.gain.exponentialRampToValueAtTime(0.35 * s + 0.12, t + 0.001);
+  bodyG.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+  body.connect(bodyG);
+  bodyG.connect(sfxGain);
 
-  const tg = envGain(0.75 * s + 0.25, 0.001, 0.11);
-  const cg = envGain(0.4 * s + 0.15, 0.001, 0.05);
-  const ng = envGain(0.5 * s + 0.2, 0.001, 0.045);
-
-  thump.connect(tg);
-  tg.connect(sfxGain);
-  click.connect(cg);
-  cg.connect(sfxGain);
-  noise.connect(nf);
-  nf.connect(ng);
-  ng.connect(sfxGain);
-
-  thump.start(t);
-  thump.stop(t + 0.12);
-  click.start(t);
-  click.stop(t + 0.07);
-  noise.start(t);
-  noise.stop(t + 0.05);
+  crack.start(t);
+  crack.stop(t + 0.04);
+  snap.start(t);
+  snap.stop(t + 0.05);
+  body.start(t);
+  body.stop(t + 0.07);
 }
 
 /** Rail thud. */
