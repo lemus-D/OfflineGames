@@ -21,9 +21,15 @@ export const PALETTE = {
   blockHi: '#D49858',
   blockLo: '#6E3C18',
   blockEdge: '#3A2010',
-  crumbly: '#A88858',
+  crumbly: '#C4A060',
+  crumblyHi: '#E0C888',
+  crumblyLo: '#8A6830',
+  vanish: '#9060A0',
+  vanishHi: '#B888C8',
+  vanishLo: '#503060',
   plat: '#E8C060',
   spike: '#2A2430',
+  spikeBase: '#4A3A28',
   spring: '#F0E050',
   springBase: '#D04040',
   reverse: 'rgba(160, 90, 210, 0.28)',
@@ -147,21 +153,46 @@ function drawGroundTile(g, x, y, grassy) {
   }
 }
 
-function drawBlock(g, x, y, crumbly = false) {
-  const fill = crumbly ? PALETTE.crumbly : PALETTE.block;
-  const hi = crumbly ? '#C8A878' : PALETTE.blockHi;
-  const lo = crumbly ? '#705838' : PALETTE.blockLo;
+function drawBlock(g, x, y) {
   px(g, x, y, TILE, TILE, PALETTE.blockEdge);
-  px(g, x + 1, y + 1, TILE - 2, TILE - 2, fill);
-  // Bevel highlight
-  px(g, x + 2, y + 2, TILE - 5, 2, hi);
-  px(g, x + 2, y + 2, 2, TILE - 5, hi);
-  // Shadow corner
-  px(g, x + TILE - 3, y + 3, 1, TILE - 5, lo);
-  px(g, x + 3, y + TILE - 3, TILE - 5, 1, lo);
-  // Diagonal crack
-  px(g, x + 5, y + 5, 6, 1, lo);
-  px(g, x + 9, y + 8, 4, 1, lo);
+  px(g, x + 1, y + 1, TILE - 2, TILE - 2, PALETTE.block);
+  px(g, x + 2, y + 2, TILE - 5, 2, PALETTE.blockHi);
+  px(g, x + 2, y + 2, 2, TILE - 5, PALETTE.blockHi);
+  px(g, x + TILE - 3, y + 3, 1, TILE - 5, PALETTE.blockLo);
+  px(g, x + 3, y + TILE - 3, TILE - 5, 1, PALETTE.blockLo);
+  // Clean brick face (mortar dots)
+  px(g, x + 4, y + 7, 8, 1, PALETTE.blockLo);
+  px(g, x + 7, y + 4, 1, 8, PALETTE.blockLo);
+}
+
+/** Crumbly: sandy / cracked — clearly different from solid bricks. */
+function drawCrumbly(g, x, y) {
+  px(g, x, y, TILE, TILE, PALETTE.crumblyLo);
+  px(g, x + 1, y + 1, TILE - 2, TILE - 2, PALETTE.crumbly);
+  px(g, x + 2, y + 2, TILE - 5, 2, PALETTE.crumblyHi);
+  // Heavy cracks + crumbs
+  px(g, x + 3, y + 5, 7, 1, PALETTE.crumblyLo);
+  px(g, x + 8, y + 5, 1, 6, PALETTE.crumblyLo);
+  px(g, x + 4, y + 10, 6, 1, PALETTE.crumblyLo);
+  px(g, x + 5, y + 7, 2, 2, PALETTE.crumblyHi);
+  px(g, x + 11, y + 9, 2, 2, PALETTE.crumblyLo);
+}
+
+/** Vanish: purple unstable brick — hop or drop. */
+function drawVanish(g, x, y, time = 0) {
+  const pulse = 0.85 + Math.sin(time * 8 + x) * 0.08;
+  px(g, x, y, TILE, TILE, PALETTE.vanishLo);
+  px(g, x + 1, y + 1, TILE - 2, TILE - 2, PALETTE.vanish);
+  px(g, x + 2, y + 2, TILE - 5, 2, PALETTE.vanishHi);
+  px(g, x + 2, y + 2, 2, TILE - 5, PALETTE.vanishHi);
+  // X mark = don't linger
+  g.globalAlpha = pulse;
+  px(g, x + 4, y + 4, 2, 2, '#E8D0F0');
+  px(g, x + 10, y + 4, 2, 2, '#E8D0F0');
+  px(g, x + 6, y + 7, 4, 2, '#E8D0F0');
+  px(g, x + 4, y + 10, 2, 2, '#E8D0F0');
+  px(g, x + 10, y + 10, 2, 2, '#E8D0F0');
+  g.globalAlpha = 1;
 }
 
 function drawPlat(g, x, y) {
@@ -170,15 +201,17 @@ function drawPlat(g, x, y) {
   px(g, x, y + 4, TILE, 1, '#B88830');
 }
 
+/** Ground-pit spikes only — base sits on the pit floor, no floating look. */
 function drawSpike(g, x, y) {
+  px(g, x, y + TILE - 3, TILE, 3, PALETTE.spikeBase);
   g.fillStyle = PALETTE.spike;
   g.beginPath();
-  g.moveTo(x + 1, y + TILE);
-  g.lineTo(x + TILE / 2, y + 1);
-  g.lineTo(x + TILE - 1, y + TILE);
+  g.moveTo(x + 1, y + TILE - 2);
+  g.lineTo(x + TILE / 2, y + 2);
+  g.lineTo(x + TILE - 1, y + TILE - 2);
   g.closePath();
   g.fill();
-  px(g, x + TILE / 2 - 1, y + 4, 2, 4, '#4A4450');
+  px(g, x + TILE / 2 - 1, y + 5, 2, 4, '#4A4450');
 }
 
 function drawSpring(g, x, y) {
@@ -266,10 +299,13 @@ export function drawLevel(g, level, camX, camY, scale, time, viewW, viewH) {
           drawGroundTile(g, 0, 0, !hasSolidAbove(level, tx, ty));
           break;
         case 'block':
-          drawBlock(g, 0, 0, false);
+          drawBlock(g, 0, 0);
+          break;
+        case 'vanish':
+          drawVanish(g, 0, 0, time);
           break;
         case 'crumbly':
-          drawBlock(g, 0, 0, true);
+          drawCrumbly(g, 0, 0);
           break;
         case 'plat':
           drawPlat(g, 0, 0);
@@ -287,7 +323,7 @@ export function drawLevel(g, level, camX, camY, scale, time, viewW, viewH) {
           drawReverse(g, 0, 0, time);
           break;
         case 'brick': // legacy alias
-          drawBlock(g, 0, 0, false);
+          drawBlock(g, 0, 0);
           break;
         default:
           break;
@@ -427,6 +463,15 @@ export function drawBrine(g, brineY, camX, camY, scale, W, H, time) {
     const wave = Math.sin(time * 5 + x * 0.08 + camX * 0.02) * 3;
     g.fillRect(x, sy + wave - 2, 10, 3);
   }
+}
+
+/** Pulsing floor line before brine rises — players get a fair heads-up. */
+export function drawBrineWarning(g, W, H, time) {
+  const a = 0.35 + Math.sin(time * 6) * 0.2;
+  g.fillStyle = `rgba(180, 200, 40, ${a})`;
+  g.fillRect(0, H - 6, W, 6);
+  g.fillStyle = `rgba(220, 240, 80, ${a + 0.15})`;
+  g.fillRect(0, H - 3, W, 2);
 }
 
 export function drawFx(g, fx, camX, camY, scale) {

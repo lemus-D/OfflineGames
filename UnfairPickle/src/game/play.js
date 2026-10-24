@@ -54,7 +54,16 @@ function parseLevel(def) {
       grid[ty][tx] = cell;
     }
   }
-  return { grid, w, h, spawn, name: def.name, hint: def.hint, id: def.id };
+  return {
+    grid,
+    w,
+    h,
+    spawn,
+    name: def.name,
+    hint: def.hint,
+    id: def.id,
+    brineGrace: def.brineGrace != null ? def.brineGrace : BRINE.grace,
+  };
 }
 
 function aabb(ax, ay, aw, ah, bx, by, bw, bh) {
@@ -90,6 +99,7 @@ export class PlaySession {
     this.levelTime = 0;
     this.brineY = this.level.h * TILE + TILE * 2;
     this.brineActive = false;
+    this.brineWarning = false;
     this.status = 'playing'; // playing | dead | cleared | won
     this.deathReason = null;
     this.deathTimer = 0;
@@ -225,10 +235,14 @@ export class PlaySession {
       p.walkCycle += dt * (10 + Math.abs(p.vx) * 0.08);
     }
 
-    // Brine pressure — idle / stall loses.
-    if (this.levelTime >= BRINE.grace) {
+    // Brine pressure — idle / stall loses. Early levels get longer grace.
+    const grace = this.level.brineGrace;
+    this.brineWarning =
+      !this.brineActive && this.levelTime >= grace - BRINE.warnBefore;
+    if (this.levelTime >= grace) {
       if (!this.brineActive) {
         this.brineActive = true;
+        this.brineWarning = false;
         this.brineY = this.level.h * TILE + TILE;
       }
       this.brineY -= BRINE.riseSpeed * dt;

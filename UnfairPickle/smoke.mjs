@@ -72,19 +72,45 @@ assert(LEVELS.every((L) => L.rows.some((r) => r.includes('G'))), 'every level ha
   }
   assert(mistOk, 'every reverse mist cell has solid ground below');
 }
+{
+  // Spikes belong in ground pits only — bottom two rows, never on top of a standable tile.
+  let spikeOk = true;
+  const standable = new Set(['#', 'B', '=', '*', '?', 'C', 'S']);
+  for (const L of LEVELS) {
+    const w = Math.max(...L.rows.map((r) => r.length));
+    const rows = L.rows.map((r) => r.padEnd(w, '.'));
+    const groundBand = Math.max(0, rows.length - 2);
+    for (let ty = 0; ty < rows.length; ty++) {
+      for (let tx = 0; tx < w; tx++) {
+        if (rows[ty][tx] !== '^' && rows[ty][tx] !== 'v') continue;
+        if (ty < groundBand) {
+          console.error(`FAIL: floating spike in ${L.id} at ${tx},${ty} (not in ground band)`);
+          spikeOk = false;
+        }
+        const below = rows[ty + 1]?.[tx];
+        if (below && standable.has(below)) {
+          console.error(`FAIL: spike ceiling on ${below} in ${L.id} at ${tx},${ty}`);
+          spikeOk = false;
+        }
+      }
+    }
+  }
+  assert(spikeOk, 'no floating spikes / spike ceilings on platforms');
+}
 assert(formatTime(65.5).startsWith('1:05'), 'formatTime formats minutes');
 assert(PICKLE.w < 14 && PICKLE.h < 18, 'player hitbox smaller than drawn pickle');
 assert(jumpPeakHeight() > TILE * 5, `jump clears >5 tiles (peak=${jumpPeakHeight().toFixed(0)}px)`);
 
 const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
 
-// Idle on L1: stays alive briefly, then brine kills after grace.
+// Idle on L1: stays alive briefly, then brine kills after per-level grace.
 {
   const s = new PlaySession(1, {}, { startLevel: 0 });
+  const grace = s.level.brineGrace;
   for (let i = 0; i < 60 * 2; i++) s.step(1 / 60, idle);
   assert(s.status === 'playing', 'idle 2s still alive on spawn');
   let diedAt = null;
-  for (let i = 0; i < 60 * 90; i++) {
+  for (let i = 0; i < 60 * 150; i++) {
     s.step(1 / 60, idle);
     if (s.status === 'dead' && diedAt == null) {
       diedAt = s.levelTime;
@@ -94,7 +120,36 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
   assert(diedAt != null, `brine/idle eventually kills (status=${s.status})`);
   assert(s.deathReason === 'brine' || s.deathReason === 'void', `idle death reason=${s.deathReason}`);
   assert(s.deaths === 1, 'idle death counts');
-  assert(diedAt < BRINE.grace + 30, `idle death before unbounded stall (${diedAt?.toFixed(1)}s)`);
+  assert(diedAt >= grace, `brine waits for grace (${diedAt?.toFixed(1)}s >= ${grace})`);
+  assert(diedAt < grace + 30, `idle death before unbounded stall (${diedAt?.toFixed(1)}s)`);
+}
+
+// L1 clearable: jump the fake-floor gap on the ground path.
+{
+  const s = new PlaySession(7, {}, { startLevel: 0 });
+  let hop = 0;
+  let cleared = false;
+  for (let steps = 0; steps < 60 * 25; steps++) {
+    if (s.status === 'dead') {
+      s.step(1 / 60, { move: 0, jump: false, jumpHeld: false, restart: true });
+      hop = 0;
+      continue;
+    }
+    if (s.status === 'cleared' || s.levelIndex > 0) {
+      cleared = true;
+      break;
+    }
+    const x = s.player.x / TILE;
+    let jump = false;
+    if (x > 9.5 && x < 11.2 && s.player.onGround) {
+      jump = true;
+      hop = 16;
+    }
+    const jumpHeld = hop > 0;
+    if (hop > 0) hop -= 1;
+    s.step(1 / 60, { move: 1, jump, jumpHeld, restart: false });
+  }
+  assert(cleared, `L1 completable (status=${s.status} x=${s.player.x.toFixed(0)})`);
 }
 
 // Fake floor on L1 (~ tiles): walking right into ~~ should fall / die or drop.
@@ -155,8 +210,9 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
 // Respawn after death restores playing on the same level.
 {
   const s = new PlaySession(5, {}, { startLevel: 2 });
-  for (let i = 0; i < 60 * 50; i++) {
-    s.step(1 / 60, idle);
+  // Walk into the fake flag on L3 (open approach).
+  for (let i = 0; i < 60 * 20; i++) {
+    s.step(1 / 60, { move: 1, jump: false, jumpHeld: false, restart: false });
     if (s.status === 'dead') break;
   }
   assert(s.status === 'dead', 'forced death before respawn test');

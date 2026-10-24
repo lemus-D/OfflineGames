@@ -13,10 +13,10 @@ export const DEV_UNLOCK_ALL = true;
 export const PICKLE = {
   w: 10,
   h: 14,
-  accel: 2400,
+  accel: 2600,
   maxRun: 160,
   friction: 0.7,
-  airFriction: 0.92,
+  airFriction: 0.94,
   gravity: 1550,
   jumpVel: -560,
   cutJumpMul: 0.42,
@@ -25,9 +25,13 @@ export const PICKLE = {
   maxFall: 520,
 };
 
-/** Seconds before brine starts rising. Idle / stall loses. */
+/**
+ * Seconds before brine starts rising. Idle / stall loses.
+ * Per-level `brineGrace` overrides this (early levels get more learning time).
+ */
 export const BRINE = {
-  grace: 40,
+  grace: 55,
+  warnBefore: 10,
   riseSpeed: 26,
   color: '#9cbc2e',
 };
@@ -35,6 +39,7 @@ export const BRINE = {
 /**
  * Tile legend (char → behaviour).
  * solid: collides  draw: how it looks (may differ — that's the unfair bit)
+ * Spikes (^) belong in ground pits only — never floating mid-air.
  */
 export const TILES = {
   '.': { id: 'empty', solid: false, draw: 'empty' },
@@ -44,7 +49,7 @@ export const TILES = {
   '^': { id: 'spike', solid: false, hazard: 'spike', draw: 'spike' },
   v: { id: 'fakeSpike', solid: false, draw: 'spike' },
   '~': { id: 'fakeFloor', solid: false, draw: 'ground' }, // looks like ground
-  '*': { id: 'vanish', solid: true, vanish: true, draw: 'block' },
+  '*': { id: 'vanish', solid: true, vanish: true, draw: 'vanish' },
   '?': { id: 'invis', solid: true, invisible: true, draw: 'block' },
   S: { id: 'spring', solid: true, spring: 620, draw: 'spring' },
   G: { id: 'goal', solid: false, goal: true, draw: 'goal' },
@@ -58,17 +63,18 @@ export const TILES = {
  * Levels sized for the jump budget above.
  * Gaps over open void are ≤ 6 tiles unless a spring / mid platform helps.
  * P = spawn, G = real goal, F = fake goal.
+ * Spike pits sit on the ground row in open gaps (not floating).
  */
 export const LEVELS = [
   {
     id: 'welcome',
     name: 'Welcome, Dill',
-    hint: 'Jump right. Trust nothing.',
+    hint: 'Jump the gap. That grass is a lie.',
+    brineGrace: 90,
     rows: [
+      // One lesson: fake floor over a pit. No floating spikes, no upper trap route.
       '........................................',
       '........................................',
-      '..............^^^^......................',
-      '..........BBBB....BBBB..................',
       '........................................',
       '....P......~~~~...............G.........',
       '###########....#########################',
@@ -79,10 +85,10 @@ export const LEVELS = [
     id: 'looks-solid',
     name: 'Looks Solid',
     hint: 'That floor ahead? Nope.',
+    brineGrace: 75,
     rows: [
       '..............................................',
       '..............................................',
-      '................BBBB..........................',
       '..............................................',
       '....P.....~~~~~......BB........G..............',
       '##########.....######..#######################',
@@ -93,21 +99,24 @@ export const LEVELS = [
     id: 'fake-flag',
     name: 'The Other Flag',
     hint: 'First flag is a lie.',
+    brineGrace: 70,
     rows: [
+      // Open ground so the fake flag is the punchline — not a gauntlet first.
       '..............................................',
       '..............................................',
-      '...............^^^^...........................',
-      '.............BBBB..BBBB.......................',
-      '....P.....................F...........G.......',
-      '##########..............####....##############',
-      '##########..............####....##############',
+      '..............................................',
+      '....P...............F...........G.............',
+      '######################....####################',
+      '######################....####################',
     ],
   },
   {
     id: 'vanish',
     name: 'Standing Room',
     hint: 'Do not linger.',
+    brineGrace: 65,
     rows: [
+      // Vanish pads (purple X) — keep hopping; ~~ is a fake bridge lie.
       '..............................................',
       '..............................................',
       '..............................................',
@@ -120,23 +129,25 @@ export const LEVELS = [
     id: 'ghost-bricks',
     name: 'Ghost Bricks',
     hint: 'Air that hits back.',
+    brineGrace: 65,
     rows: [
+      // Softer teach: short void, invisible bridge, then solid to goal. No spikes.
       '..............................................',
       '..............................................',
-      '.............????.............................',
-      '........^^^^..................................',
-      '....P..............BBBB...........G...........',
-      '######...~~~~......####......#################',
-      '######.............####......#################',
+      '..............................................',
+      '....P.........????............G...............',
+      '######....................####################',
+      '######....................####################',
     ],
   },
   {
     id: 'spring-trap',
     name: 'Helpful Spring',
     hint: 'Helpful is relative.',
+    brineGrace: 60,
     rows: [
       '..............................................',
-      '..............^^..............................',
+      '..............................................',
       '..............................................',
       '....P.............................G...........',
       '######..****..S.****..****..##################',
@@ -147,10 +158,12 @@ export const LEVELS = [
     id: 'crumbly-path',
     name: 'Crumb Trail',
     hint: 'Keep moving.',
+    brineGrace: 60,
     rows: [
+      // Crumbly islands; fake floor in the long gap (no floating spikes).
       '..............................................',
       '..............................................',
-      '...................^^^^.......................',
+      '..............................................',
       '....P..CCCC..CCCC......CCCC....CCCC..G........',
       '#####.............~~~~......................##',
       '#####.......................................##',
@@ -160,12 +173,12 @@ export const LEVELS = [
     id: 'reverse',
     name: 'Brain Pickle',
     hint: 'Left is right in the mist.',
+    brineGrace: 75,
     rows: [
+      // Mist on continuous solid ground — reverse is the only trick.
       '..............................................',
       '..............................................',
       '..............................................',
-      // Mist sits on continuous solid ground — reverse is the only trick.
-      // (A pit after the mist felt like "falling through" while controls flip.)
       '....P....RRRRRRRRRRRRRRRRRR...........G.......',
       '##############################################',
       '##############################################',
@@ -175,8 +188,9 @@ export const LEVELS = [
     id: 'combo',
     name: 'Everything Bagel',
     hint: 'All of the above.',
+    brineGrace: 70,
     rows: [
-      // Ground-row path. ~~ fake floor (2), ^^ pit (3), F on mid, vanish, ghost ?, goal.
+      // One segment per prior trick; ground spike pit only (not floating).
       '........................................................',
       '........................................................',
       '........................................................',
@@ -189,9 +203,9 @@ export const LEVELS = [
     id: 'finale',
     name: 'Jar Escape',
     hint: 'One clean run. Or not.',
+    brineGrace: 70,
     rows: [
-      // Ground-row finale: spike pit, fake ~~, vanish, crumbly, fake F, ghost ?, mist, G.
-      // (Old layout had spike ceilings on CCCC and a 9-tile void before the flag.)
+      // Ground-row finale; thinned vs kitchen-sink — spike pit stays on the floor.
       '................................................................',
       '................................................................',
       '................................................................',
@@ -217,4 +231,20 @@ export function formatTime(sec) {
   const s = Math.floor(sec % 60);
   const cs = Math.floor((sec % 1) * 100);
   return `${m}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
+}
+
+/** Friendly death labels for the HUD. */
+export function deathLabel(reason) {
+  switch (reason) {
+    case 'spike':
+      return 'spikes';
+    case 'fakeGoal':
+      return 'fake flag';
+    case 'brine':
+      return 'brine';
+    case 'void':
+      return 'the void';
+    default:
+      return reason || 'something';
+  }
 }

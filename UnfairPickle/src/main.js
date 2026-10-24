@@ -4,12 +4,13 @@ import { Input } from './core/input.js';
 import { Save } from './core/save.js';
 import { Audio } from './core/audio.js';
 import { PlaySession } from './game/play.js';
-import { LEVELS, formatTime, TILE, DEV_UNLOCK_ALL } from './game/content.js';
+import { LEVELS, formatTime, TILE, DEV_UNLOCK_ALL, deathLabel } from './game/content.js';
 import {
   drawSky,
   drawLevel,
   drawPickle,
   drawBrine,
+  drawBrineWarning,
   drawFx,
   drawFlash,
   drawMenuGround,
@@ -207,9 +208,13 @@ function updateHud() {
   if (els.timeVal) els.timeVal.textContent = formatTime(session.campaignTime);
   if (els.hintVal) {
     if (session.status === 'dead') {
-      els.hintVal.textContent = `Ouch (${session.deathReason}). R or wait to retry.`;
+      els.hintVal.textContent = `Ouch (${deathLabel(session.deathReason)}). R or wait to retry.`;
     } else if (session.status === 'cleared') {
       els.hintVal.textContent = 'Level clear!';
+    } else if (session.brineActive) {
+      els.hintVal.textContent = 'Brine rising — move!';
+    } else if (session.brineWarning) {
+      els.hintVal.textContent = 'Brine soon… keep moving.';
     } else {
       els.hintVal.textContent = session.level.hint;
     }
@@ -266,6 +271,9 @@ function drawSession(playing) {
 
   drawSky(g, W, H, camX, animTime);
   drawLevel(g, s.level, camX, camY, SCALE, animTime, viewW, viewH);
+  if (s.brineWarning && !s.brineActive) {
+    drawBrineWarning(g, W, H, animTime);
+  }
   if (s.brineActive) {
     drawBrine(g, s.brineY, camX, camY, SCALE, W, H, animTime);
   }
