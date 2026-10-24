@@ -103,19 +103,30 @@ progress; a run ends and a summary exists.
 
 ---
 
-## Gate 1 — A game
+## Gate 0b — Browser mechanical
 
-Observed in the running game by a **fresh playtest critic** (not the builder),
-in a real browser, following `.cursor/skills/game-playtest/SKILL.md`. Results
-land in `<Game>/PLAYTEST.md`. A claim here without that file, a gameplay
-**recording**, and a motion-focused review of that recording does not count.
-Screenshots alone are not enough — motion is the common failure mode.
+Run by the `game-qc` orchestrator with Playwright/browser tools before any
+critic is spawned: zero console errors across load → start → play → end →
+restart. This is a test-suite concern, not a taste/polish concern.
 
-The critic also judges **intent match** against the owner's original pitch in
-the plan. Design and content gaps versus the pitch/brief are in scope.
+## Gate 1 — Worth the owner's review (polish critic)
 
-- **Boots clean.** No console errors on load, on first input, on game over, on
-  restart.
+Observed by a **fresh polish critic** (`.cursor/skills/game-playtest/`), not
+the builder. Primary question: **is this finished enough to show a human?**
+
+Fail (`not_ready`) for half-baked presentation: inconsistent art vs `tone`,
+floating/ungrounded props, clipping, unreadable silhouettes, empty flat
+worlds when the pitch implies a place, missing feedback on core verbs,
+broken or debug-looking UI. Pass (`ready_for_owner`) only when a short owner
+review is worth it.
+
+Also required: pitch **intent match**, playability sanity (loop, inputs,
+fit, persistence, offline), and a **recording** with art + motion review.
+Screenshots alone are not enough.
+
+Playability sanity still includes (critic confirms; console suite is separate):
+
+- **Boots clean.** (Orchestrator suite owns console errors; critic notes only.)
 - **The loop closes.** Start → play → fail or finish → summary → play again,
   without a reload.
 - **The required input families work.** Whatever the brief's `inputs` lists:
