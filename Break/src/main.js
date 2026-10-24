@@ -27,7 +27,8 @@ import {
 } from './game/draw.js';
 
 const canvas = document.getElementById('stage');
-const g = canvas.getContext('2d', { alpha: false, desynchronized: true });
+// Avoid desynchronized — it went black with compositing quirks on some mobile GPUs.
+const g = canvas.getContext('2d', { alpha: false });
 if (g) {
   g.imageSmoothingEnabled = true;
   g.imageSmoothingQuality = 'high';
@@ -35,11 +36,14 @@ if (g) {
 const cueInput = new CueInput(canvas);
 
 function armAudio() {
-  unlockAudio();
-  startMusic();
+  // Keep this synchronous from the gesture; unlockAudio resumes the context.
+  unlockAudio().then((ok) => {
+    if (ok) startMusic();
+  });
 }
-canvas.addEventListener('pointerdown', armAudio, { once: false });
-addEventListener('keydown', armAudio, { once: true });
+for (const ev of ['pointerdown', 'touchstart', 'mousedown', 'keydown']) {
+  addEventListener(ev, armAudio, { capture: true, passive: true });
+}
 
 const spinCanvas = document.getElementById('spinDial');
 const spinPanel = document.getElementById('spinPanel');

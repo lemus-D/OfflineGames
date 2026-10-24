@@ -27,9 +27,6 @@ export function fitView(W, H) {
   return { cx: W * 0.5, cy: H * 0.5, scale, W, H };
 }
 
-/** Offscreen cache for the static table (felt weave is expensive per frame). */
-let _tableCache = { canvas: null, key: '' };
-
 function feltPattern(g, x, y, w, h) {
   const grad = g.createRadialGradient(
     x + w * 0.45,
@@ -45,28 +42,19 @@ function feltPattern(g, x, y, w, h) {
   g.fillStyle = grad;
   g.fillRect(x, y, w, h);
 
-  // Cloth weave
+  // Sparse cloth weave (kept light so frames stay smooth without an offscreen cache)
   g.save();
-  g.globalAlpha = 0.06;
+  g.globalAlpha = 0.05;
   g.strokeStyle = '#0c2418';
   g.lineWidth = 1;
-  for (let i = -h; i < w + h; i += 5) {
+  for (let i = -h; i < w + h; i += 12) {
     g.beginPath();
     g.moveTo(x + i, y);
     g.lineTo(x + i + h, y + h);
     g.stroke();
   }
-  g.globalAlpha = 0.04;
-  g.strokeStyle = '#b8e0c0';
-  for (let i = -h; i < w + h; i += 9) {
-    g.beginPath();
-    g.moveTo(x + i + 3, y);
-    g.lineTo(x + i + 3 + h, y + h);
-    g.stroke();
-  }
   g.restore();
 
-  // Soft vignette
   const vig = g.createRadialGradient(
     x + w / 2,
     y + h / 2,
@@ -84,47 +72,9 @@ function feltPattern(g, x, y, w, h) {
 /**
  * Reference-style table: continuous rails, pockets recessed in the wood,
  * cushion segments that open cleanly into each mouth (no green over the hole).
- * Static geometry is cached to an offscreen canvas for smooth frames.
+ * Drawn directly each frame (offscreen caching went black on some devices).
  */
 export function drawTable(g, view, animTime) {
-  const S = view.scale;
-  const left = view.cx - TABLE.halfW * S;
-  const top = view.cy - TABLE.halfH * S;
-  const tw = TABLE.halfW * 2 * S;
-  const th = TABLE.halfH * 2 * S;
-  const cssW = view.W || Math.ceil(view.cx * 2);
-  const cssH = view.H || Math.ceil(view.cy * 2);
-  const key = `${cssW}|${cssH}|${S.toFixed(4)}|${view.cx.toFixed(1)}|${view.cy.toFixed(1)}`;
-
-  if (typeof document !== 'undefined') {
-    if (!_tableCache.canvas || _tableCache.key !== key) {
-      const c = _tableCache.canvas || document.createElement('canvas');
-      c.width = Math.max(1, Math.ceil(cssW));
-      c.height = Math.max(1, Math.ceil(cssH));
-      const cg = c.getContext('2d', { alpha: false });
-      cg.setTransform(1, 0, 0, 1, 0, 0);
-      cg.fillStyle = '#0c1810';
-      cg.fillRect(0, 0, c.width, c.height);
-      paintStaticTable(cg, view);
-      _tableCache = { canvas: c, key };
-    }
-    g.drawImage(_tableCache.canvas, 0, 0);
-  } else {
-    paintStaticTable(g, view);
-  }
-
-  // Cheap living light — only this animates each frame
-  g.save();
-  g.globalAlpha = 0.025 + Math.sin(animTime * 0.55) * 0.012;
-  const glow = g.createRadialGradient(view.cx, view.cy, 8, view.cx, view.cy, tw * 0.55);
-  glow.addColorStop(0, '#d8f5d0');
-  glow.addColorStop(1, 'transparent');
-  g.fillStyle = glow;
-  g.fillRect(left, top, tw, th);
-  g.restore();
-}
-
-function paintStaticTable(g, view) {
   const S = view.scale;
   const rail = TABLE.cushion * S;
   const face = (TABLE.cushionFace || 3.2) * S;
@@ -190,6 +140,15 @@ function paintStaticTable(g, view) {
   g.beginPath();
   g.arc(spot.x, spot.y, 2.4, 0, Math.PI * 2);
   g.fill();
+  g.restore();
+
+  g.save();
+  g.globalAlpha = 0.025 + Math.sin(animTime * 0.55) * 0.012;
+  const glow = g.createRadialGradient(view.cx, view.cy, 8, view.cx, view.cy, tw * 0.55);
+  glow.addColorStop(0, '#d8f5d0');
+  glow.addColorStop(1, 'transparent');
+  g.fillStyle = glow;
+  g.fillRect(left, top, tw, th);
   g.restore();
 }
 
