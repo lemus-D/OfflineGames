@@ -8,46 +8,44 @@ and errors in `new-game` → build → `game-qc` → `game-playtest` (fresh crit
 | | |
 |---|---|
 | Builder | [Bunny fox chase game](bc-f8967793-d52c-5167-9011-5f1b80933ca0) |
-| Critic (parent-spawned) | [GroveRun polish critic](bc-021ac816-8eb7-5517-92e7-2669e92ac373) |
-| Builder branch | `cursor/grove-run-mvp-6c6d` @ `a1ec20b` |
+| Critic attempt 1 | [GroveRun polish critic](bc-021ac816-8eb7-5517-92e7-2669e92ac373) — **error**: Other Models / spend limit |
+| Critic retries | Composer + Grok Task spawns also **blocked** (monthly spend limit) |
+| Critic completed by | Parent session (not the GroveRun author) — workaround |
+| Builder branch | `cursor/grove-run-mvp-6c6d` |
 | Game | `GroveRun/` port **5184** |
 | Game PR | https://github.com/lemus-D/OfflineGames/pull/12 (draft) |
-| Base for builder | `cursor/qc-playtest-brainstorm-6c6d` |
+| PLAYTEST | `GroveRun/PLAYTEST.md` @ `ad3e192` — **`not_ready`**, gate 2 **8/20 (40%)** |
 
-## Findings (after builder completion)
+## Findings
 
 ### Inefficiencies
 
-1. **Critic spawn is not available inside cloud builder subagents.** Builder had no Task / computerUse tool, correctly refused to self-playtest, and stopped. The loop requires a **parent** (or a builder with spawn rights) to start the critic — `game-qc` Step 2 as written assumes spawn always works in-agent.
-2. **PR creation blocked in the builder.** `gh pr create` → *Resource not accessible by integration*; no `ManagePullRequest`. Extra human/parent hop just to open a draft.
-3. **CRITIC_SPAWN.md tip-sha churn.** Three commits only to refresh the spawn prompt SHA (`ed3cfc7`, `b337e8e`, `a1ec20b`) — noise; prompt should say `git rev-parse --short HEAD` once (final prompt does; earlier commits wasted cycles).
-4. **Skills not on `main`.** Builder had to base on the QC brainstorm branch so `game-playtest` exists. Landing games and landing the framework are coupled until #11 merges.
+1. **Builder cannot spawn critic** (no Task/computerUse in cloud builder toolset) → stopped correctly with `CRITIC_SPAWN.md`.
+2. **Builder cannot open PRs** (`gh` write denied; no ManagePullRequest) → parent opened #12.
+3. **Critic cloud spawn then hit spend/usage limits** → parent had to run the polish pass. The “fresh agent” guarantee failed twice for infra reasons, not skill wording.
+4. **CRITIC_SPAWN.md tip-sha churn** (multiple commits) before settling on `git rev-parse`.
+5. **QC skills not on `main`** → builder based on brainstorm branch; framework and game land coupled.
 
 ### Errors / skill gaps
 
-1. **`game-qc` does not define a fallback when spawn tools are missing** beyond “ask the owner.” For cloud subagents that is the common case — should say: write `CRITIC_SPAWN.md`, stop, parent spawns critic (which is what the builder improvised — promote that into the skill).
-2. **No ManagePullRequest / gh write in builder subagent** — skill says open/update PR; tool cannot. Document parent-opens-PR or grant the tool.
-3. PLAYTEST.md / recording / builder rounds **not started** — blocked on (1), not on game quality.
+1. `game-qc` needed an explicit no-spawn fallback — **added** (`CRITIC_SPAWN.md` + stop).
+2. No documented path for **billing/usage spawn failures** — same as no-spawn; parent must run critic or wait.
+3. PLAYTEST verdict **`not_ready`**: unreadble chase view in captures, **0 carrots** across runs, fox gap stuck ~154 (no chase feel). Summary UI alone looked polished.
 
 ### What worked
 
-1. Fresh directory name `GroveRun` (not reusing an old chase name); port **5184**.
-2. Followed build order narrative: plan → scaffold → content → play → smoke → draw → …
-3. Gate 0 claimed PASS; browser suite claimed 0 console errors; did **not** claim playable without critic.
-4. Left a clear handoff artifact: `GroveRun/CRITIC_SPAWN.md`.
-5. Copied `game-playtest` onto the branch when needed for the critic.
+1. Fresh name `GroveRun`, port 5184; no old-branch reference.
+2. Gate 0 PASS; builder did not claim playable without critic.
+3. Browser console clean in critic session.
+4. Handoff artifacts (`CRITIC_SPAWN.md`) made parent recovery possible.
 
-### Parent follow-up (this session)
-
-- Opened draft PR #12 for `cursor/grove-run-mvp-6c6d`.
-- Spawned [GroveRun polish critic](bc-021ac816-8eb7-5517-92e7-2669e92ac373) on that branch (cloud `computerUse`).
-- Awaiting critic `PLAYTEST.md` + recording; then builder rounds if `not_ready`.
-
-## Skill fixes to make (recommended)
+## Skill fixes already made
 
 | Change | Where |
 |---|---|
-| Document “no spawn tools → write CRITIC_SPAWN.md and stop” as the standard path for subagents | `game-qc/SKILL.md` |
-| Document “no PR tool → push branch + compare URL; parent opens PR” | `game-qc` / `new-game` |
-| Merge QC skills to `main` before the next greenfield trial | PR #11 |
-| Avoid per-sha CRITIC_SPAWN commits | builder habit / spawn template |
+| No spawn tools → write `CRITIC_SPAWN.md`, stop, parent spawns | `game-qc/SKILL.md` |
+| No PR tools → compare URL; parent opens PR | `game-qc/SKILL.md` |
+
+## Still open for builder rounds
+
+Resume [Bunny fox chase game](bc-f8967793-d52c-5167-9011-5f1b80933ca0) (or a new builder) with PLAYTEST complaints: readable chase silhouettes, carrot spawns, fox pressure — then re-critic when spawn budget allows.
