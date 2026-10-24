@@ -1,16 +1,14 @@
-/* Procedural audio via Web Audio API. Zero sound files. */
+/* Procedural SFX via Web Audio API. Zero sound files. No background music. */
 
 let ctx = null;
 let master = null;
-let musicGain = null;
 let sfxGain = null;
-let musicNodes = [];
-let musicTimer = null;
 let unlocked = false;
 let unlocking = null;
 let muted = false;
 let lastBallAt = 0;
 let lastCushionAt = 0;
+let sharedNoise = null;
 
 function ensure() {
   if (ctx) return ctx;
@@ -21,12 +19,8 @@ function ensure() {
   master.gain.value = 1;
   master.connect(ctx.destination);
 
-  musicGain = ctx.createGain();
-  musicGain.gain.value = 0.28;
-  musicGain.connect(master);
-
   sfxGain = ctx.createGain();
-  sfxGain.gain.value = 0.9;
+  sfxGain.gain.value = 1;
   sfxGain.connect(master);
   return ctx;
 }
@@ -35,17 +29,31 @@ function now() {
   return ctx ? ctx.currentTime : 0;
 }
 
+function getNoise(seconds = 0.15) {
+  const c = ensure();
+  if (sharedNoise && sharedNoise.duration >= seconds - 0.001) return sharedNoise;
+  const len = Math.max(1, Math.floor(c.sampleRate * seconds));
+  const buf = c.createBuffer(1, len, c.sampleRate);
+  const data = buf.getChannelData(0);
+  let s = 0x2f6e2b1;
+  for (let i = 0; i < len; i++) {
+    s = (Math.imul(s, 1664525) + 1013904223) | 0;
+    data[i] = ((s >>> 8) / 0x1000000) * 2 - 1;
+  }
+  sharedNoise = buf;
+  return buf;
+}
+
 /**
- * Must run from a user gesture. Resumes AudioContext and primes iOS with a
- * silent buffer so later SFX/music are allowed.
+ * Must run from a user gesture. Marks unlocked immediately so SFX in the
+ * same interaction are allowed, then resumes the context.
  */
 export function unlockAudio() {
   const c = ensure();
   if (!c) return Promise.resolve(false);
-  if (unlocked && c.state === 'running') {
-    if (!muted && !musicTimer) startMusic();
-    return Promise.resolve(true);
-  }
+  // Allow SFX immediately — don't wait on the resume promise.
+  unlocked = true;
+  if (c.state === 'running') return Promise.resolve(true);
   if (unlocking) return unlocking;
 
   unlocking = (async () => {
@@ -57,11 +65,8 @@ export function unlockAudio() {
       src.buffer = buf;
       src.connect(c.destination);
       src.start(0);
-      unlocked = true;
-      if (!muted) startMusic();
-      return true;
+      return c.state === 'running';
     } catch {
-      unlocked = false;
       return false;
     } finally {
       unlocking = null;
@@ -75,8 +80,6 @@ export function setMuted(m) {
   muted = !!m;
   if (!ensure()) return;
   master.gain.setTargetAtTime(muted ? 0 : 1, now(), 0.04);
-  if (muted) stopMusic();
-  else if (unlocked) startMusic();
 }
 
 export function isMuted() {
@@ -84,21 +87,12 @@ export function isMuted() {
 }
 
 export function isAudioUnlocked() {
-  return unlocked && ctx && ctx.state === 'running';
+  return unlocked && !!ctx;
 }
 
-function noiseBuffer(seconds = 0.2) {
-  const c = ensure();
-  const len = Math.max(1, Math.floor(c.sampleRate * seconds));
-  const buf = c.createBuffer(1, len, c.sampleRate);
-  const data = buf.getChannelData(0);
-  let s = 0x2f6e2b1;
-  for (let i = 0; i < len; i++) {
-    s = (Math.imul(s, 1664525) + 1013904223) | 0;
-    data[i] = ((s >>> 8) / 0x1000000) * 2 - 1;
-  }
-  return buf;
-}
+/** No-op kept so older call sites don't break. */
+export function startMusic() {}
+export function stopMusic() {}
 
 function envGain(peak, attack, decay) {
   const g = ctx.createGain();
@@ -109,97 +103,33 @@ function envGain(peak, attack, decay) {
   return g;
 }
 
-/** Soft felt-hall pad + sparse warm plucks. */
-export function startMusic() {
-  const c = ensure();
-  if (!c || muted) return;
-  if (musicTimer || musicNodes.length) return;
-  if (c.state === 'suspended') {
-    c.resume().then(() => {
-      if (unlocked && !muted && !musicTimer) startMusic();
-    });
-    return;
-  }
-
-  const osc = c.createOscillator();
-  osc.type = 'sine';
-  osc.frequency.value = 55;
-  const osc2 = c.createOscillator();
-  osc2.type = 'triangle';
-  osc2.frequency.value = 82.5;
-  const drone = c.createGain();
-  drone.gain.value = 0.45;
-  const filter = c.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.value = 420;
-  filter.Q.value = 0.55;
-  osc.connect(drone);
-  osc2.connect(drone);
-  drone.connect(filter);
-  filter.connect(musicGain);
-  osc.start();
-  osc2.start();
-  musicNodes = [osc, osc2, drone, filter];
-
-  const notes = [220, 261.63, 293.66, 329.63, 392, 440];
-  let step = 0;
-  musicTimer = setInterval(() => {
-    if (!ctx || muted || !unlocked || ctx.state !== 'running') return;
-    step += 1;
-    if (step % 2 !== 0) return;
-    const n = notes[step % notes.length];
-    const o = ctx.createOscillator();
-    o.type = 'sine';
-    o.frequency.value = n;
-    const g = envGain(0.18, 0.01, 0.9);
-    const f = ctx.createBiquadFilter();
-    f.type = 'lowpass';
-    f.frequency.value = 1400;
-    o.connect(f);
-    f.connect(g);
-    g.connect(musicGain);
-    o.start();
-    o.stop(now() + 1.05);
-  }, 720);
-}
-
-export function stopMusic() {
-  if (musicTimer) {
-    clearInterval(musicTimer);
-    musicTimer = null;
-  }
-  for (const n of musicNodes) {
-    try {
-      if (n.stop) n.stop();
-      if (n.disconnect) n.disconnect();
-    } catch {
-      /* already stopped */
-    }
-  }
-  musicNodes = [];
+function alive() {
+  if (!unlocked || muted) return false;
+  if (!ensure()) return false;
+  if (ctx.state === 'suspended') ctx.resume();
+  return true;
 }
 
 /** Cue tip strike — wood tap scaled by power. */
 export function playCueStrike(power01) {
-  if (!unlocked || muted || !ensure()) return;
-  if (ctx.state === 'suspended') ctx.resume();
+  if (!alive()) return;
   const p = Math.max(0.05, Math.min(1, power01));
   const t = now();
 
   const osc = ctx.createOscillator();
   osc.type = 'triangle';
-  osc.frequency.setValueAtTime(200 + p * 110, t);
-  osc.frequency.exponentialRampToValueAtTime(75, t + 0.09);
+  osc.frequency.setValueAtTime(180 + p * 100, t);
+  osc.frequency.exponentialRampToValueAtTime(70, t + 0.1);
 
   const click = ctx.createBufferSource();
-  click.buffer = noiseBuffer(0.05);
+  click.buffer = getNoise();
   const clickF = ctx.createBiquadFilter();
   clickF.type = 'bandpass';
-  clickF.frequency.value = 1500 + p * 900;
-  clickF.Q.value = 1.1;
+  clickF.frequency.value = 1200 + p * 600;
+  clickF.Q.value = 0.9;
 
-  const g = envGain(0.45 + p * 0.45, 0.002, 0.1);
-  const cg = envGain(0.28 + p * 0.3, 0.001, 0.045);
+  const g = envGain(0.7 + p * 0.3, 0.002, 0.12);
+  const cg = envGain(0.45 + p * 0.35, 0.001, 0.05);
 
   osc.connect(g);
   g.connect(sfxGain);
@@ -208,72 +138,87 @@ export function playCueStrike(power01) {
   cg.connect(sfxGain);
 
   osc.start(t);
-  osc.stop(t + 0.13);
+  osc.stop(t + 0.14);
   click.start(t);
-  click.stop(t + 0.05);
+  click.stop(t + 0.06);
 }
 
-/** Ball–ball click / clack. */
+/**
+ * Ball–ball clack — mid thump + short noise so phone speakers can hear it.
+ * @param {number} impactSpeed relative normal speed from physics
+ */
 export function playBallHit(impactSpeed) {
-  if (!unlocked || muted || !ensure()) return;
-  if (ctx.state === 'suspended') ctx.resume();
+  if (!alive()) return;
   const tMs = performance.now();
-  if (tMs - lastBallAt < 24) return;
+  // Allow a dense break pack to click, but not scream every substep.
+  if (tMs - lastBallAt < 18) return;
   lastBallAt = tMs;
 
-  const s = Math.max(0.05, Math.min(1, impactSpeed / 90));
+  const s = Math.max(0.12, Math.min(1, (Number(impactSpeed) || 20) / 70));
   const t = now();
 
-  const osc = ctx.createOscillator();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(560 + s * 520, t);
-  osc.frequency.exponentialRampToValueAtTime(190, t + 0.07);
+  // Body thump (what you hear on a table)
+  const thump = ctx.createOscillator();
+  thump.type = 'sine';
+  thump.frequency.setValueAtTime(190 + s * 120, t);
+  thump.frequency.exponentialRampToValueAtTime(90, t + 0.09);
+
+  // Bright click layer
+  const click = ctx.createOscillator();
+  click.type = 'triangle';
+  click.frequency.setValueAtTime(620 + s * 280, t);
+  click.frequency.exponentialRampToValueAtTime(240, t + 0.05);
 
   const noise = ctx.createBufferSource();
-  noise.buffer = noiseBuffer(0.04);
+  noise.buffer = getNoise();
   const nf = ctx.createBiquadFilter();
-  nf.type = 'highpass';
-  nf.frequency.value = 700;
+  nf.type = 'bandpass';
+  nf.frequency.value = 900 + s * 500;
+  nf.Q.value = 0.8;
 
-  const g = envGain(0.35 + s * 0.5, 0.001, 0.08);
-  const ng = envGain(0.2 + s * 0.28, 0.001, 0.04);
+  const tg = envGain(0.75 * s + 0.25, 0.001, 0.11);
+  const cg = envGain(0.4 * s + 0.15, 0.001, 0.05);
+  const ng = envGain(0.5 * s + 0.2, 0.001, 0.045);
 
-  osc.connect(g);
-  g.connect(sfxGain);
+  thump.connect(tg);
+  tg.connect(sfxGain);
+  click.connect(cg);
+  cg.connect(sfxGain);
   noise.connect(nf);
   nf.connect(ng);
   ng.connect(sfxGain);
 
-  osc.start(t);
-  osc.stop(t + 0.1);
+  thump.start(t);
+  thump.stop(t + 0.12);
+  click.start(t);
+  click.stop(t + 0.07);
   noise.start(t);
-  noise.stop(t + 0.04);
+  noise.stop(t + 0.05);
 }
 
 /** Rail thud. */
 export function playCushion(impactSpeed) {
-  if (!unlocked || muted || !ensure()) return;
-  if (ctx.state === 'suspended') ctx.resume();
+  if (!alive()) return;
   const tMs = performance.now();
-  if (tMs - lastCushionAt < 36) return;
+  if (tMs - lastCushionAt < 30) return;
   lastCushionAt = tMs;
 
-  const s = Math.max(0.05, Math.min(1, impactSpeed / 100));
+  const s = Math.max(0.12, Math.min(1, (Number(impactSpeed) || 20) / 80));
   const t = now();
 
   const osc = ctx.createOscillator();
   osc.type = 'triangle';
-  osc.frequency.setValueAtTime(150 + s * 70, t);
-  osc.frequency.exponentialRampToValueAtTime(58, t + 0.14);
+  osc.frequency.setValueAtTime(130 + s * 60, t);
+  osc.frequency.exponentialRampToValueAtTime(50, t + 0.16);
 
   const noise = ctx.createBufferSource();
-  noise.buffer = noiseBuffer(0.08);
+  noise.buffer = getNoise();
   const nf = ctx.createBiquadFilter();
   nf.type = 'lowpass';
-  nf.frequency.value = 450 + s * 220;
+  nf.frequency.value = 380 + s * 200;
 
-  const g = envGain(0.32 + s * 0.4, 0.002, 0.15);
-  const ng = envGain(0.22 + s * 0.25, 0.002, 0.11);
+  const g = envGain(0.55 * s + 0.25, 0.002, 0.16);
+  const ng = envGain(0.4 * s + 0.15, 0.002, 0.1);
 
   osc.connect(g);
   g.connect(sfxGain);
@@ -282,35 +227,34 @@ export function playCushion(impactSpeed) {
   ng.connect(sfxGain);
 
   osc.start(t);
-  osc.stop(t + 0.18);
+  osc.stop(t + 0.2);
   noise.start(t);
-  noise.stop(t + 0.08);
+  noise.stop(t + 0.1);
 }
 
 /** Soft pocket drop. */
 export function playPocket() {
-  if (!unlocked || muted || !ensure()) return;
-  if (ctx.state === 'suspended') ctx.resume();
+  if (!alive()) return;
   const t = now();
   const osc = ctx.createOscillator();
   osc.type = 'sine';
-  osc.frequency.setValueAtTime(240, t);
-  osc.frequency.exponentialRampToValueAtTime(72, t + 0.3);
-  const g = envGain(0.4, 0.01, 0.32);
+  osc.frequency.setValueAtTime(210, t);
+  osc.frequency.exponentialRampToValueAtTime(65, t + 0.28);
+  const g = envGain(0.55, 0.008, 0.3);
   osc.connect(g);
   g.connect(sfxGain);
   osc.start(t);
-  osc.stop(t + 0.38);
+  osc.stop(t + 0.35);
 }
 
 /** Drive SFX from a physics step’s event bag. */
 export function playPhysics(events) {
   if (!events || !unlocked || muted) return;
-  if (events.ballHits > 0 && events.ballImpact > 2) {
-    playBallHit(events.ballImpact);
+  if (events.ballHits > 0) {
+    playBallHit(events.ballImpact > 0 ? events.ballImpact : 25);
   }
-  if (events.cushionHits > 0 && events.cushionImpact > 2) {
-    playCushion(events.cushionImpact);
+  if (events.cushionHits > 0) {
+    playCushion(events.cushionImpact > 0 ? events.cushionImpact : 20);
   }
   if (events.pocketed && events.pocketed.length) {
     for (let i = 0; i < events.pocketed.length; i++) playPocket();

@@ -9,7 +9,6 @@ import {
   playCueStrike,
   setMuted,
   isMuted,
-  startMusic,
 } from './core/audio.js';
 import { PHYSICS, DIFFICULTIES, pocketCenters } from './game/content.js';
 import { PlaySession } from './game/play.js';
@@ -36,10 +35,7 @@ if (g) {
 const cueInput = new CueInput(canvas);
 
 function armAudio() {
-  // Keep this synchronous from the gesture; unlockAudio resumes the context.
-  unlockAudio().then((ok) => {
-    if (ok) startMusic();
-  });
+  unlockAudio();
 }
 for (const ev of ['pointerdown', 'touchstart', 'mousedown', 'keydown']) {
   addEventListener(ev, armAudio, { capture: true, passive: true });
