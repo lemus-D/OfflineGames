@@ -1,5 +1,5 @@
 /* Break service worker — precache, versioned cache name. */
-const CACHE = 'break-v19';
+const CACHE = 'break-v20';
 const PRECACHE = [
   './',
   './index.html',
@@ -34,6 +34,29 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
+
+  const url = new URL(req.url);
+  // JS modules: network-first so SFX/physics fixes aren't stuck behind an old cache.
+  const isCode =
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.mjs') ||
+    url.pathname.endsWith('.html');
+
+  if (isCode) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req).then((c) => c || caches.match('./index.html')))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;

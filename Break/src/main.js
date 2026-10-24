@@ -37,8 +37,13 @@ const cueInput = new CueInput(canvas);
 function armAudio() {
   unlockAudio();
 }
+// Capture the first gesture on the page (menu buttons + canvas).
 for (const ev of ['pointerdown', 'touchstart', 'mousedown', 'keydown']) {
   addEventListener(ev, armAudio, { capture: true, passive: true });
+}
+// Difficulty buttons also arm audio on click (resume must stay gesture-tied).
+for (const id of ['btnEasy', 'btnMedium', 'btnHard', 'btnExtraHard', 'btnAgain']) {
+  document.getElementById(id)?.addEventListener('click', armAudio);
 }
 
 const spinCanvas = document.getElementById('spinDial');

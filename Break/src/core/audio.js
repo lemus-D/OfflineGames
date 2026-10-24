@@ -1,14 +1,15 @@
-/* Procedural SFX via Web Audio API. Zero sound files. No background music. */
+/* Procedural SFX via Web Audio API. Zero sound files. No BGM. */
 
 let ctx = null;
 let master = null;
 let sfxGain = null;
 let unlocked = false;
-let unlocking = null;
 let muted = false;
 let lastBallAt = 0;
 let lastCushionAt = 0;
 let sharedNoise = null;
+/** @type {Array<() => void>} */
+let pending = [];
 
 function ensure() {
   if (ctx) return ctx;
@@ -18,10 +19,12 @@ function ensure() {
   master = ctx.createGain();
   master.gain.value = 1;
   master.connect(ctx.destination);
-
   sfxGain = ctx.createGain();
   sfxGain.gain.value = 1;
   sfxGain.connect(master);
+  ctx.addEventListener('statechange', () => {
+    if (ctx && ctx.state === 'running') flushPending();
+  });
   return ctx;
 }
 
@@ -29,7 +32,7 @@ function now() {
   return ctx ? ctx.currentTime : 0;
 }
 
-function getNoise(seconds = 0.15) {
+function getNoise(seconds = 0.2) {
   const c = ensure();
   if (sharedNoise && sharedNoise.duration >= seconds - 0.001) return sharedNoise;
   const len = Math.max(1, Math.floor(c.sampleRate * seconds));
@@ -44,42 +47,67 @@ function getNoise(seconds = 0.15) {
   return buf;
 }
 
+function flushPending() {
+  if (!ctx || ctx.state !== 'running' || muted) return;
+  const jobs = pending.splice(0, pending.length);
+  for (const job of jobs) {
+    try {
+      job();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 /**
- * Must run from a user gesture. Marks unlocked immediately so SFX in the
- * same interaction are allowed, then resumes the context.
+ * Run `fn` now if AudioContext is running; otherwise queue until resume.
+ * Critical: scheduling into a suspended context is silent on Safari/Chrome mobile.
+ */
+function whenRunning(fn) {
+  if (!unlocked || muted) return false;
+  if (!ensure()) return false;
+  if (ctx.state === 'running') {
+    fn();
+    return true;
+  }
+  pending.push(fn);
+  if (ctx.state === 'suspended') ctx.resume().then(flushPending).catch(() => {});
+  return false;
+}
+
+/**
+ * Call from a user gesture. Creates/resumes AudioContext and plays a
+ * short confirm tick so you know sound is live.
  */
 export function unlockAudio() {
   const c = ensure();
   if (!c) return Promise.resolve(false);
-  // Allow SFX immediately — don't wait on the resume promise.
   unlocked = true;
-  if (c.state === 'running') return Promise.resolve(true);
-  if (unlocking) return unlocking;
 
-  unlocking = (async () => {
-    try {
-      if (c.state === 'suspended') await c.resume();
-      // Prime unlock (iOS / Safari)
-      const buf = c.createBuffer(1, 1, c.sampleRate);
-      const src = c.createBufferSource();
-      src.buffer = buf;
-      src.connect(c.destination);
-      src.start(0);
-      return c.state === 'running';
-    } catch {
-      return false;
-    } finally {
-      unlocking = null;
-    }
-  })();
+  const after = () => {
+    flushPending();
+    // One obvious tick on unlock — if you hear this, the pipeline works.
+    playUnlockTick();
+    return c.state === 'running';
+  };
 
-  return unlocking;
+  if (c.state === 'running') {
+    after();
+    return Promise.resolve(true);
+  }
+
+  // resume() must be kicked off during the gesture call stack
+  return c
+    .resume()
+    .then(after)
+    .catch(() => false);
 }
 
 export function setMuted(m) {
   muted = !!m;
   if (!ensure()) return;
-  master.gain.setTargetAtTime(muted ? 0 : 1, now(), 0.04);
+  master.gain.setTargetAtTime(muted ? 0 : 1, now(), 0.03);
+  if (!muted) flushPending();
 }
 
 export function isMuted() {
@@ -87,195 +115,231 @@ export function isMuted() {
 }
 
 export function isAudioUnlocked() {
-  return unlocked && !!ctx;
+  return unlocked && !!ctx && ctx.state === 'running';
 }
 
-/** No-op kept so older call sites don't break. */
+/** Debug helpers for the running page. */
+export function audioDebug() {
+  return {
+    unlocked,
+    muted,
+    state: ctx ? ctx.state : 'none',
+    pending: pending.length,
+    sampleRate: ctx ? ctx.sampleRate : 0,
+  };
+}
+
 export function startMusic() {}
 export function stopMusic() {}
 
-function envGain(peak, attack, decay) {
+/** Confirm tick — mid beep phones can actually reproduce. */
+function playUnlockTick() {
+  if (!ctx || ctx.state !== 'running' || muted) return;
+  const t = now();
+  const o = ctx.createOscillator();
+  o.type = 'square';
+  o.frequency.setValueAtTime(880, t);
+  o.frequency.exponentialRampToValueAtTime(440, t + 0.08);
   const g = ctx.createGain();
-  const t = now();
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), t + attack);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
-  return g;
-}
-
-function alive() {
-  if (!unlocked || muted) return false;
-  if (!ensure()) return false;
-  if (ctx.state === 'suspended') ctx.resume();
-  return true;
-}
-
-/** Cue tip strike — wood tap scaled by power. */
-export function playCueStrike(power01) {
-  if (!alive()) return;
-  const p = Math.max(0.05, Math.min(1, power01));
-  const t = now();
-
-  const osc = ctx.createOscillator();
-  osc.type = 'triangle';
-  osc.frequency.setValueAtTime(180 + p * 100, t);
-  osc.frequency.exponentialRampToValueAtTime(70, t + 0.1);
-
-  const click = ctx.createBufferSource();
-  click.buffer = getNoise();
-  const clickF = ctx.createBiquadFilter();
-  clickF.type = 'bandpass';
-  clickF.frequency.value = 1200 + p * 600;
-  clickF.Q.value = 0.9;
-
-  const g = envGain(0.7 + p * 0.3, 0.002, 0.12);
-  const cg = envGain(0.45 + p * 0.35, 0.001, 0.05);
-
-  osc.connect(g);
+  g.gain.exponentialRampToValueAtTime(0.45, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  o.connect(g);
   g.connect(sfxGain);
-  click.connect(clickF);
-  clickF.connect(cg);
-  cg.connect(sfxGain);
+  o.start(t);
+  o.stop(t + 0.14);
+}
 
-  osc.start(t);
-  osc.stop(t + 0.14);
-  click.start(t);
-  click.stop(t + 0.06);
+/** Cue tip strike. */
+export function playCueStrike(power01) {
+  whenRunning(() => {
+    const p = Math.max(0.08, Math.min(1, power01));
+    const t = now();
+
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(220 + p * 80, t);
+    osc.frequency.exponentialRampToValueAtTime(90, t + 0.12);
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = getNoise();
+    const nf = ctx.createBiquadFilter();
+    nf.type = 'bandpass';
+    nf.frequency.value = 900 + p * 400;
+    nf.Q.value = 0.8;
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.8, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.0001, t);
+    ng.gain.exponentialRampToValueAtTime(0.55, t + 0.002);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+
+    osc.connect(g);
+    g.connect(sfxGain);
+    noise.connect(nf);
+    nf.connect(ng);
+    ng.connect(sfxGain);
+
+    osc.start(t);
+    osc.stop(t + 0.16);
+    noise.start(t);
+    noise.stop(t + 0.08);
+  });
 }
 
 /**
- * Ball–ball crack — sharp transient like ivory meeting ivory.
- * @param {number} impactSpeed relative normal speed from physics
+ * Ball–ball crack — mid-range so laptop/phone speakers hear it.
+ * (Prior version lived at 3kHz+ and was effectively silent on many devices.)
  */
 export function playBallHit(impactSpeed) {
-  if (!alive()) return;
   const tMs = performance.now();
-  // Dense break packs still crack; don't smear into one tone.
-  if (tMs - lastBallAt < 14) return;
+  if (tMs - lastBallAt < 12) return;
   lastBallAt = tMs;
 
-  const s = Math.max(0.2, Math.min(1, (Number(impactSpeed) || 30) / 55));
-  const t = now();
+  const speed = Number(impactSpeed) || 40;
+  const s = Math.max(0.35, Math.min(1, speed / 50));
 
-  // 1) Crack transient — bright noise spike (the "crack")
-  const crack = ctx.createBufferSource();
-  crack.buffer = getNoise();
-  const crackHp = ctx.createBiquadFilter();
-  crackHp.type = 'highpass';
-  crackHp.frequency.value = 1800 + s * 1200;
-  crackHp.Q.value = 0.7;
-  const crackBp = ctx.createBiquadFilter();
-  crackBp.type = 'peaking';
-  crackBp.frequency.value = 3200 + s * 800;
-  crackBp.Q.value = 2.2;
-  crackBp.gain.value = 10;
-  const crackG = ctx.createGain();
-  crackG.gain.setValueAtTime(0.0001, t);
-  crackG.gain.exponentialRampToValueAtTime(0.95 * s + 0.35, t + 0.0008);
-  crackG.gain.exponentialRampToValueAtTime(0.0001, t + 0.028);
-  crack.connect(crackHp);
-  crackHp.connect(crackBp);
-  crackBp.connect(crackG);
-  crackG.connect(sfxGain);
+  whenRunning(() => {
+    const t = now();
 
-  // 2) Snap tone — hard edge that dies almost immediately
-  const snap = ctx.createOscillator();
-  snap.type = 'square';
-  snap.frequency.setValueAtTime(1400 + s * 900, t);
-  snap.frequency.exponentialRampToValueAtTime(380, t + 0.035);
-  const snapF = ctx.createBiquadFilter();
-  snapF.type = 'bandpass';
-  snapF.frequency.value = 1600 + s * 700;
-  snapF.Q.value = 1.4;
-  const snapG = ctx.createGain();
-  snapG.gain.setValueAtTime(0.0001, t);
-  snapG.gain.exponentialRampToValueAtTime(0.55 * s + 0.2, t + 0.0006);
-  snapG.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
-  snap.connect(snapF);
-  snapF.connect(snapG);
-  snapG.connect(sfxGain);
+    // Layer A: hard snap in the 700–1400 Hz phone-speaker band
+    const snap = ctx.createOscillator();
+    snap.type = 'square';
+    snap.frequency.setValueAtTime(1100 + s * 400, t);
+    snap.frequency.exponentialRampToValueAtTime(320, t + 0.06);
+    const snapF = ctx.createBiquadFilter();
+    snapF.type = 'lowpass';
+    snapF.frequency.value = 2400;
+    const snapG = ctx.createGain();
+    snapG.gain.setValueAtTime(0.0001, t);
+    snapG.gain.exponentialRampToValueAtTime(0.9 * s, t + 0.0015);
+    snapG.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+    snap.connect(snapF);
+    snapF.connect(snapG);
+    snapG.connect(sfxGain);
 
-  // 3) Tiny body — just enough weight under the crack
-  const body = ctx.createOscillator();
-  body.type = 'sine';
-  body.frequency.setValueAtTime(280 + s * 100, t);
-  body.frequency.exponentialRampToValueAtTime(120, t + 0.05);
-  const bodyG = ctx.createGain();
-  bodyG.gain.setValueAtTime(0.0001, t);
-  bodyG.gain.exponentialRampToValueAtTime(0.35 * s + 0.12, t + 0.001);
-  bodyG.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
-  body.connect(bodyG);
-  bodyG.connect(sfxGain);
+    // Layer B: noise crack (mid, not ultra-high)
+    const crack = ctx.createBufferSource();
+    crack.buffer = getNoise();
+    const crackF = ctx.createBiquadFilter();
+    crackF.type = 'bandpass';
+    crackF.frequency.value = 1400 + s * 600;
+    crackF.Q.value = 1.1;
+    const crackG = ctx.createGain();
+    crackG.gain.setValueAtTime(0.0001, t);
+    crackG.gain.exponentialRampToValueAtTime(1.0 * s, t + 0.001);
+    crackG.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
+    crack.connect(crackF);
+    crackF.connect(crackG);
+    crackG.connect(sfxGain);
 
-  crack.start(t);
-  crack.stop(t + 0.04);
-  snap.start(t);
-  snap.stop(t + 0.05);
-  body.start(t);
-  body.stop(t + 0.07);
+    // Layer C: low knock for weight
+    const body = ctx.createOscillator();
+    body.type = 'sine';
+    body.frequency.setValueAtTime(220 + s * 80, t);
+    body.frequency.exponentialRampToValueAtTime(100, t + 0.08);
+    const bodyG = ctx.createGain();
+    bodyG.gain.setValueAtTime(0.0001, t);
+    bodyG.gain.exponentialRampToValueAtTime(0.65 * s, t + 0.002);
+    bodyG.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+    body.connect(bodyG);
+    bodyG.connect(sfxGain);
+
+    snap.start(t);
+    snap.stop(t + 0.08);
+    crack.start(t);
+    crack.stop(t + 0.07);
+    body.start(t);
+    body.stop(t + 0.12);
+  });
 }
 
 /** Rail thud. */
 export function playCushion(impactSpeed) {
-  if (!alive()) return;
   const tMs = performance.now();
-  if (tMs - lastCushionAt < 30) return;
+  if (tMs - lastCushionAt < 28) return;
   lastCushionAt = tMs;
+  const speed = Number(impactSpeed) || 30;
+  const s = Math.max(0.3, Math.min(1, speed / 70));
 
-  const s = Math.max(0.12, Math.min(1, (Number(impactSpeed) || 20) / 80));
-  const t = now();
+  whenRunning(() => {
+    const t = now();
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(160 + s * 50, t);
+    osc.frequency.exponentialRampToValueAtTime(55, t + 0.18);
 
-  const osc = ctx.createOscillator();
-  osc.type = 'triangle';
-  osc.frequency.setValueAtTime(130 + s * 60, t);
-  osc.frequency.exponentialRampToValueAtTime(50, t + 0.16);
+    const noise = ctx.createBufferSource();
+    noise.buffer = getNoise();
+    const nf = ctx.createBiquadFilter();
+    nf.type = 'lowpass';
+    nf.frequency.value = 500;
 
-  const noise = ctx.createBufferSource();
-  noise.buffer = getNoise();
-  const nf = ctx.createBiquadFilter();
-  nf.type = 'lowpass';
-  nf.frequency.value = 380 + s * 200;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.7 * s, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
 
-  const g = envGain(0.55 * s + 0.25, 0.002, 0.16);
-  const ng = envGain(0.4 * s + 0.15, 0.002, 0.1);
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.0001, t);
+    ng.gain.exponentialRampToValueAtTime(0.45 * s, t + 0.002);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
 
-  osc.connect(g);
-  g.connect(sfxGain);
-  noise.connect(nf);
-  nf.connect(ng);
-  ng.connect(sfxGain);
+    osc.connect(g);
+    g.connect(sfxGain);
+    noise.connect(nf);
+    nf.connect(ng);
+    ng.connect(sfxGain);
 
-  osc.start(t);
-  osc.stop(t + 0.2);
-  noise.start(t);
-  noise.stop(t + 0.1);
+    osc.start(t);
+    osc.stop(t + 0.22);
+    noise.start(t);
+    noise.stop(t + 0.12);
+  });
 }
 
-/** Soft pocket drop. */
+/** Pocket drop. */
 export function playPocket() {
-  if (!alive()) return;
-  const t = now();
-  const osc = ctx.createOscillator();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(210, t);
-  osc.frequency.exponentialRampToValueAtTime(65, t + 0.28);
-  const g = envGain(0.55, 0.008, 0.3);
-  osc.connect(g);
-  g.connect(sfxGain);
-  osc.start(t);
-  osc.stop(t + 0.35);
+  whenRunning(() => {
+    const t = now();
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(240, t);
+    osc.frequency.exponentialRampToValueAtTime(70, t + 0.3);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.6, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+    osc.connect(g);
+    g.connect(sfxGain);
+    osc.start(t);
+    osc.stop(t + 0.38);
+  });
 }
 
 /** Drive SFX from a physics step’s event bag. */
 export function playPhysics(events) {
   if (!events || !unlocked || muted) return;
   if (events.ballHits > 0) {
-    playBallHit(events.ballImpact > 0 ? events.ballImpact : 25);
+    playBallHit(events.ballImpact > 0 ? events.ballImpact : 40);
   }
   if (events.cushionHits > 0) {
-    playCushion(events.cushionImpact > 0 ? events.cushionImpact : 20);
+    playCushion(events.cushionImpact > 0 ? events.cushionImpact : 30);
   }
   if (events.pocketed && events.pocketed.length) {
     for (let i = 0; i < events.pocketed.length; i++) playPocket();
   }
+}
+
+// Expose for quick console checks on the live page.
+if (typeof window !== 'undefined') {
+  window.__breakAudio = {
+    unlock: unlockAudio,
+    hit: () => playBallHit(80),
+    debug: audioDebug,
+  };
 }
