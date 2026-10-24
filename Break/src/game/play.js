@@ -242,6 +242,7 @@ export class PlaySession {
     this.phase = 'rolling';
     this.message = this.isAiTurn ? 'AI shooting…' : '';
     this.lastPocketed = [];
+    this.hooks.onCueStrike?.(power01);
     return true;
   }
 
@@ -266,11 +267,16 @@ export class PlaySession {
 
   step(frameDt) {
     if (this.phase === 'won') return;
+    // Cap catch-up so a long hitch does not spiral into a multi-frame freeze.
     this.simAccum += Math.min(frameDt, 0.05);
-    while (this.simAccum >= FIXED_DT) {
+    let steps = 0;
+    const maxSteps = 10;
+    while (this.simAccum >= FIXED_DT && steps < maxSteps) {
       this._fixedStep(FIXED_DT);
       this.simAccum -= FIXED_DT;
+      steps += 1;
     }
+    if (steps === maxSteps) this.simAccum = 0;
   }
 
   _fixedStep(dt) {
@@ -283,6 +289,7 @@ export class PlaySession {
       this.pocketedCount += 1;
       this.lastPocketed.push(b.id);
     }
+    this.hooks.onSfx?.(events);
 
     if (this.moving) return;
     this._resolveShot();

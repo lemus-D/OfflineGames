@@ -3,6 +3,14 @@
 import { CueInput, EnglishDial } from './core/input.js';
 import { Save } from './core/save.js';
 import { clamp } from './core/rng.js';
+import {
+  unlockAudio,
+  playPhysics,
+  playCueStrike,
+  setMuted,
+  isMuted,
+  startMusic,
+} from './core/audio.js';
 import { PHYSICS, DIFFICULTIES, pocketCenters } from './game/content.js';
 import { PlaySession } from './game/play.js';
 import { chooseAiShot, difficultyThinkSec } from './game/ai.js';
@@ -20,7 +28,18 @@ import {
 
 const canvas = document.getElementById('stage');
 const g = canvas.getContext('2d', { alpha: false, desynchronized: true });
+if (g) {
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = 'high';
+}
 const cueInput = new CueInput(canvas);
+
+function armAudio() {
+  unlockAudio();
+  startMusic();
+}
+canvas.addEventListener('pointerdown', armAudio, { once: false });
+addEventListener('keydown', armAudio, { once: true });
 
 const spinCanvas = document.getElementById('spinDial');
 const spinPanel = document.getElementById('spinPanel');
@@ -88,7 +107,11 @@ const els = {
   btnMedium: document.getElementById('btnMedium'),
   btnHard: document.getElementById('btnHard'),
   btnExtraHard: document.getElementById('btnExtraHard'),
+  btnMute: document.getElementById('btnMute'),
 };
+
+let lastHudKey = '';
+let lastDialKey = '';
 
 function resize() {
   dpr = Math.min(devicePixelRatio || 1, 2);
@@ -105,11 +128,8 @@ function clearFrame() {
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalAlpha = 1;
   g.globalCompositeOperation = 'source-over';
-  const bg = g.createLinearGradient(0, 0, 0, canvas.height);
-  bg.addColorStop(0, '#1a2a1e');
-  bg.addColorStop(0.55, '#0c1810');
-  bg.addColorStop(1, '#060c08');
-  g.fillStyle = bg;
+  // Flat clear is cheaper than a full-canvas gradient every frame.
+  g.fillStyle = '#0a1410';
   g.fillRect(0, 0, canvas.width, canvas.height);
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
@@ -141,6 +161,7 @@ function refreshMenuMeta() {
 }
 
 function startRun(difficulty) {
+  armAudio();
   selectedDifficulty = difficulty || 'medium';
   const seed = (Date.now() ^ (performance.now() * 1000)) >>> 0;
   session = new PlaySession(
@@ -148,6 +169,12 @@ function startRun(difficulty) {
     {
       onClear() {
         endRun(true);
+      },
+      onSfx(events) {
+        playPhysics(events);
+      },
+      onCueStrike(power) {
+        playCueStrike(power);
       },
     },
     { mode: 'vsAi', difficulty: selectedDifficulty }
@@ -157,6 +184,7 @@ function startRun(difficulty) {
   englishDial.reset();
   cueInput.enabled = true;
   cueInput.reset();
+  lastHudKey = '';
   state = 'playing';
   hide(els.menu);
   hide(els.summary);
@@ -238,20 +266,29 @@ function endRun(cleared) {
 
 function updateHud() {
   if (!session) return;
+  const turn =
+    session.phase === 'rolling'
+      ? 'ROLLING'
+      : session.isAiTurn
+        ? 'AI TURN'
+        : 'YOUR TURN';
+  const key = [
+    session.scores.player,
+    session.scores.ai,
+    session.suitHud('player'),
+    session.suitHud('ai'),
+    session.remaining,
+    turn,
+    session.message || '',
+  ].join('|');
+  if (key === lastHudKey) return;
+  lastHudKey = key;
   if (els.you) els.you.textContent = String(session.scores.player);
   if (els.ai) els.ai.textContent = String(session.scores.ai);
   if (els.youSuit) els.youSuit.textContent = session.suitHud('player');
   if (els.aiSuit) els.aiSuit.textContent = session.suitHud('ai');
   if (els.left) els.left.textContent = String(session.remaining);
-  if (els.turnLabel) {
-    if (session.phase === 'rolling') {
-      els.turnLabel.textContent = 'ROLLING';
-    } else if (session.isAiTurn) {
-      els.turnLabel.textContent = 'AI TURN';
-    } else {
-      els.turnLabel.textContent = 'YOUR TURN';
-    }
-  }
+  if (els.turnLabel) els.turnLabel.textContent = turn;
   if (els.msg) els.msg.textContent = session.message || ' ';
 }
 
@@ -439,12 +476,12 @@ function drawPlay(dt) {
   }
 
   refreshSpinHot();
-  drawEnglishDial(
-    spinCtx,
-    spinCanvas.width,
-    englishDial.english,
-    englishDial.hover || englishDial.dragging
-  );
+  const dialHot = !!(englishDial.hover || englishDial.dragging);
+  const dialKey = `${englishDial.english.x.toFixed(3)}|${englishDial.english.y.toFixed(3)}|${dialHot ? 1 : 0}`;
+  if (dialKey !== lastDialKey) {
+    lastDialKey = dialKey;
+    drawEnglishDial(spinCtx, spinCanvas.width, englishDial.english, dialHot);
+  }
   updateHud();
 }
 
@@ -503,6 +540,14 @@ bindDiff(els.btnEasy, 'easy');
 bindDiff(els.btnMedium, 'medium');
 bindDiff(els.btnHard, 'hard');
 bindDiff(els.btnExtraHard, 'extraHard');
+
+if (els.btnMute) {
+  els.btnMute.addEventListener('click', () => {
+    armAudio();
+    setMuted(!isMuted());
+    els.btnMute.textContent = isMuted() ? 'Sound' : 'Mute';
+  });
+}
 
 els.btnAgain.addEventListener('click', () => {
   session = null;

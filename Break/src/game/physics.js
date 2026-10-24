@@ -62,7 +62,14 @@ export function settle(balls) {
  * `{ pocketed: Ball[], cushionHits: number, ballHits: number }`
  */
 export function stepPhysics(balls, dt) {
-  const events = { pocketed: [], cushionHits: 0, ballHits: 0 };
+  const events = {
+    pocketed: [],
+    cushionHits: 0,
+    ballHits: 0,
+    /** Peak relative speeds this step — for SFX intensity. */
+    ballImpact: 0,
+    cushionImpact: 0,
+  };
 
   // Advance pocket drop animations (no collisions while falling).
   for (const b of balls) {
@@ -85,8 +92,12 @@ export function stepPhysics(balls, dt) {
   for (let pass = 0; pass < 3; pass++) {
     for (let i = 0; i < active.length; i++) {
       for (let j = i + 1; j < active.length; j++) {
-        if (resolveBallBall(active[i], active[j])) {
-          if (pass === 0) events.ballHits += 1;
+        const imp = resolveBallBall(active[i], active[j]);
+        if (imp > 0) {
+          if (pass === 0) {
+            events.ballHits += 1;
+            if (imp > events.ballImpact) events.ballImpact = imp;
+          }
         }
       }
     }
@@ -101,7 +112,7 @@ export function stepPhysics(balls, dt) {
 
   for (const b of stillActive) {
     if (b.pocketed || b.falling) continue;
-    const rail = resolveCushions(b);
+    const rail = resolveCushions(b, events);
     if (rail === 'pocketed') events.pocketed.push(b);
     else if (rail) events.cushionHits += 1;
   }
@@ -158,7 +169,7 @@ function resolveBallBall(a, b) {
   const dy = b.y - a.y;
   const dist = Math.hypot(dx, dy);
   const min = a.r + b.r;
-  if (dist === 0 || dist >= min) return false;
+  if (dist === 0 || dist >= min) return 0;
 
   const nx = dx / dist;
   const ny = dy / dist;
@@ -171,7 +182,7 @@ function resolveBallBall(a, b) {
   const dvx = a.vx - b.vx;
   const dvy = a.vy - b.vy;
   const vn = dvx * nx + dvy * ny;
-  if (vn <= 0) return false;
+  if (vn <= 0) return 0;
 
   const e = PHYSICS.ballRestitution;
   const impulse = ((1 + e) * vn) / 2;
@@ -209,7 +220,7 @@ function resolveBallBall(a, b) {
     a.forwardSpin *= 0.4;
   }
 
-  return true;
+  return Math.abs(vn);
 }
 
 function gapForPocket(p) {
@@ -329,7 +340,7 @@ function hitApronLimit(b, nx, ny, limitCoord, isX) {
   return 'hit';
 }
 
-function resolveCushions(b) {
+function resolveCushions(b, events) {
   if (captureIfInPocketWell(b)) return 'pocketed';
 
   const maxX = TABLE.halfW - b.r;
@@ -339,6 +350,10 @@ function resolveCushions(b) {
   const apronX = TABLE.halfW + TABLE.pocketOut + TABLE.pocketR * 0.85;
   const apronY = TABLE.halfH + TABLE.pocketOutSide + TABLE.pocketR * 0.85;
 
+  const noteHit = (spd) => {
+    if (events && spd > (events.cushionImpact || 0)) events.cushionImpact = spd;
+  };
+
   // Off-felt pockets: skip the rail only at the cutout; otherwise bounce.
   if (b.x < -maxX) {
     if (railOpenAt(b, 'left') || skipRail) {
@@ -346,6 +361,7 @@ function resolveCushions(b) {
       if (r === 'pocketed') return 'pocketed';
       if (r) hit = true;
     } else {
+      noteHit(Math.abs(b.vx));
       b.x = -maxX;
       bounceRail(b, 1, 0);
       hit = true;
@@ -356,6 +372,7 @@ function resolveCushions(b) {
       if (r === 'pocketed') return 'pocketed';
       if (r) hit = true;
     } else {
+      noteHit(Math.abs(b.vx));
       b.x = maxX;
       bounceRail(b, -1, 0);
       hit = true;
@@ -370,6 +387,7 @@ function resolveCushions(b) {
       if (r === 'pocketed') return 'pocketed';
       if (r) hit = true;
     } else {
+      noteHit(Math.abs(b.vy));
       b.y = -maxY;
       bounceRail(b, 0, 1);
       hit = true;
@@ -380,6 +398,7 @@ function resolveCushions(b) {
       if (r === 'pocketed') return 'pocketed';
       if (r) hit = true;
     } else {
+      noteHit(Math.abs(b.vy));
       b.y = maxY;
       bounceRail(b, 0, -1);
       hit = true;

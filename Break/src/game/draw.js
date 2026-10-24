@@ -24,8 +24,11 @@ export function fitView(W, H) {
   const worldW = (TABLE.halfW + rail + out * 0.35) * 2;
   const worldH = (TABLE.halfH + rail + out * 0.35) * 2;
   const scale = Math.min((W - margin * 2) / worldW, (H - margin * 2) / worldH);
-  return { cx: W * 0.5, cy: H * 0.5, scale };
+  return { cx: W * 0.5, cy: H * 0.5, scale, W, H };
 }
+
+/** Offscreen cache for the static table (felt weave is expensive per frame). */
+let _tableCache = { canvas: null, key: '' };
 
 function feltPattern(g, x, y, w, h) {
   const grad = g.createRadialGradient(
@@ -81,8 +84,47 @@ function feltPattern(g, x, y, w, h) {
 /**
  * Reference-style table: continuous rails, pockets recessed in the wood,
  * cushion segments that open cleanly into each mouth (no green over the hole).
+ * Static geometry is cached to an offscreen canvas for smooth frames.
  */
 export function drawTable(g, view, animTime) {
+  const S = view.scale;
+  const left = view.cx - TABLE.halfW * S;
+  const top = view.cy - TABLE.halfH * S;
+  const tw = TABLE.halfW * 2 * S;
+  const th = TABLE.halfH * 2 * S;
+  const cssW = view.W || Math.ceil(view.cx * 2);
+  const cssH = view.H || Math.ceil(view.cy * 2);
+  const key = `${cssW}|${cssH}|${S.toFixed(4)}|${view.cx.toFixed(1)}|${view.cy.toFixed(1)}`;
+
+  if (typeof document !== 'undefined') {
+    if (!_tableCache.canvas || _tableCache.key !== key) {
+      const c = _tableCache.canvas || document.createElement('canvas');
+      c.width = Math.max(1, Math.ceil(cssW));
+      c.height = Math.max(1, Math.ceil(cssH));
+      const cg = c.getContext('2d', { alpha: false });
+      cg.setTransform(1, 0, 0, 1, 0, 0);
+      cg.fillStyle = '#0c1810';
+      cg.fillRect(0, 0, c.width, c.height);
+      paintStaticTable(cg, view);
+      _tableCache = { canvas: c, key };
+    }
+    g.drawImage(_tableCache.canvas, 0, 0);
+  } else {
+    paintStaticTable(g, view);
+  }
+
+  // Cheap living light — only this animates each frame
+  g.save();
+  g.globalAlpha = 0.025 + Math.sin(animTime * 0.55) * 0.012;
+  const glow = g.createRadialGradient(view.cx, view.cy, 8, view.cx, view.cy, tw * 0.55);
+  glow.addColorStop(0, '#d8f5d0');
+  glow.addColorStop(1, 'transparent');
+  g.fillStyle = glow;
+  g.fillRect(left, top, tw, th);
+  g.restore();
+}
+
+function paintStaticTable(g, view) {
   const S = view.scale;
   const rail = TABLE.cushion * S;
   const face = (TABLE.cushionFace || 3.2) * S;
@@ -95,7 +137,6 @@ export function drawTable(g, view, animTime) {
   const bottom = top + th;
   const woodTone = '#2e1a0e';
 
-  // —— Outer wood apron ——
   const pad = Math.max(14, TABLE.pocketOut * S * 0.75);
   const fx = left - rail - pad;
   const fy = top - rail - pad;
@@ -115,23 +156,16 @@ export function drawTable(g, view, animTime) {
   roundRect(g, fx + 3, fy + 3, fw - 6, fh - 6, 12);
   g.stroke();
 
-  // Continuous dark rail band under the cushions (full loop)
   g.fillStyle = '#24160c';
   g.fillRect(left - rail, top - rail, tw + rail * 2, rail);
   g.fillRect(left - rail, bottom, tw + rail * 2, rail);
   g.fillRect(left - rail, top, rail, th);
   g.fillRect(right, top, rail, th);
 
-  // —— Felt ——
   feltPattern(g, left, top, tw, th);
-
-  // Cover felt that would show through pocket mouths (wood fill in the gaps)
   punchPocketMouths(g, left, top, right, bottom, gap, face, rail, woodTone);
-
-  // —— Cushion faces (segments between mouths, rounded ends) ——
   drawCushions(g, left, top, right, bottom, face, gap);
 
-  // —— Pocket holes last so nothing paints over them ——
   for (const p of pocketCenters()) {
     drawRailPocket(
       g,
@@ -142,7 +176,6 @@ export function drawTable(g, view, animTime) {
 
   drawDiamonds(g, left, top, tw, th, rail, gap);
 
-  // Head string + foot spot
   g.save();
   g.strokeStyle = 'rgba(220, 230, 210, 0.22)';
   g.setLineDash([5, 7]);
@@ -157,15 +190,6 @@ export function drawTable(g, view, animTime) {
   g.beginPath();
   g.arc(spot.x, spot.y, 2.4, 0, Math.PI * 2);
   g.fill();
-  g.restore();
-
-  g.save();
-  g.globalAlpha = 0.03 + Math.sin(animTime * 0.6) * 0.01;
-  const glow = g.createRadialGradient(view.cx, view.cy, 10, view.cx, view.cy, tw * 0.55);
-  glow.addColorStop(0, '#d8f5d0');
-  glow.addColorStop(1, 'transparent');
-  g.fillStyle = glow;
-  g.fillRect(left, top, tw, th);
   g.restore();
 }
 
@@ -557,42 +581,14 @@ export function drawCueAndAim(g, cue, balls, view, aim, english, opts = {}) {
     }
   }
 
-  // Cue stick behind the ball
-  const tipGap = cue.r * view.scale + 3 + (pulling ? power * 36 : 8);
-  const cueLen = (95 + power * 20) * (view.scale / 3.2);
-  const bx = origin.x - Math.cos(ang) * tipGap;
-  const by = origin.y - Math.sin(ang) * tipGap;
-  const ex = origin.x - Math.cos(ang) * (tipGap + cueLen);
-  const ey = origin.y - Math.sin(ang) * (tipGap + cueLen);
-
-  // Stick shadow
-  g.strokeStyle = 'rgba(0,0,0,0.35)';
-  g.lineWidth = Math.max(4, 5.5 * (view.scale / 3));
-  g.lineCap = 'round';
-  g.beginPath();
-  g.moveTo(ex + 1.5, ey + 2);
-  g.lineTo(bx + 1.5, by + 2);
-  g.stroke();
-
-  const stick = g.createLinearGradient(ex, ey, bx, by);
-  stick.addColorStop(0, '#2a180c');
-  stick.addColorStop(0.15, '#5a3420');
-  stick.addColorStop(0.55, '#c4a06a');
-  stick.addColorStop(0.82, '#e8d2a8');
-  stick.addColorStop(0.92, '#1a6a9a');
-  stick.addColorStop(1, '#d8ece8');
-  g.strokeStyle = stick;
-  g.lineWidth = Math.max(3.2, 4.4 * (view.scale / 3));
-  g.beginPath();
-  g.moveTo(ex, ey);
-  g.lineTo(bx, by);
-  g.stroke();
-
-  // Tip chalk face
-  g.beginPath();
-  g.arc(bx, by, Math.max(2.2, 2.8 * (view.scale / 3)), 0, Math.PI * 2);
-  g.fillStyle = '#7ec8c0';
-  g.fill();
+  // Cue stick behind the ball — tapered shaft, not a matchstick stroke
+  const tipGap = cue.r * view.scale + 3 + (pulling ? power * 40 : 10);
+  const cueLen = (128 + power * 28) * (view.scale / 3.2);
+  const tipX = origin.x - Math.cos(ang) * tipGap;
+  const tipY = origin.y - Math.sin(ang) * tipGap;
+  const buttX = origin.x - Math.cos(ang) * (tipGap + cueLen);
+  const buttY = origin.y - Math.sin(ang) * (tipGap + cueLen);
+  drawCueStick(g, tipX, tipY, buttX, buttY, view.scale);
 
   // Power meter near cue
   if (pulling || power > 0.01) {
@@ -608,6 +604,128 @@ export function drawCueAndAim(g, cue, balls, view, aim, english, opts = {}) {
   }
 
   g.restore();
+}
+
+/** Tapered maple cue: butt → wrap → shaft → ferrule → chalk tip. */
+function drawCueStick(g, tipX, tipY, buttX, buttY, scale) {
+  const dx = tipX - buttX;
+  const dy = tipY - buttY;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const px = -uy;
+  const py = ux;
+  const k = scale / 3.2;
+  const buttW = Math.max(5.2, 6.8 * k);
+  const tipW = Math.max(1.6, 2.15 * k);
+
+  function widthAt(t) {
+    // t=0 butt, t=1 tip — gentle taper with a thicker butt
+    return buttW + (tipW - buttW) * (0.15 + 0.85 * t * t);
+  }
+
+  function point(t, side) {
+    const w = widthAt(t);
+    return {
+      x: buttX + ux * len * t + px * w * side,
+      y: buttY + uy * len * t + py * w * side,
+    };
+  }
+
+  function seg(t0, t1) {
+    const a = point(t0, -1);
+    const b = point(t0, 1);
+    const c = point(t1, 1);
+    const d = point(t1, -1);
+    g.beginPath();
+    g.moveTo(a.x, a.y);
+    g.lineTo(b.x, b.y);
+    g.lineTo(c.x, c.y);
+    g.lineTo(d.x, d.y);
+    g.closePath();
+  }
+
+  // Soft contact shadow under the stick
+  g.save();
+  g.translate(1.6, 2.2);
+  g.globalAlpha = 0.28;
+  seg(0, 1);
+  g.fillStyle = '#000';
+  g.fill();
+  g.restore();
+
+  // Butt (dark rosewood)
+  seg(0, 0.22);
+  const buttGrad = g.createLinearGradient(buttX, buttY, buttX + ux * len * 0.22, buttY + uy * len * 0.22);
+  buttGrad.addColorStop(0, '#1a0e08');
+  buttGrad.addColorStop(0.4, '#4a2814');
+  buttGrad.addColorStop(1, '#3a1e10');
+  g.fillStyle = buttGrad;
+  g.fill();
+
+  // Irish linen wrap
+  seg(0.2, 0.34);
+  g.fillStyle = '#2a2420';
+  g.fill();
+  g.save();
+  g.globalAlpha = 0.35;
+  g.strokeStyle = '#6a6058';
+  g.lineWidth = 1;
+  for (let i = 0; i < 7; i++) {
+    const t = 0.21 + i * 0.018;
+    const p0 = point(t, -1);
+    const p1 = point(t, 1);
+    g.beginPath();
+    g.moveTo(p0.x, p0.y);
+    g.lineTo(p1.x, p1.y);
+    g.stroke();
+  }
+  g.restore();
+
+  // Maple shaft
+  seg(0.32, 0.9);
+  const shaftGrad = g.createLinearGradient(
+    buttX + ux * len * 0.32,
+    buttY + uy * len * 0.32,
+    tipX,
+    tipY
+  );
+  shaftGrad.addColorStop(0, '#8a6238');
+  shaftGrad.addColorStop(0.35, '#d2b07a');
+  shaftGrad.addColorStop(0.7, '#e8d2a0');
+  shaftGrad.addColorStop(1, '#f0e0b8');
+  g.fillStyle = shaftGrad;
+  g.fill();
+
+  // Light edge highlight along the taper
+  g.strokeStyle = 'rgba(255, 245, 220, 0.35)';
+  g.lineWidth = 1;
+  g.beginPath();
+  const h0 = point(0.34, -0.55);
+  const h1 = point(0.88, -0.55);
+  g.moveTo(h0.x, h0.y);
+  g.lineTo(h1.x, h1.y);
+  g.stroke();
+
+  // Ferrule
+  seg(0.9, 0.965);
+  g.fillStyle = '#e8eef0';
+  g.fill();
+  g.strokeStyle = 'rgba(40, 50, 55, 0.35)';
+  g.lineWidth = 0.8;
+  g.stroke();
+
+  // Leather tip + chalk face
+  seg(0.96, 1);
+  g.fillStyle = '#6a3a22';
+  g.fill();
+  g.beginPath();
+  g.arc(tipX, tipY, tipW * 1.05, 0, Math.PI * 2);
+  g.fillStyle = '#5eb8b0';
+  g.fill();
+  g.strokeStyle = 'rgba(20, 40, 40, 0.4)';
+  g.lineWidth = 0.8;
+  g.stroke();
 }
 
 function drawArrowHead(g, x, y, ang, color) {

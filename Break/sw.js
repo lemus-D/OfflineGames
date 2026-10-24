@@ -1,5 +1,5 @@
 /* Break service worker — precache, versioned cache name. */
-const CACHE = 'break-v15';
+const CACHE = 'break-v16';
 const PRECACHE = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const PRECACHE = [
   './src/core/rng.js',
   './src/core/input.js',
   './src/core/save.js',
+  './src/core/audio.js',
   './src/game/content.js',
   './src/game/physics.js',
   './src/game/aim.js',
