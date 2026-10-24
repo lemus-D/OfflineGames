@@ -33,6 +33,7 @@ non_goals: no multiplayer; no meta unlock tree for MVP; no licensed art [owner]
 """
 
 Mechanical suite: PASSED (gate 0 + browser checks).
-Build: GroveRun/ at http://localhost:5184 (sha ed3cfc7).
+Build: GroveRun/ at http://localhost:5184 on branch cursor/grove-run-mvp-6c6d
+(use `git rev-parse --short HEAD` for the tip sha when writing PLAYTEST.md).
 Write GroveRun/PLAYTEST.md. Record + videoReview. Be critical.
 Polish verdict must be ready_for_owner or not_ready.
