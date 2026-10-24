@@ -1,9 +1,9 @@
 # QC workflow brainstorm — playtest agents and harder gates
 
 > Branch: `cursor/qc-playtest-brainstorm-6c6d`
-> Status: **skills implemented** on this branch (`game-playtest`, retargeted
-> `game-qc`, AGENTS / QUALITY-BAR / check-game updates). Smoke (#3) left alone;
-> CI (#4) deferred. First live trial awaits an owner pitch.
+> Status: **skills implemented and refocused** — critic = minimum polish bar
+> (`ready_for_owner`); console/mechanical browser checks = orchestrator suite.
+> Smoke (#3) left alone; CI (#4) deferred.
 
 Why this exists: gate 0 (`check-game.mjs` + smoke) is honest about the house
 rules, but “playable / fun / done” still depends on the *same* coding agent

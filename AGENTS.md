@@ -40,14 +40,12 @@ reference moves when a game earns it.
   answers into the plan, copies the scaffold from the reference game, and sets
   the build order. The brief is asked, never guessed.
 - **Before saying any game or change is done** → use the `game-qc` skill
-  (`.cursor/skills/game-qc/`). It runs mechanical gate 0, then **spawns a
-  fresh** `game-playtest` critic (not the builder) that judges the build
-  against the original pitch, records gameplay, reviews motion, and commits
-  `<Game>/PLAYTEST.md`. The builder may respond for up to three rounds
-  (feel **and** design/content). A game is not done because smoke is green.
-- **Independent playtest** → use the `game-playtest` skill
-  (`.cursor/skills/game-playtest/`) in a fresh agent when you want a critic
-  pass without the builder context.
+  (`.cursor/skills/game-qc/`). It runs gate 0, a **browser mechanical suite**
+  (console errors — not the critic's job), then **spawns a fresh**
+  `game-playtest` polish critic that judges art/finish and pitch match so
+  half-baked games never reach the owner. Verdict `ready_for_owner` or
+  `not_ready`; commits `<Game>/PLAYTEST.md`. Up to three builder rounds.
+- **Independent polish playtest** → `game-playtest` in a fresh agent.
 
 `CLAUDE.md` is a one-line pointer to this file so Claude Code reads the same
 instructions.

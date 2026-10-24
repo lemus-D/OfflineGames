@@ -47,12 +47,16 @@ pass/fail. The third is scored, and the score has to be backed by evidence.
 | Gate | Question | How it is answered |
 |---|---|---|
 | **0 — Honest** | Does the repo say true things about itself? | `check-game.mjs` + `npm run smoke`, both green |
-| **1 — A game** | Can a stranger open it and play a full loop? | Fresh `game-playtest` critic in a browser; committed `<Game>/PLAYTEST.md` plus a **recording** with motion review |
+| **0b — Browser mechanical** | Does it boot without console errors through a loop? | Orchestrator Playwright/browser suite in `game-qc` (not the critic) |
+| **1 — Worth review** | Is this near-final enough for a human? | Fresh `game-playtest` polish critic: art/finish + pitch match; verdict `ready_for_owner` or `not_ready`; `PLAYTEST.md` + recording |
 | **2 — Fun** | Would they play a second run without being asked? | Same critic scores F1–F10 in PLAYTEST.md; each line needs a quoted observation |
 
-The builder who wrote the game does **not** fill gates 1–2. `game-qc`
-spawns a fresh critic (see `.cursor/skills/game-playtest/`). Claiming
-playable without PLAYTEST.md + recording is not allowed.
+**Owner goal:** the critic is a **minimum polish bar** so humans spend time on
+near-final games, not half-baked drafts (floating props, inconsistent art,
+prototype UI). Console/debug checks stay in the mechanical suite.
+
+The builder does **not** polish-score their own build. Claiming playable
+requires `ready_for_owner` + recording + green mechanical layers.
 
 ### How the gate-2 score works
 
