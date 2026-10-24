@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>GroveRun</title>
+<meta name="description" content="Lane-hop a bunny through the dusk woods. The fox is always behind you." />
+<meta name="theme-color" content="#1a2438" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%231a2438'/><ellipse cx='14' cy='20' rx='8' ry='6' fill='%23f0e6d0' stroke='%230e1218' stroke-width='1.5'/><ellipse cx='18' cy='12' rx='5' ry='4.5' fill='%23f0e6d0' stroke='%230e1218' stroke-width='1.5'/><ellipse cx='15' cy='6' rx='1.6' ry='4' fill='%23f0e6d0' stroke='%230e1218' stroke-width='1'/><ellipse cx='20' cy='5.5' rx='1.6' ry='4' fill='%23f0e6d0' stroke='%230e1218' stroke-width='1'/><circle cx='20' cy='11' r='1.1' fill='%230e1218'/><path d='M26 22c4-1 6 2 5 4' fill='none' stroke='%23c45a2a' stroke-width='2'/></svg>" />
+<style>
+  :root {
+    --ink: #f0e6d0;
+    --muted: #9aa8b8;
+    --deep: #0e1522;
+    --dusk: #1a2438;
+    --orange: #e07040;
+    --fox: #c45a2a;
+    --cream: #f0e6d0;
+    --panel: rgba(14, 21, 34, 0.78);
+    --line: rgba(240, 230, 208, 0.18);
+    --font-display: "Trebuchet MS", "Verdana", "Geneva", sans-serif;
+    --font-body: "Verdana", "Geneva", "Trebuchet MS", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--deep);
+    color: var(--ink);
+    font-family: var(--font-body);
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  #stage {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    touch-action: none;
+    background: var(--deep);
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  .hidden { display: none !important; }
+
+  .overlay {
+    position: fixed; inset: 0;
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-start;
+    pointer-events: none;
+  }
+  .overlay > * { pointer-events: auto; }
+
+  #menu .menu-panel {
+    width: min(400px, 92vw);
+    margin: clamp(20px, 5vh, 56px) clamp(16px, 4vw, 44px);
+    padding: 26px 24px 22px;
+    background: linear-gradient(165deg, rgba(32, 42, 64, 0.92), rgba(10, 16, 28, 0.84));
+    border: 1px solid var(--line);
+    backdrop-filter: blur(10px);
+    align-self: center;
+  }
+
+  .brand {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(2.8rem, 8vw, 4.2rem);
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    color: var(--cream);
+    text-shadow: 0 2px 0 #2a1810, 0 12px 36px rgba(196, 90, 42, 0.35);
+    margin: 0 0 8px;
+  }
+  .tag {
+    margin: 0 0 20px;
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.35;
+    max-width: 28ch;
+  }
+
+  .btn {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.05rem;
+    border: none;
+    cursor: pointer;
+    padding: 12px 18px;
+    color: var(--deep);
+    background: var(--orange);
+    transition: transform 0.12s, filter 0.12s;
+  }
+  .btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary {
+    width: 100%;
+    background: linear-gradient(180deg, #f0a070, #c45a2a);
+    color: #1a1008;
+  }
+  .btn.ghost {
+    background: transparent;
+    color: var(--cream);
+    border: 1px solid var(--line);
+  }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+  .meta {
+    margin-top: 16px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .meta b { color: var(--ink); }
+
+  .hint {
+    margin-top: 14px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  #hud {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    padding: calc(10px + env(safe-area-inset-top)) 14px 8px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    pointer-events: none;
+    font-family: var(--font-display);
+  }
+  .hud-block {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 8px 12px;
+    min-width: 72px;
+  }
+  .hud-block span {
+    display: block;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .hud-block b {
+    font-size: 1.15rem;
+    color: var(--cream);
+  }
+  #foxVal[data-threat="1"] { color: #ff6a4a; }
+
+  #summary {
+    position: fixed; inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8, 12, 20, 0.55);
+    padding: 20px;
+  }
+  #summary .menu-panel {
+    width: min(380px, 94vw);
+    padding: 24px;
+    background: linear-gradient(165deg, rgba(32, 42, 64, 0.95), rgba(10, 16, 28, 0.9));
+    border: 1px solid var(--line);
+  }
+  .reason {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    margin: 0 0 14px;
+    color: var(--orange);
+  }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .stat-grid div {
+    background: rgba(0, 0, 0, 0.25);
+    padding: 10px 12px;
+  }
+  .stat-grid span {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .stat-grid b {
+    font-size: 1.3rem;
+    font-family: var(--font-display);
+  }
+  .muted { color: var(--muted); font-size: 0.9rem; margin: 0 0 8px; }
+</style>
+</head>
+<body>
+<canvas id="stage" aria-label="GroveRun game stage"></canvas>
+
+<div id="menu" class="overlay">
+  <div class="menu-panel">
+    <h1 class="brand">GroveRun</h1>
+    <p class="tag">Lane-hop the dusk path. The fox never stops.</p>
+    <button type="button" class="btn primary" id="btnPlay">Play</button>
+    <p class="meta">Best <b id="bestVal">0</b></p>
+    <p class="hint">Swipe or tap L/R to switch lanes · swipe up / tap top to jump<br/>Keys: ← → · Space / ↑ jump</p>
+  </div>
+</div>
+
+<div id="hud" class="hidden">
+  <div class="hud-block"><span>Score</span><b id="scoreVal">0</b></div>
+  <div class="hud-block"><span>Dist</span><b id="distVal">0</b></div>
+  <div class="hud-block"><span>Carrots</span><b id="carrotVal">0</b></div>
+  <div class="hud-block"><span>Fox gap</span><b id="foxVal">0</b></div>
+</div>
+
+<div id="summary" class="hidden">
+  <div class="menu-panel">
+    <div id="summaryBody"></div>
+    <div class="btn-row">
+      <button type="button" class="btn primary" id="btnAgain">Play again</button>
+      <button type="button" class="btn ghost" id="btnMenu">Menu</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
