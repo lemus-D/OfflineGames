@@ -47,8 +47,16 @@ pass/fail. The third is scored, and the score has to be backed by evidence.
 | Gate | Question | How it is answered |
 |---|---|---|
 | **0 — Honest** | Does the repo say true things about itself? | `check-game.mjs` + `npm run smoke`, both green |
-| **1 — A game** | Can a stranger open it and play a full loop? | Observed in a browser, with a recording or screenshots |
-| **2 — Fun** | Would they play a second run without being asked? | The rubric below, each line with a quoted observation |
+| **0b — Browser mechanical** | Does it boot without console errors through a loop? | Orchestrator Playwright/browser suite in `game-qc` (not the critic) |
+| **1 — Worth review** | Is this near-final enough for a human? | Fresh `game-playtest` polish critic: art/finish + pitch match; verdict `ready_for_owner` or `not_ready`; `PLAYTEST.md` + recording |
+| **2 — Fun** | Would they play a second run without being asked? | Same critic scores F1–F10 in PLAYTEST.md; each line needs a quoted observation |
+
+**Owner goal:** the critic is a **minimum polish bar** so humans spend time on
+near-final games, not half-baked drafts (floating props, inconsistent art,
+prototype UI). Console/debug checks stay in the mechanical suite.
+
+The builder does **not** polish-score their own build. Claiming playable
+requires `ready_for_owner` + recording + green mechanical layers.
 
 ### How the gate-2 score works
 
@@ -95,14 +103,30 @@ progress; a run ends and a summary exists.
 
 ---
 
-## Gate 1 — A game
+## Gate 0b — Browser mechanical
 
-Observed in the running game by the agent, in a real browser, using the
-`Playwright` tools or a recording. A claim here without a screenshot, recording
-or console transcript does not count.
+Run by the `game-qc` orchestrator with Playwright/browser tools before any
+critic is spawned: zero console errors across load → start → play → end →
+restart. This is a test-suite concern, not a taste/polish concern.
 
-- **Boots clean.** No console errors on load, on first input, on game over, on
-  restart.
+## Gate 1 — Worth the owner's review (polish critic)
+
+Observed by a **fresh polish critic** (`.cursor/skills/game-playtest/`), not
+the builder. Primary question: **is this finished enough to show a human?**
+
+Fail (`not_ready`) for half-baked presentation: inconsistent art vs `tone`,
+floating/ungrounded props, clipping, unreadable silhouettes, empty flat
+worlds when the pitch implies a place, missing feedback on core verbs,
+broken or debug-looking UI. Pass (`ready_for_owner`) only when a short owner
+review is worth it.
+
+Also required: pitch **intent match**, playability sanity (loop, inputs,
+fit, persistence, offline), and a **recording** with art + motion review.
+Screenshots alone are not enough.
+
+Playability sanity still includes (critic confirms; console suite is separate):
+
+- **Boots clean.** (Orchestrator suite owns console errors; critic notes only.)
 - **The loop closes.** Start → play → fail or finish → summary → play again,
   without a reload.
 - **The required input families work.** Whatever the brief's `inputs` lists:
