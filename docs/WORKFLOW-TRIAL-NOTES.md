@@ -7,36 +7,47 @@ and errors in `new-game` → build → `game-qc` → `game-playtest` (fresh crit
 
 | | |
 |---|---|
-| Builder agent | `[Bunny fox chase game](bc-f8967793-d52c-5167-9011-5f1b80933ca0)` |
-| Base branch | `cursor/qc-playtest-brainstorm-6c6d` (skills live here; not yet on `main`) |
-| Pitch | Temple Run–style bunny vs fox endless chase (verbatim in builder prompt) |
-| Old chase work | **Forbidden** in builder prompt — fresh directory/name required |
-| QC brief | Pre-filled in prompt so the trial is not blocked on questionnaire |
+| Builder | [Bunny fox chase game](bc-f8967793-d52c-5167-9011-5f1b80933ca0) |
+| Critic (parent-spawned) | [GroveRun polish critic](bc-021ac816-8eb7-5517-92e7-2669e92ac373) |
+| Builder branch | `cursor/grove-run-mvp-6c6d` @ `a1ec20b` |
+| Game | `GroveRun/` port **5184** |
+| Game PR | https://github.com/lemus-D/OfflineGames/pull/12 (draft) |
+| Base for builder | `cursor/qc-playtest-brainstorm-6c6d` |
 
-## What the parent is watching for
-
-1. Does the builder actually read `new-game` / scaffold from Apex + Sharky audio/touch?
-2. Port / directory collisions with games already on the branch.
-3. Does gate 0 run before any “playable” claim?
-4. Is the browser console suite run by the orchestrator (not dumped on the critic)?
-5. Is a **fresh** critic subagent spawned, or does the builder self-playtest?
-6. Is `PLAYTEST.md` committed with `ready_for_owner` / `not_ready` + recording?
-7. Are builder response rounds capped and does re-critic happen after fixes?
-8. Skill friction: unclear steps, missing tools, spawn failures, SW/precache footguns.
-9. Time sinks: polish before smoke, drawing before PlaySession, skipped brief fields.
-
-## Findings
-
-_(Filled after the builder finishes or when artifacts are available.)_
+## Findings (after builder completion)
 
 ### Inefficiencies
 
--
+1. **Critic spawn is not available inside cloud builder subagents.** Builder had no Task / computerUse tool, correctly refused to self-playtest, and stopped. The loop requires a **parent** (or a builder with spawn rights) to start the critic — `game-qc` Step 2 as written assumes spawn always works in-agent.
+2. **PR creation blocked in the builder.** `gh pr create` → *Resource not accessible by integration*; no `ManagePullRequest`. Extra human/parent hop just to open a draft.
+3. **CRITIC_SPAWN.md tip-sha churn.** Three commits only to refresh the spawn prompt SHA (`ed3cfc7`, `b337e8e`, `a1ec20b`) — noise; prompt should say `git rev-parse --short HEAD` once (final prompt does; earlier commits wasted cycles).
+4. **Skills not on `main`.** Builder had to base on the QC brainstorm branch so `game-playtest` exists. Landing games and landing the framework are coupled until #11 merges.
 
 ### Errors / skill gaps
 
--
+1. **`game-qc` does not define a fallback when spawn tools are missing** beyond “ask the owner.” For cloud subagents that is the common case — should say: write `CRITIC_SPAWN.md`, stop, parent spawns critic (which is what the builder improvised — promote that into the skill).
+2. **No ManagePullRequest / gh write in builder subagent** — skill says open/update PR; tool cannot. Document parent-opens-PR or grant the tool.
+3. PLAYTEST.md / recording / builder rounds **not started** — blocked on (1), not on game quality.
 
 ### What worked
 
--
+1. Fresh directory name `GroveRun` (not reusing an old chase name); port **5184**.
+2. Followed build order narrative: plan → scaffold → content → play → smoke → draw → …
+3. Gate 0 claimed PASS; browser suite claimed 0 console errors; did **not** claim playable without critic.
+4. Left a clear handoff artifact: `GroveRun/CRITIC_SPAWN.md`.
+5. Copied `game-playtest` onto the branch when needed for the critic.
+
+### Parent follow-up (this session)
+
+- Opened draft PR #12 for `cursor/grove-run-mvp-6c6d`.
+- Spawned [GroveRun polish critic](bc-021ac816-8eb7-5517-92e7-2669e92ac373) on that branch (cloud `computerUse`).
+- Awaiting critic `PLAYTEST.md` + recording; then builder rounds if `not_ready`.
+
+## Skill fixes to make (recommended)
+
+| Change | Where |
+|---|---|
+| Document “no spawn tools → write CRITIC_SPAWN.md and stop” as the standard path for subagents | `game-qc/SKILL.md` |
+| Document “no PR tool → push branch + compare URL; parent opens PR” | `game-qc` / `new-game` |
+| Merge QC skills to `main` before the next greenfield trial | PR #11 |
+| Avoid per-sha CRITIC_SPAWN commits | builder habit / spawn template |

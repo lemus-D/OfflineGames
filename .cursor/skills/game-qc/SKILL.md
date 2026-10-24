@@ -90,8 +90,18 @@ Spawn a **new** agent (`computerUse` / browser-capable). Point it at
 `.cursor/skills/game-playtest/SKILL.md`. Paste pitch, brief, port, sha, and
 `Mechanical suite: PASSED`.
 
-**Do not** run `game-playtest` in the builder context. If you cannot spawn,
-stop and ask the owner for a fresh playtest agent.
+**Do not** run `game-playtest` in the builder context.
+
+**If you cannot spawn** (common for cloud builder subagents with no Task /
+computerUse tools):
+
+1. Write `<Game>/CRITIC_SPAWN.md` containing the full spawn prompt (pitch,
+   brief, URL, branch, “Mechanical suite: PASSED”).
+2. Push the branch. Do **not** self-playtest and do **not** invent PLAYTEST.md.
+3. Stop QC here. Tell the parent/owner to spawn a fresh critic with that
+   file. Resume at Step 3 when PLAYTEST.md appears.
+4. If you also lack PR-creation tools (`ManagePullRequest` / `gh` write),
+   push the branch and paste a compare URL; the parent opens the PR.
 
 Wait for `<Game>/PLAYTEST.md`. Commit it if needed.
 
