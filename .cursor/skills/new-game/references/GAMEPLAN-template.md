@@ -92,4 +92,5 @@ Same house rules as the rest of the repo (`AGENTS.md`). Storage prefix
 cd <Game> && npm start
 cd <Game> && npm run smoke
 node .cursor/skills/game-qc/scripts/check-game.mjs <Game>
+# then game-qc spawns game-playtest → commits PLAYTEST.md (not in sw.js)
 ```

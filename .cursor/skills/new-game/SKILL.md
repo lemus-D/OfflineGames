@@ -135,9 +135,11 @@ The order matters because each step is testable without the next.
 
 ## Step 5 — Hand off to QC
 
-Run the `game-qc` skill. Do not open or update the PR as "playable" until
-gates 0 and 1 pass. Put the gate-2 scores, the measured proxies and the
-recording in the PR body.
+Run the `game-qc` skill. It will run gate 0, then spawn a fresh
+`game-playtest` critic (pitch + recording + `PLAYTEST.md`), then up to three
+builder response rounds. Do not open or update the PR as "playable" until
+gate 0 is green, PLAYTEST.md exists with gate 1 PASS, a recording/motion
+review is cited, and gate 2 meets the brief's `done_pct`.
 
 ## Things that have gone wrong before
 

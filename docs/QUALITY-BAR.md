@@ -47,8 +47,12 @@ pass/fail. The third is scored, and the score has to be backed by evidence.
 | Gate | Question | How it is answered |
 |---|---|---|
 | **0 — Honest** | Does the repo say true things about itself? | `check-game.mjs` + `npm run smoke`, both green |
-| **1 — A game** | Can a stranger open it and play a full loop? | Observed in a browser, with a recording or screenshots |
-| **2 — Fun** | Would they play a second run without being asked? | The rubric below, each line with a quoted observation |
+| **1 — A game** | Can a stranger open it and play a full loop? | Fresh `game-playtest` critic in a browser; committed `<Game>/PLAYTEST.md` plus a **recording** with motion review |
+| **2 — Fun** | Would they play a second run without being asked? | Same critic scores F1–F10 in PLAYTEST.md; each line needs a quoted observation |
+
+The builder who wrote the game does **not** fill gates 1–2. `game-qc`
+spawns a fresh critic (see `.cursor/skills/game-playtest/`). Claiming
+playable without PLAYTEST.md + recording is not allowed.
 
 ### How the gate-2 score works
 
@@ -97,9 +101,14 @@ progress; a run ends and a summary exists.
 
 ## Gate 1 — A game
 
-Observed in the running game by the agent, in a real browser, using the
-`Playwright` tools or a recording. A claim here without a screenshot, recording
-or console transcript does not count.
+Observed in the running game by a **fresh playtest critic** (not the builder),
+in a real browser, following `.cursor/skills/game-playtest/SKILL.md`. Results
+land in `<Game>/PLAYTEST.md`. A claim here without that file, a gameplay
+**recording**, and a motion-focused review of that recording does not count.
+Screenshots alone are not enough — motion is the common failure mode.
+
+The critic also judges **intent match** against the owner's original pitch in
+the plan. Design and content gaps versus the pitch/brief are in scope.
 
 - **Boots clean.** No console errors on load, on first input, on game over, on
   restart.
