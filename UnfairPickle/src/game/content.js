@@ -14,25 +14,25 @@ export const PICKLE = {
   w: 10,
   h: 14,
   accel: 2600,
-  maxRun: 160,
+  maxRun: 165,
   friction: 0.7,
   airFriction: 0.94,
   gravity: 1550,
   jumpVel: -560,
   cutJumpMul: 0.42,
-  coyote: 0.1,
-  buffer: 0.14,
+  coyote: 0.08,
+  buffer: 0.12,
   maxFall: 520,
 };
 
 /**
  * Seconds before brine starts rising. Idle / stall loses.
- * Per-level `brineGrace` overrides this (early levels get more learning time).
+ * Per-level `brineGrace` overrides this.
  */
 export const BRINE = {
-  grace: 55,
-  warnBefore: 10,
-  riseSpeed: 26,
+  grace: 48,
+  warnBefore: 8,
+  riseSpeed: 30,
   color: '#9cbc2e',
 };
 
@@ -40,6 +40,7 @@ export const BRINE = {
  * Tile legend (char → behaviour).
  * solid: collides  draw: how it looks (may differ — that's the unfair bit)
  * Spikes (^) belong in ground pits only — never floating mid-air.
+ * Invisible (?) ceilings are the "bonk" trap instead of floating spikes.
  */
 export const TILES = {
   '.': { id: 'empty', solid: false, draw: 'empty' },
@@ -48,10 +49,11 @@ export const TILES = {
   '=': { id: 'plat', solid: true, oneWay: true, draw: 'plat' },
   '^': { id: 'spike', solid: false, hazard: 'spike', draw: 'spike' },
   v: { id: 'fakeSpike', solid: false, draw: 'spike' },
-  '~': { id: 'fakeFloor', solid: false, draw: 'ground' }, // looks like ground
-  '*': { id: 'vanish', solid: true, vanish: true, draw: 'vanish' },
+  '~': { id: 'fakeFloor', solid: false, draw: 'ground' },
+  // Vanish looks like a normal brick — Unfair Mario style.
+  '*': { id: 'vanish', solid: true, vanish: true, draw: 'block' },
   '?': { id: 'invis', solid: true, invisible: true, draw: 'block' },
-  S: { id: 'spring', solid: true, spring: 620, draw: 'spring' },
+  S: { id: 'spring', solid: true, spring: 680, draw: 'spring' },
   G: { id: 'goal', solid: false, goal: true, draw: 'goal' },
   F: { id: 'fakeGoal', solid: false, hazard: 'fakeGoal', draw: 'goal' },
   C: { id: 'crumbly', solid: true, crumbly: true, draw: 'crumbly' },
@@ -60,158 +62,158 @@ export const TILES = {
 };
 
 /**
- * Levels sized for the jump budget above.
- * Gaps over open void are ≤ 6 tiles unless a spring / mid platform helps.
- * P = spawn, G = real goal, F = fake goal.
- * Spike pits sit on the ground row in open gaps (not floating).
+ * Harder Unfair-Mario-inspired maps.
+ * Denser lies, early fake flags, vanish-as-brick, invis bonk ceilings over bait —
+ * spikes stay in ground pits only (no floating mid-air rows).
+ * Gaps over void stay ≤ 5 tiles so a running jump still clears.
  */
 export const LEVELS = [
   {
     id: 'welcome',
     name: 'Welcome, Dill',
-    hint: 'Jump the gap. That grass is a lie.',
-    brineGrace: 90,
+    hint: 'Trust nothing. Especially the grass.',
+    brineGrace: 60,
     rows: [
-      // One lesson: fake floor over a pit. No floating spikes, no upper trap route.
+      // Two fake-floor pits. Second gap has an invis bonk if you leap too high.
       '........................................',
+      '......................????..............',
       '........................................',
-      '........................................',
-      '....P......~~~~...............G.........',
-      '###########....#########################',
-      '###########....#########################',
+      '....P......~~~~......~~~~.....G.........',
+      '###########....######....###############',
+      '###########....######....###############',
     ],
   },
   {
     id: 'looks-solid',
     name: 'Looks Solid',
-    hint: 'That floor ahead? Nope.',
-    brineGrace: 75,
+    hint: 'That floor ahead? Nope. Twice. And that flag?',
+    brineGrace: 55,
     rows: [
       '..............................................',
       '..............................................',
       '..............................................',
-      '....P.....~~~~~......BB........G..............',
-      '##########.....######..#######################',
-      '##########.....######..#######################',
+      '....P.....~~~~~..~~~~~..F....G................',
+      '##########....####....####..##################',
+      '##########....####....####..##################',
     ],
   },
   {
     id: 'fake-flag',
     name: 'The Other Flag',
-    hint: 'First flag is a lie.',
-    brineGrace: 70,
+    hint: 'First flag is a lie. So is the grass after it.',
+    brineGrace: 55,
     rows: [
-      // Open ground so the fake flag is the punchline — not a gauntlet first.
       '..............................................',
       '..............................................',
       '..............................................',
-      '....P...............F...........G.............',
-      '######################....####################',
-      '######################....####################',
+      '....P..........F......~~~~........G...........',
+      '################....####....##################',
+      '################....####....##################',
     ],
   },
   {
     id: 'vanish',
     name: 'Standing Room',
-    hint: 'Do not linger.',
-    brineGrace: 65,
+    hint: 'Do not linger. At all.',
+    brineGrace: 50,
     rows: [
-      // Vanish pads (purple X) — keep hopping; ~~ is a fake bridge lie.
+      // Vanish pads that look like bricks; ~~ mid-bridge is a lie.
       '..............................................',
       '..............................................',
       '..............................................',
       '....P.............~~~~................G.......',
-      '######..****..****..****..####################',
-      '######....................####################',
+      '######..****..****..****..****..##############',
+      '######..........................##############',
     ],
   },
   {
     id: 'ghost-bricks',
     name: 'Ghost Bricks',
     hint: 'Air that hits back.',
-    brineGrace: 65,
+    brineGrace: 50,
     rows: [
-      // Softer teach: short void, invisible bridge, then solid to goal. No spikes.
+      // Invisible bridge with a fake midsection; high invis ceiling over the void.
       '..............................................',
+      '..........????????............................',
       '..............................................',
-      '..............................................',
-      '....P.........????............G...............',
-      '######....................####################',
-      '######....................####################',
+      '....P.....????~~~~??????......G...............',
+      '######..................######################',
+      '######..................######################',
     ],
   },
   {
     id: 'spring-trap',
     name: 'Helpful Spring',
     hint: 'Helpful is relative.',
-    brineGrace: 60,
+    brineGrace: 48,
     rows: [
+      // Spring is bait under an invis ceiling — hop the pads, don't bounce.
       '..............................................',
-      '..............................................',
+      '..............????............................',
       '..............................................',
       '....P.............................G...........',
-      '######..****..S.****..****..##################',
+      '######..****..S.***..****..###################',
       '######......................##################',
     ],
   },
   {
     id: 'crumbly-path',
     name: 'Crumb Trail',
-    hint: 'Keep moving.',
-    brineGrace: 60,
+    hint: 'Keep moving. Or else.',
+    brineGrace: 48,
     rows: [
-      // Crumbly islands; fake floor in the long gap (no floating spikes).
+      // Crumbly ground-row pads; fake floor lies in the long gap.
       '..............................................',
       '..............................................',
       '..............................................',
-      '....P..CCCC..CCCC......CCCC....CCCC..G........',
-      '#####.............~~~~......................##',
-      '#####.......................................##',
+      '....P....................................G....',
+      '#####..CCCC..CCCC......CCCC....CCCC###########',
+      '#####.............~~~~........................',
     ],
   },
   {
     id: 'reverse',
     name: 'Brain Pickle',
-    hint: 'Left is right in the mist.',
-    brineGrace: 75,
+    hint: 'Left is right in the mist. Then the floor lies.',
+    brineGrace: 60,
     rows: [
-      // Mist on continuous solid ground — reverse is the only trick.
+      // Mist on solid ground, then a fake-floor pit before the goal.
       '..............................................',
       '..............................................',
       '..............................................',
-      '....P....RRRRRRRRRRRRRRRRRR...........G.......',
-      '##############################################',
-      '##############################################',
+      '....P....RRRRRRRRRRRRRRRRRR.....~~~~..G.......',
+      '################################....##########',
+      '################################....##########',
     ],
   },
   {
     id: 'combo',
     name: 'Everything Bagel',
-    hint: 'All of the above.',
-    brineGrace: 70,
+    hint: 'All of the above. Faster.',
+    brineGrace: 55,
     rows: [
-      // One segment per prior trick; ground spike pit only (not floating).
+      // One segment per prior trick; ground spike pit only; invis over early bait.
       '........................................................',
-      '........................................................',
+      '..............????......................................',
       '........................................................',
       '....P.....................F.................G...........',
-      '######..****~~CCCC....^^.#####..****..?.################',
-      '######...................#####........#..################',
+      '######..****~~CCCC....^^.#####..****?###################',
+      '######...................#####......####################',
     ],
   },
   {
     id: 'finale',
     name: 'Jar Escape',
     hint: 'One clean run. Or not.',
-    brineGrace: 70,
+    brineGrace: 60,
     rows: [
-      // Ground-row finale; thinned vs kitchen-sink — spike pit stays on the floor.
+      // Ground-row finale; invis ceiling over the early spike leap (punishes big jumps).
       '................................................................',
-      '................................................................',
+      '........????....................................................',
       '................................................................',
       '....P.........................F.................RRRR....G.......',
-      '######..^^..####~~****..CCCC#####..****..?.#####################',
-      '######......####........#####........#..#####################',
+      '######..^^..####~~****..CCCC#####..****?########################',
+      '######......####........#####......#############################',
     ],
   },
 ];

@@ -386,10 +386,10 @@ export class PlaySession {
 
   _standOn(cell) {
     if (cell.vanish && cell.timer <= 0) {
-      cell.timer = 0.55; // tense, but long enough to hop off
+      cell.timer = 0.45; // snappier than soft teach; still hoppable in a chain
     }
     if (cell.crumbly && cell.timer <= 0) {
-      cell.timer = 0.55;
+      cell.timer = 0.45;
     }
   }
 

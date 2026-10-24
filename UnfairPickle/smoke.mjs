@@ -124,7 +124,7 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
   assert(diedAt < grace + 30, `idle death before unbounded stall (${diedAt?.toFixed(1)}s)`);
 }
 
-// L1 clearable: jump the fake-floor gap on the ground path.
+// L1 clearable: two fake-floor gaps; short hop on the second (invis ceiling).
 {
   const s = new PlaySession(7, {}, { startLevel: 0 });
   let hop = 0;
@@ -143,7 +143,11 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
     let jump = false;
     if (x > 9.5 && x < 11.2 && s.player.onGround) {
       jump = true;
-      hop = 16;
+      hop = 10;
+    }
+    if (x > 19.5 && x < 21.2 && s.player.onGround) {
+      jump = true;
+      hop = 10;
     }
     const jumpHeld = hop > 0;
     if (hop > 0) hop -= 1;
@@ -233,14 +237,16 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
   assert(s.summary().time > 0, 'summary has time');
 }
 
-// L2 is completable: run + timed jumps over pits (fake bridge is a lie).
+// L2 is completable: two pits, then hop the fake flag.
 {
   const s = new PlaySession(11, {}, { startLevel: 1 });
   let steps = 0;
   let cleared = false;
+  let hop = 0;
   while (steps < 60 * 45) {
     if (s.status === 'dead') {
       s.step(1 / 60, { move: 0, jump: false, jumpHeld: false, restart: true });
+      hop = 0;
       steps += 1;
       continue;
     }
@@ -248,17 +254,23 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
       cleared = true;
       break;
     }
-    const x = s.player.x;
-    // Jump just before each pit (5-tile at ~10–14, 2-tile at ~21–22).
-    const nearGap = x > 8.5 * TILE && x < 10.5 * TILE;
-    const nearSecond = x > 19.2 * TILE && x < 21.0 * TILE;
-    const jump = (nearGap || nearSecond) && s.player.onGround;
-    s.step(1 / 60, {
-      move: 1,
-      jump,
-      jumpHeld: !s.player.onGround || jump,
-      restart: false,
-    });
+    const x = s.player.x / TILE;
+    let jump = false;
+    if (x > 8.5 && x < 10.5 && s.player.onGround) {
+      jump = true;
+      hop = 16;
+    }
+    if (x > 15.5 && x < 17.5 && s.player.onGround) {
+      jump = true;
+      hop = 16;
+    }
+    if (x > 22.5 && x < 24.5 && s.player.onGround) {
+      jump = true;
+      hop = 14;
+    }
+    const jumpHeld = hop > 0;
+    if (hop > 0) hop -= 1;
+    s.step(1 / 60, { move: 1, jump, jumpHeld, restart: false });
     steps += 1;
   }
   assert(
@@ -267,7 +279,7 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
   );
 }
 
-// L4 (vanish pads): hop the 2-tile pits, ignore the fake ~~ ledge.
+// L4 (vanish pads): hop the 2-tile pits, ignore the fake ~~ ledge above.
 {
   const s = new PlaySession(17, {}, { startLevel: 3 });
   let steps = 0;
@@ -289,7 +301,8 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
       (x > 5.3 * TILE && x < 6.8 * TILE) ||
       (x > 11.3 * TILE && x < 12.8 * TILE) ||
       (x > 17.3 * TILE && x < 18.8 * TILE) ||
-      (x > 23.3 * TILE && x < 24.8 * TILE);
+      (x > 23.3 * TILE && x < 24.8 * TILE) ||
+      (x > 29.3 * TILE && x < 30.8 * TILE);
     let jump = false;
     if (nearPit && s.player.onGround) {
       jump = true;
@@ -345,28 +358,93 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
   );
 }
 
-// L8 (reverse mist): continuous floor under mist; flip move in R, walk to G.
+// L7 (crumbly path): short hops between ground-row pads; ignore ~~ lie.
+{
+  const s = new PlaySession(21, {}, { startLevel: 6 });
+  let steps = 0;
+  let cleared = false;
+  let hop = 0;
+  let landed = false;
+  while (steps < 60 * 35) {
+    if (s.status === 'dead') {
+      s.step(1 / 60, { move: 0, jump: false, jumpHeld: false, restart: true });
+      hop = 0;
+      landed = false;
+      steps += 1;
+      continue;
+    }
+    if (s.status === 'cleared' || s.levelIndex > 6) {
+      cleared = true;
+      break;
+    }
+    const x = s.player.x / TILE;
+    let jump = false;
+    let move = 1;
+    if (!landed) {
+      move = 0;
+      if (s.player.onGround) landed = true;
+    } else {
+      if (x > 5.0 && x < 6.5 && s.player.onGround) {
+        jump = true;
+        hop = 8;
+      }
+      if (x > 10.8 && x < 12.5 && s.player.onGround) {
+        jump = true;
+        hop = 8;
+      }
+      if (x > 16.5 && x < 20.0 && s.player.onGround) {
+        jump = true;
+        hop = 14;
+      }
+      if (x > 26.5 && x < 28.5 && s.player.onGround) {
+        jump = true;
+        hop = 8;
+      }
+    }
+    const jumpHeld = hop > 0;
+    if (hop > 0) hop -= 1;
+    s.step(1 / 60, { move, jump, jumpHeld, restart: false });
+    steps += 1;
+  }
+  assert(
+    cleared,
+    `L7 completable (status=${s.status} x=${s.player.x.toFixed(0)} deaths=${s.deaths})`
+  );
+}
+
+// L8 (reverse mist): solid under mist, then hop the fake-floor pit before G.
 {
   const s = new PlaySession(23, {}, { startLevel: 7 });
   let steps = 0;
   let cleared = false;
   let mistSteps = 0;
+  let hop = 0;
   while (steps < 60 * 35) {
     if (s.status === 'dead') {
-      assert(false, `L8 must not die on solid mist floor (reason=${s.deathReason})`);
+      s.step(1 / 60, { move: 0, jump: false, jumpHeld: false, restart: true });
+      hop = 0;
+      steps += 1;
+      continue;
     }
     if (s.status === 'cleared' || s.levelIndex > 7) {
       cleared = true;
       break;
     }
-    const x = s.player.x;
+    const x = s.player.x / TILE;
     const ty = Math.floor(s.player.y / TILE);
-    const tx = Math.floor(x / TILE);
+    const tx = Math.floor(s.player.x / TILE);
     const cell = s.level.grid[ty]?.[tx];
     const inMist = !!(cell && cell.reverse);
     if (inMist) mistSteps += 1;
     const move = inMist ? -1 : 1;
-    s.step(1 / 60, { move, jump: false, jumpHeld: false, restart: false });
+    let jump = false;
+    if (x > 31.5 && x < 33.5 && s.player.onGround) {
+      jump = true;
+      hop = 14;
+    }
+    const jumpHeld = hop > 0;
+    if (hop > 0) hop -= 1;
+    s.step(1 / 60, { move, jump, jumpHeld, restart: false });
     steps += 1;
   }
   assert(mistSteps > 30, `L8 walks through mist (${mistSteps} steps in R)`);
@@ -415,13 +493,9 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
       jump = true;
       hopFrames = 14;
     }
-    if (x > 34.5 && x < 36.5 && s.player.onGround) {
+    if (x > 34.0 && x < 36.0 && s.player.onGround) {
       jump = true;
-      hopFrames = 14;
-    }
-    if (x > 37.0 && x < 39.0 && s.player.onGround) {
-      jump = true;
-      hopFrames = 14;
+      hopFrames = 12;
     }
     const jumpHeld = hopFrames > 0;
     if (hopFrames > 0) hopFrames -= 1;
@@ -454,33 +528,30 @@ const idle = { move: 0, jump: false, jumpHeld: false, restart: false };
     }
     const x = s.player.x / TILE;
     let jump = false;
-    if (x > 5.2 && x < 6.8 && s.player.onGround) {
+    // Short hop over spikes (invis ceiling punishes big leaps).
+    if (x > 5.5 && x < 7.0 && s.player.onGround) {
       jump = true;
-      hopFrames = 18;
+      hopFrames = 10;
     }
     if (x > 14.5 && x < 16.5 && s.player.onGround) {
       jump = true;
-      hopFrames = 14;
+      hopFrames = 10;
     }
     if (x > 21.5 && x < 23.5 && s.player.onGround) {
       jump = true;
-      hopFrames = 14;
+      hopFrames = 10;
     }
-    if (x > 28.2 && x < 29.8 && s.player.onGround) {
+    if (x > 27.5 && x < 29.5 && s.player.onGround) {
       jump = true;
       hopFrames = 16;
     }
-    if (x > 32.5 && x < 34.5 && s.player.onGround) {
+    if (x > 33.5 && x < 35.5 && s.player.onGround) {
       jump = true;
-      hopFrames = 14;
+      hopFrames = 12;
     }
-    if (x > 38.5 && x < 40.5 && s.player.onGround) {
+    if (x > 37.5 && x < 39.5 && s.player.onGround) {
       jump = true;
-      hopFrames = 14;
-    }
-    if (x > 41.5 && x < 43.5 && s.player.onGround) {
-      jump = true;
-      hopFrames = 14;
+      hopFrames = 10;
     }
     const tx = Math.floor(s.player.x / TILE);
     const ty = Math.floor(s.player.y / TILE);
