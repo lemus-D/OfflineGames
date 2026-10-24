@@ -26,6 +26,7 @@ doctrine, not necessarily its structure.
 | `Apex/` | Playable MVP on `main`; current scaffold source | 5182 | `apex.v1.` |
 | `Break/` | MVP on branch `cursor/pool-game-mvp-d1a5` | 5183 | `break.v1.` |
 | `RabbitRun/` | MVP on branch `cursor/rabbit-run-mvp-c55d` | 5183 (collides with Break) | `rabbit.v1.` |
+| `GroveRun/` | Playable MVP in progress | 5184 | `grove-run.v1.` |
 
 No game in this repo has been approved as "done" yet. Until one is,
 `moon-rover` is the reference for *feel* and `Apex/` is the reference for
