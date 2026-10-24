@@ -59,16 +59,16 @@ export const PICKUPS = {
 
 export const FOX = {
   /** Starting gap behind bunny (world units along path). */
-  startGap: 140,
+  startGap: 150,
   /** Gap closes this much on a stumble (hit soft). */
-  stumbleClose: 48,
+  stumbleClose: 42,
   /** Soft hit: lose this much gap; if gap ≤ catchGap → caught. */
-  catchGap: 18,
+  catchGap: 16,
   /** Passive close rate (units / sec) so idle pressure exists even without hits. */
-  creepPerSec: 1.2,
+  creepPerSec: 0.9,
   /** Gap opens slowly while clean running. */
-  recoverPerSec: 2.8,
-  maxGap: 180,
+  recoverPerSec: 3.2,
+  maxGap: 190,
   minVisualGap: 8,
 };
 

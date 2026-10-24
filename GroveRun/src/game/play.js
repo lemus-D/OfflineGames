@@ -200,23 +200,31 @@ export class PlaySession {
     const z = atDist - this.distance + 280;
     if (z < 40) return;
 
-    // Guarantee an early carrot.
+    // Guarantee an early carrot on mid lane (readable first reward < 5 s).
     if (!this._carrotGiven && atDist >= this._firstCarrotAt - 5) {
       this._carrotGiven = true;
       this.entities.push({
         id: this._nextId++,
         kind: 'carrot',
-        lane: LANES[Math.floor(this.rng() * 3)],
+        lane: 0,
         z,
         dead: false,
       });
-      // Also a soft obstacle nearby so idle fails.
-      const obsLane = LANES[Math.floor(this.rng() * 3)];
+      // Soft obstacle in a side lane so idle still fails soon after.
+      const obsLane = this.rng() < 0.5 ? -1 : 1;
       this.entities.push({
         id: this._nextId++,
         kind: 'log',
         lane: obsLane,
-        z: z + 55,
+        z: z + 70,
+        dead: false,
+      });
+      // Mid-lane rock shortly after so standing still still dies.
+      this.entities.push({
+        id: this._nextId++,
+        kind: 'rock',
+        lane: 0,
+        z: z + 130,
         dead: false,
       });
       return;

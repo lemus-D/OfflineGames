@@ -74,68 +74,36 @@ assert(FIXED_DT > 0 && FIXED_DT < 0.05, 'FIXED_DT is arcade timestep');
   assert(gotCarrot || s.distance > RUN.firstCarrotDist, 'carrot opportunity inside early window');
 }
 
-// Scripted dodge player survives longer and scores.
+// Scripted player: collect a carrot and dodge a rock via lane change.
 {
-  function botStep(s) {
-    const p = s.player;
+  const s = new PlaySession(55);
+  s.entities = [
+    { id: 1, kind: 'carrot', lane: 0, z: 40, dead: false },
+    { id: 2, kind: 'rock', lane: 0, z: 95, dead: false },
+    { id: 3, kind: 'log', lane: 1, z: 140, dead: false },
+  ];
+  s._spawnAt = s.distance + 9999; // freeze natural spawns
+  let steps = 0;
+  while (s.player.alive && steps < 60 * 8) {
     let laneDelta = 0;
     let jump = false;
-    // Find nearest threat in path.
-    let threat = null;
-    let bestZ = Infinity;
-    for (const e of s.entities) {
-      if (e.dead || e.kind === 'carrot') continue;
-      if (e.z > 0 && e.z < bestZ) {
-        bestZ = e.z;
-        threat = e;
+    const threats = s.entities
+      .filter((e) => !e.dead && e.kind !== 'carrot' && e.z > 0 && e.z < 55)
+      .sort((a, b) => a.z - b.z);
+    const hit = threats.find((e) => e.lane === s.player.lane);
+    if (hit) {
+      if (OBSTACLES[hit.kind].dodge === 'jump') jump = true;
+      else {
+        const want = hit.lane === 0 ? -1 : 0;
+        if (want !== s.player.lane) laneDelta = want > s.player.lane ? 1 : -1;
       }
-    }
-    // Prefer carrots in clear lanes.
-    let carrot = null;
-    for (const e of s.entities) {
-      if (e.kind === 'carrot' && !e.dead && e.z > 5 && e.z < 80) {
-        carrot = e;
-        break;
-      }
-    }
-    if (threat && threat.z < 50) {
-      const def = OBSTACLES[threat.kind];
-      if (threat.lane === p.lane) {
-        if (def.dodge === 'jump' || (def.dodge === 'either' && Math.abs(threat.lane) === 1)) {
-          jump = true;
-        } else {
-          // Change lane away from threat — pick a free lane.
-          const blocked = new Set(
-            s.entities
-              .filter((e) => e.kind !== 'carrot' && !e.dead && Math.abs(e.z - threat.z) < 20)
-              .map((e) => e.lane)
-          );
-          for (const lane of [-1, 0, 1]) {
-            if (!blocked.has(lane) && lane !== p.lane) {
-              laneDelta = lane - p.lane;
-              break;
-            }
-          }
-          if (laneDelta === 0 && def.dodge === 'either') jump = true;
-        }
-      }
-    } else if (carrot && carrot.lane !== p.lane && Math.abs(carrot.lane - p.lane) === 1) {
-      laneDelta = carrot.lane - p.lane;
     }
     s.step(FIXED_DT, { laneDelta, jump });
+    steps += 1;
   }
-
-  const idle = new PlaySession(99);
-  const bot = new PlaySession(99);
-  for (let i = 0; i < 60 * 8; i++) {
-    if (idle.player.alive) idle.step(FIXED_DT, { laneDelta: 0, jump: false });
-    if (bot.player.alive) botStep(bot);
-  }
-  assert(
-    bot.score > idle.score || bot.distance > idle.distance * 0.9,
-    `scripted player progresses (bot=${bot.score}/${bot.distance.toFixed(0)} idle=${idle.score}/${idle.distance.toFixed(0)})`
-  );
-  assert(bot.carrots >= 0, 'bot carrot count is finite');
+  assert(s.carrots >= 1, `scripted player grabs carrot (c=${s.carrots})`);
+  assert(s.distance > 200, `scripted player clears early rock (d=${s.distance.toFixed(0)})`);
+  assert(s.score > 0, 'scripted player has score');
 }
 
 // Determinism: same seed + inputs → same outcome.

@@ -62,11 +62,13 @@ export function drawBackground(g, W, H, distance, threat) {
 export function drawPath(g, W, H, distance) {
   const horizon = H * 0.28;
   const bottom = H * 0.95;
+  // Gentle wind so the path reads as a winding woodland trail.
+  const wind = Math.sin(distance * 0.012) * W * 0.04;
   g.beginPath();
-  g.moveTo(W * 0.5 - 20, horizon);
-  g.lineTo(W * 0.5 + 20, horizon);
-  g.lineTo(W * 0.92, bottom);
-  g.lineTo(W * 0.08, bottom);
+  g.moveTo(W * 0.5 - 20 + wind * 0.3, horizon);
+  g.lineTo(W * 0.5 + 20 + wind * 0.3, horizon);
+  g.lineTo(W * 0.92 + wind, bottom);
+  g.lineTo(W * 0.08 + wind, bottom);
   g.closePath();
   g.fillStyle = PALETTE.path;
   g.fill();
@@ -79,8 +81,8 @@ export function drawPath(g, W, H, distance) {
   g.lineWidth = 1.5;
   for (const lane of [-0.5, 0.5]) {
     g.beginPath();
-    g.moveTo(W * 0.5 + lane * 12, horizon + 8);
-    g.lineTo(W * 0.5 + lane * W * 0.28, bottom);
+    g.moveTo(W * 0.5 + lane * 12 + wind * 0.3, horizon + 8);
+    g.lineTo(W * 0.5 + lane * W * 0.28 + wind, bottom);
     g.stroke();
   }
 
@@ -89,8 +91,8 @@ export function drawPath(g, W, H, distance) {
   g.setLineDash([16, 24]);
   g.lineDashOffset = -dashScroll;
   g.beginPath();
-  g.moveTo(W * 0.5, horizon + 6);
-  g.lineTo(W * 0.5, bottom);
+  g.moveTo(W * 0.5 + wind * 0.3, horizon + 6);
+  g.lineTo(W * 0.5 + wind, bottom);
   g.stroke();
   g.setLineDash([]);
 }
