@@ -137,11 +137,23 @@ if (existsSync(swPath)) {
     const stale = listed.filter((f) => !existsSync(path.join(GAME, f)));
     check(missing.length === 0, `sw.js precaches every shipped file${missing.length ? ' — missing: ' + missing.join(', ') : ''}`);
     check(stale.length === 0, `sw.js lists only files that exist${stale.length ? ' — stale: ' + stale.join(', ') : ''}`);
+    const nonShipped = listed.filter((f) => /(^|\/)PLAYTEST\.md$/i.test(f) || /(^|\/).*PLAN\.md$/i.test(f));
+    check(
+      nonShipped.length === 0,
+      `sw.js does not precache critic/plan docs${nonShipped.length ? ' — remove: ' + nonShipped.join(', ') : ''}`
+    );
     const cache = sw.match(/CACHE\s*=\s*['"`]([^'"`]+)['"`]/);
     if (!cache) fail('sw.js has no versioned CACHE name');
     else if (!/-v\d+$/.test(cache[1])) warn(`CACHE name "${cache[1]}" is not versioned like "<game>-vN"`);
     else ok(`sw.js cache name versioned: ${cache[1]}`);
   }
+}
+
+// PLAYTEST.md is the critic report: allowed in the game dir, never shipped.
+if (existsSync(path.join(GAME, 'PLAYTEST.md'))) {
+  ok('PLAYTEST.md present (critic report; not a shipped asset)');
+} else {
+  warn('no PLAYTEST.md yet — required before claiming playable (game-qc / game-playtest)');
 }
 
 // --- Saves ------------------------------------------------------------------

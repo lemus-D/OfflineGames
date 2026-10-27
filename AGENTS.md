@@ -33,7 +33,7 @@ No game in this repo has been approved as "done" yet. Until one is,
 *scaffold*. `docs/QUALITY-BAR.md` says what approval means and how the
 reference moves when a game earns it.
 
-## Two workflows
+## Three workflows
 
 - **Starting a game from a pitch** → use the `new-game` skill
   (`.cursor/skills/new-game/`). It asks the owner a short questionnaire (the
@@ -41,10 +41,12 @@ reference moves when a game earns it.
   answers into the plan, copies the scaffold from the reference game, and sets
   the build order. The brief is asked, never guessed.
 - **Before saying any game or change is done** → use the `game-qc` skill
-  (`.cursor/skills/game-qc/`). It runs the mechanical gates, then plays the
-  game against `docs/QUALITY-BAR.md` and the game's QC brief, then does a feel
-  pass. A game is not done because it compiles; it is done when the gates pass
-  and the claims in the PR were observed.
+  (`.cursor/skills/game-qc/`). It runs gate 0, a **browser mechanical suite**
+  (console errors — not the critic's job), then **spawns a fresh**
+  `game-playtest` polish critic that judges art/finish and pitch match so
+  half-baked games never reach the owner. Verdict `ready_for_owner` or
+  `not_ready`; commits `<Game>/PLAYTEST.md`. Up to three builder rounds.
+- **Independent polish playtest** → `game-playtest` in a fresh agent.
 
 `CLAUDE.md` is a one-line pointer to this file so Claude Code reads the same
 instructions.
@@ -83,13 +85,14 @@ game's plan.
 
 ```
 <Game>/
-  <GAME>PLAN.md          loop, controls, non-goals, open questions
+  <GAME>PLAN.md          loop, controls, QC brief, non-goals, open questions
+  PLAYTEST.md            critic report (committed; NOT shipped / not in sw.js)
   index.html             shell, HUD markup, inline CSS, inline SVG icon
   manifest.webmanifest   installable; icons are data: URIs
   sw.js                  precache list — every file under src/ must be listed
   server.js              zero-dependency static server, unique default port
   package.json           scripts: start, smoke
-  smoke.mjs              headless checks: no Math.random, determinism, the loop
+  smoke.mjs              headless checks (per-game; genres differ)
   src/main.js            boot, menus, frame loop, DOM HUD, SW registration
   src/core/rng.js        seeded PRNG (+ noise if needed)
   src/core/save.js       the only file that touches localStorage
@@ -124,6 +127,8 @@ name must be bumped whenever a precached file changes.
 | `docs/TECHNICAL-DECISIONS.md` | Settled decisions and why, so they aren't re-opened. **Read before building.** |
 | `docs/QUALITY-BAR.md` | What a good game is here, the fun rubric, and which game is the current reference. |
 | `docs/PLATFORM-CONSTRAINTS.md` | What the browser actually permits, all of it measured. |
+| `docs/QC-WORKFLOW-BRAINSTORM.md` | Why the critic loop exists and the locked owner decisions behind it. |
 | `<Game>/<GAME>PLAN.md` | Per-game design and open questions. |
+| `<Game>/PLAYTEST.md` | Latest critic playtest (not part of the PWA). |
 | `tools/qa/README.md` | Playtest harness: bot ladder, browser probes, the per-game adapter contract. |
 | `spikes/` | Runnable proofs of technique, not game code. |
