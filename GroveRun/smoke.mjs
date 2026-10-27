@@ -22,6 +22,7 @@ for (const file of [
   'src/core/input.js',
   'src/core/save.js',
   'src/core/audio.js',
+  'src/core/qa.js',
   'src/main.js',
 ]) {
   const src = readFileSync(new URL(file, import.meta.url), 'utf8')

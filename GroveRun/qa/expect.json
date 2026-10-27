@@ -1,0 +1,31 @@
+{
+  "firstRewardS": 5,
+  "idleDiesWithinS": 30,
+  "events": [
+    {
+      "bot": "humanish",
+      "kind": "reward",
+      "minPerMin": 6,
+      "why": "Plan loop: carrots every few seconds."
+    },
+    {
+      "bot": "humanish",
+      "kind": "danger",
+      "minPerRun": 1,
+      "why": "Pitch: the fox should feel predatory, so a decent player should be threatened at least once a run."
+    }
+  ],
+  "rects": [
+    {
+      "rule": "visible",
+      "role": "fox",
+      "why": "Pitch: a fox is always behind you."
+    },
+    {
+      "rule": "below",
+      "a": "fox",
+      "b": "player",
+      "why": "Pitch: the fox chases from behind. With the camera behind the bunny, behind means lower on screen."
+    }
+  ]
+}

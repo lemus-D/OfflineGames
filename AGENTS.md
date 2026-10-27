@@ -95,9 +95,12 @@ game's plan.
   src/core/save.js       the only file that touches localStorage
   src/core/input.js      keyboard + pointer/touch → one controls object
   src/core/audio.js      procedural WebAudio, gated on user gesture
+  src/core/qa.js         tools/qa hook; inert unless the URL has ?qa=1
   src/game/content.js    data tables and constants, including FIXED_DT
   src/game/play.js       PlaySession: pure simulation, no DOM, no canvas
   src/game/draw.js       Canvas 2D rendering from session state
+  qa/adapter.mjs         translates the game for tools/qa bots (not shipped)
+  qa/expect.json         the plan's promises as numbers (not shipped)
 ```
 
 ## Commands
@@ -107,6 +110,7 @@ git submodule update --init --depth 1       # fetch moon-rover
 cd <Game> && npm start                       # dev server on the game's port
 cd <Game> && npm run smoke                   # headless checks
 node .cursor/skills/game-qc/scripts/check-game.mjs <Game>   # mechanical gates
+node tools/qa/run.mjs <Game>                 # bots + browser probes → tools/qa/out/<Game>/<sha>/report.md
 ```
 
 Service workers need a secure context, so a PWA cannot be tested from
@@ -121,4 +125,5 @@ name must be bumped whenever a precached file changes.
 | `docs/QUALITY-BAR.md` | What a good game is here, the fun rubric, and which game is the current reference. |
 | `docs/PLATFORM-CONSTRAINTS.md` | What the browser actually permits, all of it measured. |
 | `<Game>/<GAME>PLAN.md` | Per-game design and open questions. |
+| `tools/qa/README.md` | Playtest harness: bot ladder, browser probes, the per-game adapter contract. |
 | `spikes/` | Runnable proofs of technique, not game code. |

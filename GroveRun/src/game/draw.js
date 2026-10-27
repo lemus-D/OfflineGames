@@ -2,6 +2,7 @@
 
 import { hash2i } from '../core/rng.js';
 import { PALETTE, LANE_WIDTH, OBSTACLES, FOX, BUNNY } from './content.js';
+import { qa } from '../core/qa.js';
 
 /** Perspective helper: z along path → screen. */
 function project(lanePos, z, height, W, H) {
@@ -114,6 +115,8 @@ export function drawBunny(g, W, H, player, animT) {
   const s = 18 * scale;
   const bob = Math.sin(animT * 10) * (player.jumping ? 0 : 1.2);
 
+  qa.rect('player', x - s * 0.7, y + bob - s * 1.77, s * 1.4, s * 2.32);
+
   g.save();
   g.translate(x, y + bob);
 
@@ -164,6 +167,8 @@ export function drawFox(g, W, H, foxGap, threat, animT) {
   const { x, y, scale } = project(0, Math.min(280, z), 0, W, H);
   const s = (16 + threat * 10) * scale;
   const lunge = threat > 0.7 ? Math.sin(animT * 14) * 3 : 0;
+
+  qa.rect('fox', x - s * 1.9, y + 8 * scale + lunge - s * 1.25, s * 3.15, s * 1.7);
 
   g.save();
   g.translate(x, y + 8 * scale + lunge);
@@ -237,6 +242,7 @@ export function drawEntity(g, W, H, e) {
 
   if (e.kind === 'carrot') {
     const s = 10 * scale;
+    qa.rect('pickup', x - s * 0.55, y - s * 1.15, s * 1.1, s * 2.05);
     inkShape(g, PALETTE.carrot, () => {
       g.beginPath();
       g.moveTo(0, s * 0.9);
@@ -257,6 +263,7 @@ export function drawEntity(g, W, H, e) {
     const def = OBSTACLES[e.kind] || OBSTACLES.log;
     const w = def.width * 0.5 * scale;
     const h = def.height * scale;
+    qa.rect('hazard', x - w, y - h * 1.05, w * 2, h * 1.05);
     if (e.kind === 'rock') {
       inkShape(g, '#5a6678', () => {
         g.beginPath();

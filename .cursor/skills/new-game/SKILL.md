@@ -96,7 +96,8 @@ Copy from `Apex/`, then rename. Nothing is shared at runtime (D7).
 | `manifest.webmanifest` | Apex | name, description, colours, draw a new inline SVG icon |
 | `package.json` | Apex | `name` |
 | `index.html` | Apex | title, inline icon, HUD markup, hint line, palette |
-| `src/core/rng.js` | Apex (or Sharky if you need noise) | nothing |
+| `src/core/rng.js` | Apex (or Sharky if you need noise) | nothing — it must keep `clone()` so bots can copy sessions |
+| `src/core/qa.js` | `tools/qa/templates/qa.js` | nothing; add to `PRECACHE` and wire it in (`tools/qa/README.md`) |
 | `src/core/save.js` | Apex | `PROFILE_KEY = '<game>.v1.profile'`, `DEFAULT_PROFILE` fields |
 | `src/core/input.js` | **Sharky** | map to your controls; keep the families the brief requires (default: pointer + touch + keyboard) |
 | `src/core/audio.js` | **Sharky** | your sound set at the brief's level; skip the file only if the brief says `sound: none` |
@@ -105,6 +106,8 @@ Copy from `Apex/`, then rename. Nothing is shared at runtime (D7).
 | `src/game/draw.js` | Apex | your art |
 | `src/main.js` | Apex | wiring |
 | `smoke.mjs` | Apex | your assertions |
+| `qa/adapter.mjs` | `GroveRun/qa/adapter.mjs` | your actions, events, score, invariants — no strategy |
+| `qa/expect.json` | `GroveRun/qa/expect.json` | the plan's own promises as numbers (first reward, pressure, what must be on screen) |
 
 Check the directory name and the storage prefix against the table in
 `AGENTS.md` so they do not collide with an existing game.

@@ -5,6 +5,7 @@ import { Save } from './core/save.js';
 import { Audio } from './core/audio.js';
 import { PlaySession } from './game/play.js';
 import { drawFrame } from './game/draw.js';
+import { qa } from './core/qa.js';
 
 const canvas = document.getElementById('stage');
 const g = canvas.getContext('2d', { alpha: false, desynchronized: true });
@@ -76,7 +77,7 @@ function startRun() {
   audio.init();
   audio.resume();
   audio.click();
-  const seed = (Date.now() ^ (performance.now() * 1000)) >>> 0;
+  const seed = qa.seed((Date.now() ^ (performance.now() * 1000)) >>> 0);
   session = new PlaySession(seed, {
     onDeath() {
       endRun();
@@ -128,6 +129,7 @@ function endRun() {
 function drainAudio() {
   if (!session) return;
   for (const ev of session.drainEvents()) {
+    qa.record(ev);
     if (ev.kind === 'lane') audio.lane();
     else if (ev.kind === 'jump') audio.jump();
     else if (ev.kind === 'carrot') audio.carrot();
@@ -167,6 +169,7 @@ function frame(ts) {
   lastTs = ts;
   animTime += dt;
 
+  qa.beginFrame();
   clearFrame();
 
   if (state === 'menu') {
@@ -174,16 +177,17 @@ function frame(ts) {
     drawAttract(dt);
   } else if (state === 'playing' && session) {
     const controls = input.controls();
-    session.step(dt, controls);
+    if (qa.replaying()) qa.step(session, dt);
+    else session.step(dt, controls);
     drainAudio();
     hudAccum += dt;
     if (hudAccum >= HUD_DT) {
       hudAccum = 0;
       updateHud();
     }
-    drawFrame(g, W, H, session, animTime);
+    drawFrame(g, W, H, session, qa.clock(animTime));
   } else if (state === 'summary' && session) {
-    drawFrame(g, W, H, session, animTime);
+    drawFrame(g, W, H, session, qa.clock(animTime));
   }
 
   input.endFrame();
@@ -205,6 +209,7 @@ function drawAttract(dt) {
   drawFrame(g, W, H, attract, animTime);
 }
 
+qa.expose({ state: () => state });
 refreshMenuMeta();
 resize();
 requestAnimationFrame(frame);
