@@ -156,6 +156,13 @@ if (existsSync(path.join(GAME, 'PLAYTEST.md'))) {
   warn('no PLAYTEST.md yet — required before claiming playable (game-qc / game-playtest)');
 }
 
+// tools/qa needs an adapter before the harness (and so the critic) can run.
+if (existsSync(path.join(GAME, 'qa', 'adapter.mjs'))) {
+  ok('qa/adapter.mjs present (tools/qa harness can run)');
+} else {
+  warn('no qa/adapter.mjs — tools/qa cannot play this game yet (see tools/qa/README.md)');
+}
+
 // --- Saves ------------------------------------------------------------------
 
 const savePath = path.join(GAME, 'src/core/save.js');

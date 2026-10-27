@@ -41,12 +41,19 @@ reference moves when a game earns it.
   answers into the plan, copies the scaffold from the reference game, and sets
   the build order. The brief is asked, never guessed.
 - **Before saying any game or change is done** → use the `game-qc` skill
-  (`.cursor/skills/game-qc/`). It runs gate 0, a **browser mechanical suite**
-  (console errors — not the critic's job), then **spawns a fresh**
-  `game-playtest` polish critic that judges art/finish and pitch match so
-  half-baked games never reach the owner. Verdict `ready_for_owner` or
-  `not_ready`; commits `<Game>/PLAYTEST.md`. Up to three builder rounds.
-- **Independent polish playtest** → `game-playtest` in a fresh agent.
+  (`.cursor/skills/game-qc/`). It runs gate 0, then the **`tools/qa`
+  harness** (bots and browser probes — free) until it is green, then
+  **spawns a fresh** `game-critic` agent that judges art, finish and pitch
+  match from the harness report and screenshots. Verdict `ready_for_owner`
+  or `not_ready` in `<Game>/PLAYTEST.md`. Up to three builder rounds; the
+  final one records video and goes to `game-art-director`.
+- **Independent polish playtest** → the `game-critic` agent
+  (`game-playtest` skill) on an existing harness run.
+
+Skills live in `.cursor/skills/`; `.claude/skills` links to them so Claude
+Code reads the same files. The critic agents have one thin file per
+platform (`.claude/agents/`, `.cursor/agents/`) that only sets the model,
+tools and turn cap.
 
 `CLAUDE.md` is a one-line pointer to this file so Claude Code reads the same
 instructions.

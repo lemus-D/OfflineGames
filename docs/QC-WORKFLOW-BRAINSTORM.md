@@ -1,9 +1,9 @@
 # QC workflow brainstorm — playtest agents and harder gates
 
 > Branch: `cursor/qc-playtest-brainstorm-6c6d`
-> Status: **skills implemented and refocused** — critic = minimum polish bar
-> (`ready_for_owner`); console/mechanical browser checks = orchestrator suite.
-> Smoke (#3) left alone; CI (#4) deferred.
+> Status: **superseded in part by `tools/qa`** (2026-10-27). Bots and browser
+> probes now do the measuring for free; the critic judges taste from the
+> harness report. #3 reopened, #7 narrowed — see the table. CI (#4) deferred.
 
 Why this exists: gate 0 (`check-game.mjs` + smoke) is honest about the house
 rules, but “playable / fun / done” still depends on the *same* coding agent
@@ -18,11 +18,11 @@ That is the weak joint. This note proposes a sharper workflow.
 |---|---|---|---|
 | 1 | Critic | **Fresh agent, critical** | Sees the **original pitch/prompt** + plan/brief; judges the build against that intent, not against the builder’s excuses. Stance: skeptical player, not co-author. |
 | 2 | Report location | **Commit** `PLAYTEST.md` | Keep out of SW precache. Videos may still live in artifact store; checklist + complaints + scores in git. |
-| 3 | Smoke hardening | **Leave alone** | Games differ (arcade vs turn-based). Do not force one arcade smoke contract. Critic + recording carry quality. |
+| 3 | Smoke hardening → **bot tier** | **Reopened 2026-10-27: bot tier** | Not one arcade smoke contract: a per-game `qa/adapter.mjs` and genre profiles (`arcade`, `turn`) in `tools/qa`. Bots measure; the critic judges taste. Smoke stays per-game. |
 | 4 | CI for gate 0 | **Deferred** | Owner: ignore for now. Revisit after the critic loop works. |
 | 5 | Critic rounds | **3** | Design **and** content complaints are **in scope** — do not stop / ignore them as “not feel.” Escalate to owner only when a change needs a taste call the brief does not cover. |
 | 6 | Trial game | **Owner will pitch a new game** | Do not trial on Apex/Sharky/UnfairPickle first. New title exercises `new-game` → build → critic end-to-end. |
-| 7 | Recording / motion | **Required now** | Motion is the common fail. Playtest must record; a vision/`videoReview` pass on that recording is part of the critic loop, not a later nice-to-have. |
+| 7 | Recording / motion | **Final round only** (2026-10-27) | Saves credits. `run.mjs --final` records `recording.webm` for the owner and a 16-frame filmstrip the art director reviews for motion. Earlier rounds use key-moment screenshots; ghosting and frame time are probes every round. |
 
 ### Implications for the playtest agent (from #1, #5, #7)
 

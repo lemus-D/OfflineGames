@@ -47,7 +47,7 @@ pass/fail. The third is scored, and the score has to be backed by evidence.
 | Gate | Question | How it is answered |
 |---|---|---|
 | **0 — Honest** | Does the repo say true things about itself? | `check-game.mjs` + `npm run smoke`, both green |
-| **0b — Browser mechanical** | Does it boot without console errors through a loop? | Orchestrator Playwright/browser suite in `game-qc` (not the critic) |
+| **0b — Harness** | Does it measure right — bots and browser? | `node tools/qa/run.mjs <Game>`: bot ladder over 20 seeds plus browser probes, no `FAIL` (not the critic) |
 | **1 — Worth review** | Is this near-final enough for a human? | Fresh `game-playtest` polish critic: art/finish + pitch match; verdict `ready_for_owner` or `not_ready`; `PLAYTEST.md` + recording |
 | **2 — Fun** | Would they play a second run without being asked? | Same critic scores F1–F10 in PLAYTEST.md; each line needs a quoted observation |
 
@@ -103,11 +103,16 @@ progress; a run ends and a summary exists.
 
 ---
 
-## Gate 0b — Browser mechanical
+## Gate 0b — Harness
 
-Run by the `game-qc` orchestrator with Playwright/browser tools before any
-critic is spawned: zero console errors across load → start → play → end →
-restart. This is a test-suite concern, not a taste/polish concern.
+`node tools/qa/run.mjs <Game>` before any critic is spawned (`tools/qa/README.md`).
+Bots play 20 seeds per rung through the game's adapter and the genre
+profile turns the gaps between them into checks against the brief and
+`qa/expect.json`: pressure, skill mattering, run length, first reward,
+reachable content, invariants. Browser probes cover console errors, blank
+canvas, ghosting, layout at three viewports, frame time, audio, input
+families, offline boot and draw rules. All of it is free; none of it is
+taste. No `FAIL` before the critic.
 
 ## Gate 1 — Worth the owner's review (polish critic)
 

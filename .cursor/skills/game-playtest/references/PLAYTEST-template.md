@@ -1,10 +1,11 @@
 # Playtest — <Game> @ <short sha>
 
 Date: <ISO date>
-Tester: playtest-agent (polish critic; no source edits)
-Server: http://localhost:<port>
-Recording: <artifact path or link — not under this game directory>
-Motion + art review: done / not done — <one-line summary>
+Tester: <game-critic | game-art-director> (fresh agent; no source edits)
+Round: <1 | 2 | 3 | final>
+Harness run: tools/qa/out/<Game>/<label>/ — <n> checks, all PASS
+Compared with: <previous label | none> — tools/qa/out/<Game>/compare/<prev>__<label>/
+Recording (final round): tools/qa/out/<Game>/<label>/recording.webm
 
 ## Pitch (verbatim)
 
@@ -15,11 +16,34 @@ Motion + art review: done / not done — <one-line summary>
 shape=<…> run_band=<…> inputs=<…> orientation=<…> sound=<…> done_pct=<…>
 tone=<…> persists=<…> non_goals=<…>
 
-## Polish verdict (primary)
+## Polish verdict
 
 **ready_for_owner** / **not_ready**
 
-Why (art style, finish, floating/unfinished junk, tone vs brief):
+Top reasons, player's voice:
+
+1.
+2.
+3.
+
+## Rubric by key moment
+
+| Moment | R1 player | R2 danger/reward | R3 grounded | R4 HUD | R5 tone | R6 feedback | R7 finished | R8 pitch | Notes |
+|---|---|---|---|---|---|---|---|---|---|
+| early | | | | | | | | | |
+| first-reward | | | | | | | | | |
+| first-damage | | | | | | | | | |
+| first-danger | | | | | | | | | |
+| before-end | | | | | | | | | |
+| summary | | | | | | | | | |
+
+## Pairs against the previous round
+
+| Moment | Better side | Anything worse? |
+|---|---|---|
+| | left / right / same | |
+
+## Motion (final round, from filmstrip)
 
 -
 
@@ -28,52 +52,22 @@ Why (art style, finish, floating/unfinished junk, tone vs brief):
 - Verb:
 - Pressure / fail:
 - Tone / art direction:
-- Inputs / sound vs brief:
 - Promised content:
 - Verdict: match / partial / miss — "<one sentence>"
 
-## Playability sanity
+## Harness numbers that shaped the verdict
 
-(Mechanical console suite already run by orchestrator — do not re-litigate.)
+(Quote from report.md; do not re-measure.)
 
-- [ ] loop closes without reload — evidence:
-- [ ] required inputs work — evidence:
-- [ ] fit / orientation — evidence:
-- [ ] persistence — evidence:
-- [ ] offline after server kill — evidence:
-- [ ] recording + art/motion review — path:
-
-Playability: PASS / FAIL
+-
 
 ## Complaints (ranked)
 
-Feel, art/polish, design, content. Player voice.
+Feel, art/polish, design, content. Player's voice.
 
 1.
 2.
 3.
-4.
-5.
-
-## Gate 2 — Fun
-
-(__/__ = __ %, threshold __ %; N/A: <…>)
-
-F1 verb: _ — "<observation>"
-F2 readable: _ — "<observation>"
-F3 feedback: _ — "<observation>"
-F4 fair deaths: _ — "<observation>"
-F5 tension: _ — "<observation>"
-F6 one more go: _ — "<observation>"
-F7 controls: _ — "<observation>"
-F8 look: _ — "<observation>"
-F9 sound: _ / N/A — "<observation>"
-F10 depth: _ — "<observation>"
-
-## Art / motion findings (from recording)
-
--
--
 
 ## Not checked
 
@@ -81,9 +75,10 @@ F10 depth: _ — "<observation>"
 
 ## Builder response
 
-<!-- Orchestrator / builder appends below. Do not edit critic scores above. -->
+<!-- Builder appends below. Do not edit critic verdicts above. -->
 
 ### Round 1
 - Addressed:
+- Harness before → after: tools/qa/out/<Game>/compare/<before>__<after>/compare.md
 - Commits:
 - Left for owner:

@@ -1,47 +1,42 @@
 ---
 name: game-qc
-description: Quality-control orchestrator for a game in this repo. Runs mechanical gate 0 and a browser suite (console errors, etc.), then spawns a fresh polish critic (game-playtest) that judges art/finish and pitch match so the owner only reviews near-final builds. Up to three builder response rounds. Use before claiming playable/done/ready.
+description: Quality-control orchestrator for a game in this repo. Runs gate 0, then the tools/qa harness (bot ladder + browser probes — free, no LLM), fixes until it is green, and only then spawns a fresh polish critic (game-critic agent, game-playtest skill) on the harness report and key-moment screenshots. Up to three builder rounds; the last one adds a recording and an art-director pass. Use before claiming a game is playable, done or ready.
 ---
 
 # Game QC (orchestrator)
 
-**Owner goal:** less human time on half-baked games; more near-final builds
-ready for a short owner review.
+**Owner goal:** the owner only reviews near-final builds, and model credits
+are spent on taste, not on things code can measure.
 
-Split of labor:
+| Layer | Who | Cost | What |
+|---|---|---|---|
+| Gate 0 | you, `check-game.mjs` | free | House rules, smoke exit 0 |
+| Harness | you, `tools/qa/run.mjs` | free | Bots over 20 seeds; console, canvas, ghosting, layout, frame time, audio, inputs, offline, draw rules; key-moment screenshots |
+| Critic | **fresh** `game-critic` agent | small model | Art, finish, pitch match from the report and screenshots |
+| Art director | **fresh** `game-art-director` agent | big model, final round only | Same skill, plus motion from the filmstrip |
 
-| Layer | Who | What |
-|---|---|---|
-| Gate 0 | you + `check-game.mjs` | House rules, smoke exit 0 |
-| Browser mechanical suite | **you** (Playwright / browser tools) | Console errors and other automatable browser checks |
-| Polish critic | **fresh** `game-playtest` agent | Art style, finish, pitch match, feel; `ready_for_owner` vs `not_ready` |
-
-You do **not** polish-score your own build. The critic does not debug consoles.
+You never score your own build. The critic never re-measures what the
+harness measured.
 
 A PR must not claim **playable** / **done** / **ready** unless:
 
 1. Gate 0 is green.
-2. Browser mechanical suite is green (logged in the PR).
-3. `<Game>/PLAYTEST.md` covers the current short SHA.
-4. Critic polish verdict is **`ready_for_owner`**.
-5. Playability sanity in PLAYTEST.md is PASS.
-6. Recording + art/motion review is cited.
-7. Gate 2 meets the brief's `done_pct` with no zero on F1–F7 (unless the
-   owner accepts a lower bar for this version).
+2. The harness run for the current short SHA has no `FAIL`.
+3. `<Game>/PLAYTEST.md` covers that SHA with verdict **`ready_for_owner`**
+   from the final-round art director.
+4. The PR body has the QC report below.
 
 ---
 
-## Step 0 — QC brief
+## Step 0 — Brief and adapter
 
-Open `<Game>/<GAME>PLAN.md` → `## QC brief`.
+Open `<Game>/<GAME>PLAN.md` → `## QC brief`. Missing or blank: run gate 0,
+ask the `new-game` questionnaire (always ask `tone`), stop.
 
-- **Present:** continue.
-- **Missing / blank:** run gate 0 only, ask the `new-game` questionnaire
-  (always ask `tone`), stop. Do not spawn the critic.
-
-Keep the **original pitch** for the critic prompt.
-
----
+`<Game>/qa/adapter.mjs` missing: write it now (contract and worked example
+in `tools/qa/README.md`), with `src/core/qa.js` and the two `data-qa`
+attributes. Turn the plan's promises into `qa/expect.json`. Keep the
+original pitch for the critic.
 
 ## Step 1 — Gate 0
 
@@ -49,117 +44,91 @@ Keep the **original pitch** for the critic prompt.
 node .cursor/skills/game-qc/scripts/check-game.mjs <Game>
 ```
 
-Fix every `FAIL`. Smoke stays per-game (no arcade-only contract).
+Fix every `FAIL`.
 
-`PLAYTEST.md` must not be in `sw.js` PRECACHE.
-
----
-
-## Step 1b — Browser mechanical suite (you, not the critic)
-
-Start the server:
+## Step 2 — Harness until green
 
 ```bash
-SESSION_NAME="<game>-dev"
-tmux -f /exec-daemon/tmux.portal.conf has-session -t "=$SESSION_NAME" 2>/dev/null \
-  || tmux -f /exec-daemon/tmux.portal.conf new-session -d -s "$SESSION_NAME" -c "$PWD/<Game>" -- npm start
+cd tools/qa && npm run setup     # once per machine
+node tools/qa/run.mjs <Game>
 ```
 
-Using Playwright / browser tools against `http://localhost:<port>`, **fail
-closed** on:
+Read `tools/qa/out/<Game>/<sha>/report.md`. Every `FAIL` is a bug or a
+missed promise; fix it and re-run. This loop costs nothing, so do not spawn
+a critic while anything fails.
 
-1. **Console errors** across load → start → ~20 s play → die/end → restart.
-   Zero `error`-level console messages (page errors and failed module loads).
-   Warnings may be noted; errors fail the suite.
-2. Optional but recommended while you are here: confirm the document title
-   loads and the canvas/main shell is present (smoke against a blank page).
+- A check you believe is wrong for this game (the brief says otherwise):
+  change `qa/expect.json` with a `why`, and say so in the PR. Never delete a
+  check to get green.
+- `WARN` lines go in the PR; they do not block.
+- **Every fix is verified, not claimed.** Run the harness on the commit
+  before and after and
+  `node tools/qa/compare.mjs <Game> <before> <after>`; put the numbers that
+  moved in the commit message (rule 6). This is how a fix that did not work
+  gets caught before anyone looks at it.
 
-Paste a short transcript into the PR (`### Browser suite`). Do **not** ask
-the critic to re-do console hunting.
+## Step 3 — Critic round
 
-If this suite fails, fix and re-run before spawning a critic.
+Spawn a **fresh** agent, never the builder context:
 
-> Later: these checks can move into a dedicated script when we have a
-> zero-drama way to run them in CI. Until then, this step *is* the suite.
+- Claude Code: the `game-critic` subagent (`.claude/agents/`).
+- Cursor: the `game-critic` subagent (`.cursor/agents/`).
+- Neither available: write `<Game>/CRITIC_SPAWN.md` with the spawn prompt
+  from the `game-playtest` skill, push, stop, and tell the owner. Do not
+  self-playtest. Resume when PLAYTEST.md appears.
 
----
+Give it the spawn prompt from the `game-playtest` skill: pitch, brief, run
+label, previous round's label (if any), round type `round`.
 
-## Step 2 — Spawn the polish critic (fresh agent)
+## Step 4 — Builder rounds (max 3)
 
-Spawn a **new** agent (`computerUse` / browser-capable). Point it at
-`.cursor/skills/game-playtest/SKILL.md`. Paste pitch, brief, port, sha, and
-`Mechanical suite: PASSED`.
+Read PLAYTEST.md.
 
-**Do not** run `game-playtest` in the builder context.
+- `blocked: …` → fix what it names; restart at the step it points to.
+- `not_ready` → fix the top complaints (polish and art first, then feel,
+  then content against the pitch). Re-run the harness until green, run
+  `compare.mjs` against the critic's run, append `## Builder response →
+  ### Round N` (never edit the critic's verdict), commit, re-spawn a fresh
+  critic with the previous label.
+- `ready_for_owner` from a `round` critic → go to step 5.
 
-**If you cannot spawn** (common for cloud builder subagents with no Task /
-computerUse tools):
+After round 3 still `not_ready`: stop and send the owner PLAYTEST.md and the
+latest compare.
 
-1. Write `<Game>/CRITIC_SPAWN.md` containing the full spawn prompt (pitch,
-   brief, URL, branch, “Mechanical suite: PASSED”).
-2. Push the branch. Do **not** self-playtest and do **not** invent PLAYTEST.md.
-3. Stop QC here. Tell the parent/owner to spawn a fresh critic with that
-   file. Resume at Step 3 when PLAYTEST.md appears.
-4. If you also lack PR-creation tools (`ManagePullRequest` / `gh` write),
-   push the branch and paste a compare URL; the parent opens the PR.
+## Step 5 — Final round
 
-Wait for `<Game>/PLAYTEST.md`. Commit it if needed.
+```bash
+node tools/qa/run.mjs <Game> --final
+```
 
----
+This adds `recording.webm` (for the owner) and `moments/filmstrip.png` (for
+the motion review). Spawn a fresh **`game-art-director`** with round type
+`final`. Its verdict is the one the PR quotes.
 
-## Step 3 — Read the critic report
-
-- `blocked:*` → resolve and restart.
-- `not_ready` → builder must raise finish/art/intent; counts as a round.
-- `ready_for_owner` with playability PASS → eligible for owner review when
-  scores also meet threshold.
-- Design/content complaints are in scope when they fit pitch/brief.
-
----
-
-## Step 4 — Builder response rounds (max 3)
-
-For each round (1…3):
-
-1. Fix top complaints (polish/art first, then feel, then content vs pitch).
-2. Re-run gate 0 + browser suite if you touched shipped files or UI boot.
-3. Append `## Builder response` → `### Round N` (do not edit critic scores).
-4. Re-spawn **fresh** `game-playtest` for a new verdict + recording.
-
-Stop when `ready_for_owner` + score threshold, or after 3 rounds → ping owner
-with PLAYTEST.md (even if still `not_ready`).
-
----
-
-## Step 5 — PR report
+## Step 6 — PR report
 
 ```markdown
 ## QC report — <Game> @ <short sha>
 
-Brief: …
+Brief: shape=… run_band=… inputs=… orientation=… sound=… done_pct=…
 
 ### Gate 0
-check-game: PASS / FAIL
+check-game: PASS
 
-### Browser suite (orchestrator)
-Console errors load→play→end→restart: 0 / FAIL — <notes>
+### Harness — tools/qa/out/<Game>/<sha>/report.md
+Checks: <n> PASS, <n> WARN (<which>), 0 FAIL
+Bots: humanish p50 __ s (run_band __–__), searcher p10 __ s, idle p90 __ s
+     (turn-based: searcher beats random __ %, seat balance __ %)
+Recording: tools/qa/out/<Game>/<sha>/recording.webm
 
-### Critic (game-playtest)
-PLAYTEST.md: …
-Polish verdict: ready_for_owner / not_ready
-Playability: PASS / FAIL
-Gate 2: __/__ = __ %
-Recording + art/motion review: <link>
-Intent: match / partial / miss
-
-### Builder rounds
-…
+### Critic rounds
+Round 1 (<label>): not_ready — <top reason>
+Round 2 (<label>): … — compare: <path>
+Final (<label>, game-art-director): ready_for_owner
 
 ### Owner handoff
-Worth human review: yes / no
+Worth human review: yes / no — <one line>
 ```
-
----
 
 ## When the owner approves
 
