@@ -1,24 +1,27 @@
 #!/usr/bin/env node
 /* tools/qa entry point — the same command for every game, agent and platform.
 
-     node tools/qa/run.mjs <Game> [--tier bots|probes|all] [--seeds 20] [--label name]
+     node tools/qa/run.mjs <Game> [--tier bots|probes|all] [--seeds 20] [--label name] [--final]
+                           [--replay-from <label>]
 
    Tier 1 (bots) plays the simulation headless through <Game>/qa/adapter.mjs.
    Tier 2 (probes) drives the real page in Chromium through src/core/qa.js.
    Writes tools/qa/out/<Game>/<label>/{report.md, results.json, moments/}
-   and exits 1 if any check fails. */
+   and exits 1 if any check fails. --final (last critic round only) also
+   records recording.webm for the owner and moments/filmstrip.png for the
+   critic's motion review. --replay-from replays an earlier run's exact
+   inputs, so key moments pair up with that run's even after gameplay changed. */
 
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 
-import { BOTS } from './lib/bots.mjs';
 import { parseDurations, readBrief, readExpect } from './lib/brief.mjs';
 import { runEpisode } from './lib/episode.mjs';
-import { summarizeBot } from './lib/metrics.mjs';
+import { allJobs, makeJob, summarizeAll } from './lib/ladder.mjs';
 import { renderReport } from './lib/report.mjs';
 import { selfCheck } from './lib/selfcheck.mjs';
 
@@ -27,19 +30,22 @@ const ROOT = path.resolve(HERE, '../..');
 
 const PROFILES = {
   arcade: () => import('./profiles/arcade.mjs'),
+  turn: () => import('./profiles/turn.mjs'),
 };
 
 function parseArgs(argv) {
-  const args = { tier: 'all', seeds: 20, label: null, game: null };
+  const args = { tier: 'all', seeds: 20, label: null, game: null, final: false, replayFrom: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--tier') args.tier = argv[++i];
     else if (a === '--seeds') args.seeds = Number(argv[++i]);
     else if (a === '--label') args.label = argv[++i];
+    else if (a === '--final') args.final = true;
+    else if (a === '--replay-from') args.replayFrom = argv[++i];
     else if (!args.game) args.game = a;
   }
   if (!args.game || !['bots', 'probes', 'all'].includes(args.tier) || !(args.seeds > 0)) {
-    console.error('usage: node tools/qa/run.mjs <Game> [--tier bots|probes|all] [--seeds 20] [--label name]');
+    console.error('usage: node tools/qa/run.mjs <Game> [--tier bots|probes|all] [--seeds 20] [--label name] [--final]');
     process.exit(2);
   }
   return args;
@@ -116,32 +122,38 @@ async function main() {
 
   const checks = selfCheck(adapter);
   const adapterOk = checks.every((c) => c.status !== 'fail');
-  const maxSeconds = profile.maxSeconds({ runBand, expect });
+  const limits = profile.limits({ runBand, expect });
+  const keys = profile.replayKeys(adapter);
+  const toJob = (matchup, seed) => makeJob(profile, expect, limits, matchup, seed);
   let metrics = null;
   let moments = [];
   const replays = {};
 
   if (adapterOk) {
+    const all = profile.matchups(adapter);
     let episodes;
     if (args.tier === 'probes') {
-      // Probes still need one decent run to pick key moments from.
-      episodes = [runEpisode(adapter, { seed: 1, bot: 'humanish', maxSeconds, botOptions: expect.bots?.humanish })];
+      // Probes still need runs to replay: the key-moment one and a long one.
+      episodes = all.filter((m) => m.key === keys.moments || m.key === keys.long).map((m) => runEpisode(adapter, toJob(m, 1)));
     } else {
-      const jobs = BOTS.flatMap((bot) =>
-        Array.from({ length: args.seeds }, (_, i) => ({ seed: i + 1, bot, maxSeconds, botOptions: expect.bots?.[bot] }))
-      );
-      episodes = await runJobs(jobs, adapterUrl);
-      metrics = Object.fromEntries(BOTS.map((bot) => [bot, summarizeBot(episodes.filter((e) => e.bot === bot))]));
-      checks.push(...profile.checks(metrics, { runBand, expect, brief }));
+      episodes = await runJobs(allJobs(profile, adapter, expect, limits, args.seeds), adapterUrl);
+      metrics = summarizeAll(profile, adapter, episodes);
+      checks.push(...profile.checks(metrics, { adapter, runBand, expect, brief }));
     }
-    for (const bot of ['humanish', 'searcher']) {
-      const ep = episodes.find((e) => e.bot === bot && e.seed === 1);
-      if (ep) replays[bot] = { seed: ep.seed, ticks: ep.ticks, inputs: ep.inputs, events: ep.events };
+    for (const [role, key] of Object.entries(keys)) {
+      const ep = episodes.find((e) => e.key === key && e.seed === 1);
+      if (ep) replays[role] = { key, seed: ep.seed, variant: ep.variant, ticks: ep.ticks, inputs: ep.inputs, events: ep.events };
+    }
+    if (args.replayFrom) {
+      const earlier = path.join(HERE, 'out', path.basename(gameDir), args.replayFrom, 'results.json');
+      if (!existsSync(earlier)) throw new Error(`--replay-from: no run "${args.replayFrom}"`);
+      const from = JSON.parse(readFileSync(earlier, 'utf8')).replays;
+      for (const role of Object.keys(from)) replays[role] = { ...from[role], from: args.replayFrom };
     }
 
     if (args.tier !== 'bots') {
       const { runProbes } = await import('./probes.mjs');
-      const probed = await runProbes({ gameDir, brief, expect, adapter, replays, outDir });
+      const probed = await runProbes({ gameDir, brief, expect, adapter, replays, outDir, final: args.final });
       checks.push(...probed.checks);
       moments = probed.moments;
     }

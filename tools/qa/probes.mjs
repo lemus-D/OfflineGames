@@ -13,13 +13,14 @@
    on exact ticks, so screenshots from two builds pair up frame for frame. */
 
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { chromium } from 'playwright';
 
 import { requiredInputs } from './lib/brief.mjs';
-import { decodePng, imageStats } from './lib/png.mjs';
+import { grid, readPng, shrink } from './lib/image.mjs';
+import { decodePng, encodePng, imageStats } from './lib/png.mjs';
 
 const VIEWPORTS = {
   desktop: { width: 1280, height: 800 },
@@ -62,7 +63,7 @@ const AUDIO_TAP = `(() => {
   };
 })();`;
 
-export async function runProbes({ gameDir, brief, expect, adapter, replays, outDir }) {
+export async function runProbes({ gameDir, brief, expect, adapter, replays, outDir, final = false }) {
   const checks = [];
   const consoleErrors = [];
   const add = (id, status, detail, why) => checks.push({ id, status, detail, why });
@@ -95,8 +96,8 @@ export async function runProbes({ gameDir, brief, expect, adapter, replays, outD
       layoutIssues.push(...tagged('desktop/menu', await layoutProblems(page)));
 
       // A long-lived run (the strong bot's) to look at real play.
-      const long = replays.searcher || replays.humanish;
-      await startRun(page, { seed: long.seed, inputs: long.inputs, speed: 1 });
+      const long = replays.long || replays.moments;
+      await startRun(page, { seed: long.seed, variant: long.variant, inputs: long.inputs, speed: 1 });
       await sleep(1500);
       blankCheck(add, 'canvas-drawn:play', await canvasStats(page));
       layoutIssues.push(...tagged('desktop/playing', await layoutProblems(page)));
@@ -143,7 +144,7 @@ export async function runProbes({ gameDir, brief, expect, adapter, replays, outD
         : ['portrait', 'landscape'];
     for (const shape of ['desktop', ...shapes]) {
       await probe(`layout:${shape}`, 'Layout pass at this viewport.', async () => {
-        layoutIssues.push(...(await layoutPass(ctx, shape, shape !== 'desktop')));
+        layoutIssues.push(...(await layoutPass(ctx, shape, shape !== 'desktop', replays.moments)));
       });
     }
     add(
@@ -178,17 +179,19 @@ export async function runProbes({ gameDir, brief, expect, adapter, replays, outD
       });
     }
 
-    if (replays.humanish) {
+    if (replays.moments) {
       await probe('moments', 'Key-moment screenshots for the critic and A/B pairing.', async () => {
         const viewport = inputs.touch ? VIEWPORTS.portrait : VIEWPORTS.desktop;
-        const result = await captureMoments(ctx, replays.humanish, fixedDt, viewport, inputs.touch, outDir);
+        const result = await captureMoments(ctx, replays.moments, fixedDt, viewport, inputs.touch, outDir);
         moments = result.moments;
         add(
           'replay-matches',
-          result.mismatches.length ? 'fail' : 'pass',
-          result.mismatches.length
+          replays.moments.from ? 'skip' : result.mismatches.length ? 'fail' : 'pass',
+          replays.moments.from
+            ? `replaying the inputs of run "${replays.moments.from}"; events may differ in this build by design`
+            : result.mismatches.length
             ? `browser and Node disagree: ${result.mismatches.join('; ')}`
-            : `browser replay of seed ${replays.humanish.seed} matched the Node run at ${result.frames.length} paused frames`,
+            : `browser replay of "${replays.moments.key}" seed ${replays.moments.seed} matched the Node run at ${result.frames.length} paused frames`,
           'If the browser does not replay the bot run exactly, the key-moment frames are not comparable.'
         );
         const rules = [
@@ -198,6 +201,20 @@ export async function runProbes({ gameDir, brief, expect, adapter, replays, outD
           ...(expect.rects || []),
         ];
         for (const rule of rules) checks.push(rectRule(rule, result.frames));
+      });
+    }
+
+    if (final && replays.moments) {
+      await probe('filmstrip', 'Final round: consecutive frames for the critic\'s motion review.', async () => {
+        const viewport = inputs.touch ? VIEWPORTS.portrait : VIEWPORTS.desktop;
+        const film = await captureFilm(ctx, replays.moments, fixedDt, viewport, inputs.touch, outDir);
+        moments.push(film);
+        add('filmstrip', 'pass', `${film.frames} frames, ${film.spacingS} s apart, ending at tick ${film.tick}`, 'Motion the critic can see without a video.');
+      });
+      await probe('recording', 'Final round: a real-time recording for the owner.', async () => {
+        const file = await record(ctx, replays.long || replays.moments, inputs.touch ? VIEWPORTS.portrait : VIEWPORTS.desktop, inputs.touch, outDir);
+        moments.push({ name: 'recording', tick: null, file });
+        add('recording', 'pass', `${file} (30 s of the long bot run at real speed)`, 'Owner-locked: recording on the final round.');
       });
     }
 
@@ -373,12 +390,12 @@ async function layoutProblems(page) {
   });
 }
 
-async function layoutPass(ctx, shape, touch) {
+async function layoutPass(ctx, shape, touch, replay) {
   const { page, context } = await openPage(ctx, { viewport: VIEWPORTS[shape], touch });
   const issues = [];
   if (shape !== 'desktop') issues.push(...tagged(`${shape}/menu`, await layoutProblems(page)));
-  // The idle bot reaches the summary screen quickly.
-  await startRun(page, { seed: 1, inputs: [], speed: 8 }, { touch });
+  // Replaying the key-moment run at speed reaches the summary screen quickly.
+  await startRun(page, { seed: replay.seed, variant: replay.variant, inputs: replay.inputs, speed: 8 }, { touch });
   await sleep(300);
   if (shape !== 'desktop') issues.push(...tagged(`${shape}/playing`, await layoutProblems(page)));
   try {
@@ -471,7 +488,11 @@ async function captureMoments(ctx, replay, fixedDt, viewport, touch, outDir) {
   const mismatches = [];
 
   const { page, context } = await openPage(ctx, { viewport, touch });
-  await startRun(page, { seed: replay.seed, inputs: replay.inputs, pauseAt: timed.map((m) => m.tick), speed: 8 }, { touch });
+  await startRun(
+    page,
+    { seed: replay.seed, variant: replay.variant, inputs: replay.inputs, pauseAt: timed.map((m) => m.tick), speed: 8 },
+    { touch }
+  );
   for (const m of timed) {
     await page.waitForFunction((t) => window.__qa.paused() === t, m.tick, { timeout: 120000 });
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
@@ -514,6 +535,50 @@ async function captureMoments(ctx, replay, fixedDt, viewport, touch, outDir) {
   }
   await context.close();
   return { moments, frames, mismatches };
+}
+
+/** Sixteen consecutive frames leading up to the run's end (or its last
+    tick), every ~0.1 s, tiled into one image. Deterministic, so pairable. */
+async function captureFilm(ctx, replay, fixedDt, viewport, touch, outDir) {
+  const frames = 16;
+  const every = Math.max(1, Math.round(0.1 / fixedDt));
+  const end = (replay.events.find((e) => e.kind === 'death' || e.kind === 'lose' || e.kind === 'win')?.tick ?? replay.ticks) - 1;
+  const ticks = Array.from({ length: frames }, (_, i) => end - (frames - 1 - i) * every).filter((t) => t > 0);
+  mkdirSync(path.join(outDir, 'moments', 'film'), { recursive: true });
+
+  const { page, context } = await openPage(ctx, { viewport, touch });
+  await startRun(page, { seed: replay.seed, variant: replay.variant, inputs: replay.inputs, pauseAt: ticks, speed: 8 }, { touch });
+  const shots = [];
+  for (const [i, t] of ticks.entries()) {
+    await page.waitForFunction((x) => window.__qa.paused() === x, t, { timeout: 120000 });
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const file = path.join(outDir, 'moments', 'film', `${String(i).padStart(2, '0')}.png`);
+    await page.screenshot({ path: file });
+    shots.push(file);
+    await page.evaluate(() => window.__qa.resume());
+  }
+  await context.close();
+
+  const images = shots.map(readPng);
+  const factor = Math.max(1, Math.ceil(images[0].width / 320));
+  writeFileSync(path.join(outDir, 'moments', 'filmstrip.png'), encodePng(grid(images.map((img) => shrink(img, factor)), 4)));
+  return { name: 'filmstrip', tick: end, file: 'moments/filmstrip.png', frames: ticks.length, spacingS: Math.round(every * fixedDt * 100) / 100 };
+}
+
+/** 30 s of real-time play, recorded by the browser. For the owner, not a model. */
+async function record(ctx, replay, viewport, touch, outDir) {
+  const dir = path.join(outDir, 'video');
+  const context = await ctx.browser.newContext({ viewport, hasTouch: touch, isMobile: touch, recordVideo: { dir, size: viewport } });
+  await context.addInitScript(AUDIO_TAP);
+  const page = await context.newPage();
+  await page.goto(`${ctx.url}?qa=1`);
+  await page.waitForFunction(() => window.__qa?.ready === true, null, { timeout: 10000 });
+  await startRun(page, { seed: replay.seed, variant: replay.variant, inputs: replay.inputs, speed: 1 }, { touch });
+  await Promise.race([waitState(page, 'summary', 30000).then(() => sleep(1500)), sleep(30000)]).catch(() => {});
+  const video = page.video();
+  await context.close();
+  await video.saveAs(path.join(outDir, 'recording.webm'));
+  return 'recording.webm';
 }
 
 /** Rules about where things are drawn, checked at every key moment. */

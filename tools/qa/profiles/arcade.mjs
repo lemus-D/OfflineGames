@@ -6,12 +6,31 @@
    in <Game>/qa/expect.json. */
 
 import { neverFraction } from '../lib/metrics.mjs';
+import { eventRule, invariantsCheck } from '../lib/rules.mjs';
 
 export const name = 'arcade';
 
+/** The bot ladder. qa/expect.json "bots" may override any option per rung. */
+export const ladder = {
+  idle: { type: 'idle' },
+  random: { type: 'random' },
+  humanish: { type: 'search', horizon: 12, rollouts: 2, reactionS: 0.25, noise: 0.05, idleBias: 0.7 },
+  searcher: { type: 'search', horizon: 20, rollouts: 4, idleBias: 0.7 },
+};
+
+/** Every rung plays alone. Keys are what the checks and report use. */
+export function matchups() {
+  return Object.keys(ladder).map((name) => ({ key: name, players: [name] }));
+}
+
+/** Which matchups the browser probes replay: key moments, and a long run. */
+export function replayKeys() {
+  return { moments: 'humanish', long: 'searcher' };
+}
+
 /** Longest a bot run may last before it is cut off and counted "capped". */
-export function maxSeconds({ runBand }) {
-  return runBand ? Math.max(60, runBand[1] * 1.5) : 600;
+export function limits({ runBand }) {
+  return { maxSeconds: runBand ? Math.max(60, runBand[1] * 1.5) : 600 };
 }
 
 export function checks(m, { runBand, expect }) {
@@ -77,34 +96,9 @@ export function checks(m, { runBand, expect }) {
     'A player who never gets the first reward does not learn what the game is about.'
   );
 
-  for (const rule of expect.events || []) out.push(eventRule(m, rule));
+  for (const rule of expect.events || []) out.push(eventRule(m, rule, 'humanish'));
 
-  const violations = Object.values(m).flatMap((b) => b.violations);
-  add(
-    'invariants',
-    violations.length ? 'fail' : 'pass',
-    violations.length
-      ? violations.slice(0, 3).map((v) => `seed ${v.seed} tick ${v.tick}: ${v.name}`).join('; ')
-      : 'no violations in any bot run',
-    'States the game says can never happen.'
-  );
+  out.push(invariantsCheck(m));
 
   return out;
-}
-
-/** { bot, kind, minPerMin | maxPerMin | minPerRun, why } from expect.json. */
-function eventRule(m, rule) {
-  const bot = m[rule.bot || 'humanish'];
-  const perMin = bot.perMinute[rule.kind] ?? 0;
-  const perRun = bot.perRun[rule.kind] ?? 0;
-  const fails = [];
-  if (rule.minPerMin != null && perMin < rule.minPerMin) fails.push(`${perMin}/min < ${rule.minPerMin}`);
-  if (rule.maxPerMin != null && perMin > rule.maxPerMin) fails.push(`${perMin}/min > ${rule.maxPerMin}`);
-  if (rule.minPerRun != null && perRun < rule.minPerRun) fails.push(`${perRun}/run < ${rule.minPerRun}`);
-  return {
-    id: `events:${rule.kind}`,
-    status: fails.length ? 'fail' : 'pass',
-    detail: `${rule.bot || 'humanish'}: ${rule.kind} ${perMin}/min, ${perRun}/run${fails.length ? ' — ' + fails.join(', ') : ''}`,
-    why: rule.why,
-  };
 }

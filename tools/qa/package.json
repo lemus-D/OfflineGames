@@ -4,6 +4,7 @@
   "type": "module",
   "description": "Dev-only playtest harness: headless bots + browser probes. Never shipped with a game.",
   "scripts": {
+    "setup": "npm install && playwright install ffmpeg",
     "test": "node test/selftest.mjs"
   },
   "devDependencies": {

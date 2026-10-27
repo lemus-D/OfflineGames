@@ -1,7 +1,7 @@
-/* Just enough PNG decoding to read Playwright screenshots (8-bit,
-   non-interlaced), plus the image statistics the probes need. */
+/* Just enough PNG to read Playwright screenshots (8-bit, non-interlaced)
+   and write composites, plus the image statistics the probes need. */
 
-import { inflateSync } from 'node:zlib';
+import { crc32, deflateSync, inflateSync } from 'node:zlib';
 
 const CHANNELS = { 0: 1, 2: 3, 4: 2, 6: 4 };
 
@@ -44,6 +44,33 @@ export function decodePng(buf) {
     }
   }
   return { width, height, channels, data: out };
+}
+
+const COLOUR_TYPE = { 1: 0, 2: 4, 3: 2, 4: 6 };
+
+export function encodePng({ width, height, channels, data }) {
+  const stride = width * channels;
+  const raw = Buffer.alloc((stride + 1) * height);
+  for (let y = 0; y < height; y++) data.copy(raw, y * (stride + 1) + 1, y * stride, (y + 1) * stride);
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = COLOUR_TYPE[channels];
+  const chunk = (type, body) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(body.length);
+    const typed = Buffer.concat([Buffer.from(type, 'ascii'), body]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(typed));
+    return Buffer.concat([len, typed, crc]);
+  };
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
 }
 
 function paeth(a, b, c) {

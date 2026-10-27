@@ -6,7 +6,7 @@
    in Node or in the browser (src/core/qa.js). */
 
 import { makeBot } from './bots.mjs';
-import { isDecisionPoint, drainShared } from './sim.mjs';
+import { drainShared, isDecisionPoint, seatOf } from './sim.mjs';
 
 /** Non-finite numbers anywhere in observe() — NaN positions, Infinity speeds. */
 export function nonFinite(obs, prefix = '') {
@@ -20,20 +20,28 @@ export function nonFinite(obs, prefix = '') {
 
 /**
  * @param {object} adapter  the game's qa/adapter.mjs default export
- * @param {{ seed: number, bot: string, botOptions?: object, maxSeconds: number }} job
+ * @param {{
+ *   seed: number,
+ *   key: string,                              matchup label, e.g. "searcher" or "searcher vs random"
+ *   players: { name: string, spec: object }[], one per seat
+ *   variant?: string,                         passed to adapter.create (e.g. AI difficulty)
+ *   maxSeconds: number,
+ *   maxDecisions?: number,
+ * }} job
  */
 export function runEpisode(adapter, job) {
-  const session = adapter.create(job.seed);
-  const bot = makeBot(job.bot, adapter, job.seed, job.botOptions);
+  const session = adapter.create(job.seed, job.variant);
+  const bots = job.players.map((p, seat) => makeBot(p.spec, adapter, job.seed, seat * 101 + p.name.length));
+  const maxDecisions = job.maxDecisions ?? Infinity;
   const inputs = [];
   const events = [];
   const violations = [];
   let tick = 0;
 
-  while (!adapter.terminal(session) && adapter.time(session) < job.maxSeconds) {
+  while (!adapter.terminal(session) && adapter.time(session) < job.maxSeconds && inputs.length < maxDecisions) {
     let action = null;
     if (isDecisionPoint(adapter, session, tick)) {
-      action = bot.choose(session, tick);
+      action = bots[seatOf(adapter, session)].choose(session, tick);
       inputs.push([tick, action]);
     }
     adapter.tick(session, action);
@@ -51,10 +59,12 @@ export function runEpisode(adapter, job) {
   const terminal = adapter.terminal(session);
   return {
     seed: job.seed,
-    bot: job.bot,
+    key: job.key,
+    variant: job.variant ?? null,
     seconds: round(adapter.time(session)),
     ticks: tick,
-    score: adapter.score(session),
+    decisions: inputs.length,
+    score: adapter.score(session, 0),
     end: terminal ? adapter.outcome(session) : { result: 'capped' },
     final: adapter.observe(session),
     events,

@@ -21,8 +21,8 @@ const REQUIRED = [
 ];
 
 /** Rebuild a run from its seed and input log — what the browser replay does. */
-export function replay(adapter, seed, inputs, ticks) {
-  const session = adapter.create(seed);
+export function replay(adapter, seed, inputs, ticks, variant) {
+  const session = adapter.create(seed, variant);
   const byTick = new Map(inputs);
   for (let t = 0; t < ticks; t++) {
     adapter.tick(session, byTick.has(t) ? byTick.get(t) : null);
@@ -37,23 +37,32 @@ export function selfCheck(adapter) {
 
   const missing = REQUIRED.filter((k) => adapter[k] === undefined);
   if (!adapter.ticksPerDecision && !adapter.awaitingDecision) missing.push('ticksPerDecision or awaitingDecision');
+  if ((adapter.seats || 1) > 1 && !adapter.seat) missing.push('seat (needed when seats > 1)');
   add('adapter-contract', !missing.length, missing.length ? `missing: ${missing.join(', ')}` : 'all members present');
   if (missing.length) return checks;
 
   // Same seed, same bot → same run.
-  const job = { seed: 1234, bot: 'random', maxSeconds: 20 };
+  const seats = adapter.seats || 1;
+  const job = {
+    seed: 1234,
+    key: 'random',
+    players: Array.from({ length: seats }, () => ({ name: 'random', spec: { type: 'random' } })),
+    variant: adapter.variants?.[0],
+    maxSeconds: 20,
+    maxDecisions: 200,
+  };
   const a = runEpisode(adapter, job);
   const b = runEpisode(adapter, job);
   const sameRun = a.ticks === b.ticks && json(a.final) === json(b.final) && json(a.events) === json(b.events);
   add('deterministic', sameRun, sameRun ? `seed 1234 twice: identical over ${a.ticks} ticks` : 'two runs of seed 1234 diverged');
 
   // The input log alone reproduces the run. Browser replays depend on this.
-  const replayed = replay(adapter, job.seed, a.inputs, a.ticks);
+  const replayed = replay(adapter, job.seed, a.inputs, a.ticks, job.variant);
   const sameReplay = json(adapter.observe(replayed)) === json(a.final);
   add('replayable', sameReplay, sameReplay ? 'input log reproduces the run' : 'replaying the input log ends in a different state');
 
   // A copy taken mid-run is independent and faithful.
-  const session = adapter.create(99);
+  const session = adapter.create(99, job.variant);
   let tick = drive(adapter, session, 0, 2, 7);
   const before = json(adapter.observe(session));
   const copy = cloneSession(adapter, session);

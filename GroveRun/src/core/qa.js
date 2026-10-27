@@ -44,6 +44,12 @@ export const qa = {
     return replay.seed;
   },
 
+  /** main.js, when a run starts in a game with variants (e.g. AI difficulty):
+      the variant to use. The armed replay's variant wins. */
+  variant(fallback) {
+    return replay && replay.variant != null ? replay.variant : fallback;
+  },
+
   replaying() {
     return !!replay && replay.running;
   },
@@ -75,8 +81,8 @@ export const qa = {
 if (enabled) {
   window.__qa = {
     ready: false,
-    arm({ seed, inputs = [], pauseAt = [], speed = 1 }) {
-      replay = { seed, inputs: new Map(inputs), pauseAt: new Set(pauseAt), speed, running: false, tick: 0, acc: 0, paused: null };
+    arm({ seed, variant = null, inputs = [], pauseAt = [], speed = 1 }) {
+      replay = { seed, variant, inputs: new Map(inputs), pauseAt: new Set(pauseAt), speed, running: false, tick: 0, acc: 0, paused: null };
     },
     disarm() {
       replay = null;

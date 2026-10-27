@@ -51,9 +51,22 @@ export function summarizeBot(episodes) {
     };
   }
 
+  // Who won: seat indexes for multi-seat games, 'win' results for one seat.
+  const winners = {};
+  let wins = 0;
+  for (const e of episodes) {
+    if (e.end.winner != null) winners[e.end.winner] = (winners[e.end.winner] || 0) + 1;
+    else if (e.end.result === 'draw') winners.draw = (winners.draw || 0) + 1;
+    if (e.end.winner != null ? e.end.winner === 0 : e.end.result === 'win') wins += 1;
+  }
+
   return {
     runs: episodes.length,
+    variant: episodes[0]?.variant ?? null,
     seconds: spread(seconds),
+    decisions: spread(episodes.map((e) => e.decisions)),
+    winRate: round(wins / episodes.length),
+    winners,
     score: spread(episodes.map((e) => e.score)),
     ends,
     perMinute,

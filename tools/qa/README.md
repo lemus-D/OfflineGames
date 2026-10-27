@@ -3,30 +3,53 @@
 Dev-only. Never shipped with a game, never precached.
 
 ```bash
-cd tools/qa && npm install                      # once: Playwright (uses system Chrome if present)
-node tools/qa/run.mjs GroveRun                  # both tiers, 20 seeds per bot
+cd tools/qa && npm run setup                    # once: Playwright (+ its ffmpeg, for recordings)
+node tools/qa/run.mjs GroveRun                  # both tiers, 20 seeds per matchup
 node tools/qa/run.mjs GroveRun --tier bots      # headless only, no browser
 node tools/qa/run.mjs GroveRun --tier probes    # browser only
-cd tools/qa && npm test                         # the harness's own tests, on a toy game
+node tools/qa/run.mjs GroveRun --final          # final critic round: + recording.webm, filmstrip
+node tools/qa/run.mjs GroveRun --replay-from <label>   # replay an earlier run's exact inputs
+node tools/qa/compare.mjs GroveRun <before> <after>    # side-by-side of two runs
+cd tools/qa && npm test                         # the harness's own tests, on toy games
 ```
+
+Playwright uses the system Chrome when there is one.
 
 Output goes to `tools/qa/out/<Game>/<short sha>[-dirty]/` (git-ignored):
 
 | File | For |
 |---|---|
-| `report.md` | The short summary an agent or the owner reads. Checks, bot table, key moments. |
-| `results.json` | Everything: metrics per bot, every check, the replays used. |
+| `report.md` | The short summary an agent or the owner reads: checks, bot table, key moments. |
+| `results.json` | Everything: metrics per matchup, every check, the replays used. |
 | `moments/*.png` | Key-moment screenshots, same seed and inputs every build. |
+| `moments/filmstrip.png` | `--final`: 16 consecutive frames ~0.1 s apart, for a motion review. |
+| `recording.webm` | `--final`: 30 s of real-time play, for the owner. |
 
-Exit code 1 if any check fails. The same command works for every game, from
+Exit code 1 if any check fails. The same commands work for every game, from
 Cursor, Claude Code or a terminal. No LLM is involved in anything here.
 
-## The two tiers
+## Where it sits in QC
 
-**Tier 1 — bots.** Four bots play the simulation headless, 20 seeds each,
-through the game's adapter. Search bots try every action on copies of the
-session and keep the one whose futures score best, so no game needs a
-hand-written AI.
+`game-qc` runs gate 0, then this harness until it has no `FAIL` (free), and
+only then spawns a fresh critic agent on `report.md` and the screenshots:
+
+| Agent | Platform files | Model | When |
+|---|---|---|---|
+| `game-critic` | `.claude/agents/`, `.cursor/agents/` | small (Claude Code: `haiku`) | each round |
+| `game-art-director` | same | large (Claude Code: `opus`) | final round only |
+
+Both follow the `game-playtest` skill. Skills live in `.cursor/skills/`, and
+`.claude/skills` links there, so both platforms read one copy. The agent
+files only set model, tools and turn cap. Cursor's files inherit the parent
+model until you set an id from Cursor's model picker.
+
+## Tier 1 — bots
+
+Each genre profile defines a ladder of bots. Search bots try every action on
+copies of the session and keep the one whose futures score best for their
+seat, so no game needs a hand-written AI.
+
+**`arcade`** — every rung plays alone, 20 seeds each.
 
 | Bot | Question |
 |---|---|
@@ -35,19 +58,37 @@ hand-written AI.
 | `humanish` | Short lookahead, 0.25 s reaction, 5 % noise. Does a decent run fit the brief? |
 | `searcher` | Longer lookahead. Is everything reachable and survivable? |
 
-The gaps between them are the findings: idle lasting as long as the searcher
-means no pressure; random scoring like humanish means skill does not matter.
+Checks: idle loses, skill matters, run length in `run_band`, a strong player
+lasts, difficulty has a ceiling, first reward is reached early, plan events,
+invariants.
 
-**Tier 2 — probes.** Chromium drives the real page: console errors, blank or
-black canvas, canvas not repainted each frame (ghosting), layout clipping at
-desktop / portrait / landscape, frame time under 4× CPU throttle, audio
-actually audible after the first tap, required input families, offline boot,
-and key-moment screenshots replayed from a Node bot run and paused on exact
-ticks.
+**`turn`** — no idle rung (passing is rarely a move).
+
+| Bot | |
+|---|---|
+| `random` | the floor |
+| `humanish` | one move of lookahead, 15 % mistakes |
+| `searcher` | three moves of lookahead (both sides), more rollouts |
+
+- `seats: 2` — every rung plays every rung, in both seats. Checks: games
+  finish, searcher beats random, the ladder is ordered, first-seat advantage,
+  draw rate, game length.
+- `seats: 1` with the game's own AI — each rung plays each `variant` (e.g.
+  difficulty, easiest first). Checks: games finish, skill gap, ladder
+  ordered, harder variants really are harder, the hardest is beatable.
+
+## Tier 2 — probes
+
+Chromium drives the real page: console errors, blank or black canvas, canvas
+not repainted each frame (ghosting), layout at desktop / portrait /
+landscape, frame time under 4× CPU throttle, audio audible after the first
+tap, the brief's input families, offline boot, draw rules, and key-moment
+screenshots replayed from a Node bot run and paused on exact ticks.
 
 ## Adding a game
 
-Four small pieces, all copied or written by the build agent at scaffold time.
+Four small pieces, all written or copied by the build agent at scaffold
+time. `GroveRun` is the worked example.
 
 ### 1. `<Game>/qa/adapter.mjs`
 
@@ -55,24 +96,24 @@ Translates the game for the harness. No strategy goes here.
 
 | Member | Meaning |
 |---|---|
-| `profile` | `'arcade'` (more profiles to come: turn-based, level-based) |
+| `profile` | `'arcade'` or `'turn'` |
 | `fixedDt` | the simulation's fixed step, usually `FIXED_DT` |
-| `ticksPerDecision` | arcade: decide every N ticks. Turn-based games instead give `awaitingDecision(session)` |
-| `create(seed)` | a fresh session |
-| `actions(session)` | what a player can do now. **`[0]` is "do nothing"** |
+| `ticksPerDecision` | arcade: decide every N ticks. Turn-based: give `awaitingDecision(session)` instead |
+| `seats`, `seat(session)` | turn-based with two sides: `2`, and whose move it is. Default one seat |
+| `variants` | optional, e.g. `['easy', 'hard']` — passed to `create` |
+| `create(seed, variant)` | a fresh session |
+| `actions(session)` | what the deciding player can do now. **`[0]` is "do nothing" / the default move** |
 | `tick(session, action)` | one fixed step. `action` is `null` between decisions. Must accept any action `actions()` ever returns |
 | `time(session)` | game seconds elapsed |
-| `score(session)` | higher is better — usually the HUD score |
-| `terminal(session)` / `outcome(session)` | run over? `{ result: 'death' \| 'win' \| 'lose' \| 'end', cause }` |
-| `drainEvents(session)` / `mapEvent(raw)` | raw events → shared vocabulary: `reward`, `damage`, `danger`, `death`, `input`, `win`, `lose`, `turn_end`, `level_end` (return `null` to drop) |
+| `score(session, seat)` | higher is better for `seat` — usually the HUD score |
+| `terminal(session)` / `outcome(session)` | run over? `{ result: 'death' \| 'win' \| 'lose' \| 'draw' \| 'end', cause, winner }` — `winner` is a seat index for two-seat games |
+| `drainEvents(session)` / `mapEvent(raw)` | raw events → shared vocabulary: `reward`, `damage`, `danger`, `death`, `input`, `win`, `lose`, `turn_end`, `level_end` (`null` drops one) |
 | `observe(session)` | plain numbers describing the state; used for determinism and NaN checks |
 | `invariants(session)` | names of anything that must never be true right now; `[]` when fine |
 | `clone(session)` | optional. By default sessions are deep-copied |
 
 The default copy needs the game's `src/core/rng.js` to expose `clone()` (the
 scaffold version does). The self-check fails loudly if copies drift.
-
-`GroveRun/qa/adapter.mjs` is the worked example.
 
 ### 2. `src/core/qa.js`
 
@@ -83,7 +124,7 @@ does nothing unless the URL has `?qa=1`. Then wire it in:
 |---|---|
 | `main.js` boot | `qa.expose({ state: () => state })` — state is `'menu'`, `'playing'` or `'summary'` |
 | top of each frame | `qa.beginFrame()` |
-| starting a run | `const seed = qa.seed(timeSeed)` |
+| starting a run | `const seed = qa.seed(timeSeed)`; games with variants also `qa.variant(chosen)` |
 | stepping | `if (qa.replaying()) qa.step(session, dt); else session.step(dt, controls);` |
 | draw calls | pass `qa.clock(animTime)` as the animation time |
 | draining events | `qa.record(ev)` for each raw event |
@@ -112,17 +153,25 @@ The plan's own promises, as numbers. Everything else comes from the QC brief
 }
 ```
 
+Turn-based keys: `turns: [lo, hi]` or `secondsPerTurn` (game length),
+`skillWinRate`, `skillGap`, `seatTolerance`, `maxDrawRate`, `maxTurns`.
+
 Rect rules: `visible`, `onScreen`, `minSize` (`px`), `hudClear`, and
-`below` / `above` / `leftOf` / `rightOf` (`a` relative to `b`). Each rule
-keeps a `why` so the report says what it protects.
+`below` / `above` / `leftOf` / `rightOf` (`a` relative to `b`). Keep a `why`
+on each so the report says what it protects.
 
 When the owner hand-fixes something new, the fix becomes a rule here or a
 probe, so the same complaint never needs a human twice.
 
 ## Comparing builds
 
-Key moments come from the same bot run every time (seed 1, `humanish`), so
-`out/<Game>/<shaA>/moments/first-reward.png` and
-`out/<Game>/<shaB>/moments/first-reward.png` show the same instant. A critic
-compares them pairwise ("which reads the chase better?"), which small vision
-models do far more reliably than scoring one image.
+`compare.mjs` writes `out/<Game>/compare/<before>__<after>/`: checks that
+changed, numbers that moved (put them in the commit message), one A|B image
+per key moment for the critic, and `index.html` for a person.
+
+Pairs are the **same instant of the same play** when both runs had the same
+inputs: always for a drawing-only change. After a gameplay change the bot
+plays differently, so re-run the new build with `--replay-from <before>` to
+force the old inputs. `compare.md` says which case it is. Small vision
+models judge "which side is better" far more reliably than they score one
+image.

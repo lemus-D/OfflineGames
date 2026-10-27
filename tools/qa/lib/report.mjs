@@ -24,18 +24,26 @@ export function renderReport({ game, label, profile, brief, runBand, seeds, chec
   }
   lines.push('');
 
-  if (metrics) {
+  if (metrics && profile === 'turn') {
+    lines.push('## Matchups');
+    lines.push('');
+    lines.push('| Matchup | Turns p10 / p50 / p90 | First seat won | Draws | How games ended |');
+    lines.push('|---|---|---|---|---|');
+    for (const [key, m] of Object.entries(metrics)) {
+      const turns = [m.decisions.p10, m.decisions.p50, m.decisions.p90].join(' / ');
+      const draws = m.winners.draw ? `${Math.round((100 * m.winners.draw) / m.runs)}%` : '0%';
+      lines.push(`| ${key} | ${turns} | ${Math.round(m.winRate * 100)}% | ${draws} | ${endsText(m)} |`);
+    }
+    lines.push('');
+  } else if (metrics) {
     const kinds = [...new Set(Object.values(metrics).flatMap((m) => Object.keys(m.perMinute)))].sort();
     lines.push('## Bots');
     lines.push('');
     lines.push(`| Bot | Seconds p10 / p50 / p90 | Score p50 | How runs ended | ${kinds.map((k) => `${k}/min`).join(' | ')} |`);
     lines.push(`|---|---|---|---|${kinds.map(() => '---').join('|')}|`);
     for (const [bot, m] of Object.entries(metrics)) {
-      const ends = Object.entries(m.ends)
-        .map(([k, n]) => `${k} ×${n}`)
-        .join(', ');
       const secs = [m.seconds.p10, m.seconds.p50, m.seconds.p90].map((x) => Math.round(x)).join(' / ');
-      lines.push(`| ${bot} | ${secs} | ${m.score.p50} | ${ends} | ${kinds.map((k) => m.perMinute[k] ?? 0).join(' | ')} |`);
+      lines.push(`| ${bot} | ${secs} | ${m.score.p50} | ${endsText(m)} | ${kinds.map((k) => m.perMinute[k] ?? 0).join(' | ')} |`);
     }
     lines.push('');
   }
@@ -52,6 +60,12 @@ export function renderReport({ game, label, profile, brief, runBand, seeds, chec
   }
 
   return lines.join('\n');
+}
+
+function endsText(m) {
+  return Object.entries(m.ends)
+    .map(([k, n]) => `${k} ×${n}`)
+    .join(', ');
 }
 
 function esc(s) {

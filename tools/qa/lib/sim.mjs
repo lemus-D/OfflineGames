@@ -19,3 +19,8 @@ export function drainShared(adapter, session) {
   }
   return out;
 }
+
+/** Which seat decides now. Single-seat games are always seat 0. */
+export function seatOf(adapter, session) {
+  return adapter.seat ? adapter.seat(session) : 0;
+}
