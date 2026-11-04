@@ -166,7 +166,7 @@ export class PlaySession {
   _updateFox(dt) {
     // Creep closes the gap; clean recovery opens it.
     this.foxGap -= FOX.creepPerSec * dt;
-    if (this.player.invuln <= 0 && !this.nearMiss) {
+    if (this.player.invuln <= 0) {
       this.foxGap += FOX.recoverPerSec * dt;
     }
     this.foxGap = clamp(this.foxGap, FOX.minVisualGap, FOX.maxGap);
