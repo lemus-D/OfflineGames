@@ -296,6 +296,11 @@ export function drawEntity(g, W, H, e) {
     const w = def.width * 0.5 * scale;
     const h = def.height * scale;
     qa.rect('hazard', x - w, y - h * 1.05, w * 2, h * 1.05);
+    // Contact shadow so every obstacle sits on the path.
+    g.fillStyle = 'rgba(14, 18, 24, 0.45)';
+    g.beginPath();
+    g.ellipse(0, h * 0.04, w * 1.1, Math.max(2, h * 0.16), 0, 0, Math.PI * 2);
+    g.fill();
     if (e.kind === 'rock') {
       inkShape(g, '#5a6678', () => {
         g.beginPath();
@@ -306,23 +311,50 @@ export function drawEntity(g, W, H, e) {
         g.lineTo(w * 0.8, 0);
         g.closePath();
       });
+      // Lit face so the rock reads as a solid, not a cut-out.
+      g.fillStyle = 'rgba(240, 230, 208, 0.18)';
+      g.beginPath();
+      g.moveTo(-w * 0.7, -h);
+      g.lineTo(w * 0.2, -h * 1.05);
+      g.lineTo(-w * 0.1, -h * 0.45);
+      g.lineTo(-w * 0.8, -h * 0.3);
+      g.closePath();
+      g.fill();
     } else if (e.kind === 'root') {
-      inkShape(g, '#4a3828', () => {
+      // Arched root: a hoop out of the ground with a gnarl on top.
+      inkShape(g, '#7a5a3a', () => {
         g.beginPath();
         g.moveTo(-w, 0);
-        g.quadraticCurveTo(-w * 0.2, -h * 0.6, w * 0.3, -h);
-        g.quadraticCurveTo(w, -h * 0.3, w * 0.9, 0);
+        g.bezierCurveTo(-w * 0.8, -h * 1.3, w * 0.8, -h * 1.3, w, 0);
+        g.lineTo(w * 0.62, 0);
+        g.bezierCurveTo(w * 0.5, -h * 0.75, -w * 0.5, -h * 0.75, -w * 0.62, 0);
         g.closePath();
       });
-    } else {
-      // log
-      inkShape(g, '#6b4428', () => {
+      inkShape(g, '#7a5a3a', () => {
         g.beginPath();
-        g.ellipse(0, -h * 0.35, w, h * 0.45, 0, 0, Math.PI * 2);
+        g.arc(w * 0.1, -h * 0.92, Math.max(2, h * 0.2), 0, Math.PI * 2);
       });
-      g.strokeStyle = PALETTE.ink;
+    } else {
+      // Log: lighter bark than the path, with a cut end showing rings.
+      inkShape(g, '#9a6a3e', () => {
+        g.beginPath();
+        g.roundRect(-w, -h * 0.8, w * 2, h * 0.8, h * 0.4);
+      });
+      g.strokeStyle = 'rgba(14, 18, 24, 0.5)';
+      g.lineWidth = 1.2;
       g.beginPath();
-      g.ellipse(-w * 0.85, -h * 0.35, w * 0.18, h * 0.4, 0, 0, Math.PI * 2);
+      g.moveTo(-w * 0.6, -h * 0.55);
+      g.lineTo(w * 0.5, -h * 0.55);
+      g.moveTo(-w * 0.3, -h * 0.28);
+      g.lineTo(w * 0.7, -h * 0.28);
+      g.stroke();
+      inkShape(g, '#e0b884', () => {
+        g.beginPath();
+        g.ellipse(w * 0.85, -h * 0.4, w * 0.2, h * 0.4, 0, 0, Math.PI * 2);
+      });
+      g.strokeStyle = '#9a6a3e';
+      g.beginPath();
+      g.ellipse(w * 0.85, -h * 0.4, w * 0.09, h * 0.2, 0, 0, Math.PI * 2);
       g.stroke();
     }
   }
