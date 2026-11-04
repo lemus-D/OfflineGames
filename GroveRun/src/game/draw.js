@@ -12,7 +12,8 @@ function project(lanePos, z, height, W, H) {
   const scale = 0.35 + Math.max(0, Math.min(1, t)) * 0.9;
   const pathY = H * 0.72;
   const horizon = H * 0.28;
-  const depth = Math.max(0, Math.min(1, 1 - z / far));
+  // No upper clamp: z < 0 is behind the bunny, nearer the camera, lower on screen.
+  const depth = Math.max(0, 1 - z / far);
   const y = horizon + (pathY - horizon) * (0.15 + depth * 0.85) - height * scale;
   const pathHalf = W * (0.12 + depth * 0.28);
   const x = W * 0.5 + lanePos * (pathHalf * 0.55) * (LANE_WIDTH / 56);
@@ -162,9 +163,10 @@ export function drawBunny(g, W, H, player, animT) {
 }
 
 export function drawFox(g, W, H, foxGap, threat, animT) {
-  // Fox sits behind the bunny along the path; closer gap → larger / lower on path.
-  const z = 12 + foxGap * 0.85;
-  const { x, y, scale } = project(0, Math.min(280, z), 0, W, H);
+  // Fox runs behind the bunny (z < 12, nearer the camera, lower on screen);
+  // a closing gap brings it up the screen towards the bunny.
+  const z = 2 - foxGap * 0.5;
+  const { x, y, scale } = project(0, z, 0, W, H);
   const s = (16 + threat * 10) * scale;
   const lunge = threat > 0.7 ? Math.sin(animT * 14) * 3 : 0;
 
@@ -238,7 +240,7 @@ export function drawEntity(g, W, H, e) {
   if (depth <= 0.02) return;
   g.save();
   g.translate(x, y);
-  g.globalAlpha = 0.4 + depth * 0.6;
+  g.globalAlpha = Math.min(1, 0.4 + depth * 0.6);
 
   if (e.kind === 'carrot') {
     const s = 10 * scale;
