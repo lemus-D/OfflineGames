@@ -1,5 +1,5 @@
 /* GroveRun service worker — precache, versioned cache name. */
-const CACHE = 'grove-run-v12';
+const CACHE = 'grove-run-v13';
 const PRECACHE = [
   './',
   './index.html',

@@ -167,16 +167,27 @@ export function drawBunny(g, W, H, player, animT) {
 export function drawFox(g, W, H, foxGap, threat, animT) {
   // Fox runs behind the bunny (z < 12, nearer the camera, lower on screen);
   // a closing gap brings it up the screen towards the bunny.
-  const z = 2 - foxGap * 0.5;
+  // Starts a body-length back even at the catch gap, so it never sits on the bunny.
+  const z = -28 - foxGap * 0.5;
   const { x, y, scale } = project(0, z, 0, W, H);
-  const s = (16 + threat * 10) * scale;
-  const lunge = threat > 0.7 ? Math.sin(animT * 14) * 3 : 0;
+  // Grows as it closes: a fox at the bunny's heels fills the lane.
+  const s = (18 + threat * 18) * scale;
+  // Gallop: body bounds and tilts every stride, faster as it closes.
+  const stride = animT * (9 + threat * 7);
+  const lunge = -Math.abs(Math.sin(stride)) * s * 0.18;
+  const tilt = Math.sin(stride) * 0.08;
 
   qa.rect('fox', x - s * 1.9, y + 8 * scale + lunge - s * 1.25, s * 3.15, s * 1.7);
 
+  // Ground shadow stays put while the body bounds.
+  g.fillStyle = 'rgba(0,0,0,0.35)';
+  g.beginPath();
+  g.ellipse(x, y + 8 * scale + s * 0.45, s * 1.1, s * 0.22, 0, 0, Math.PI * 2);
+  g.fill();
+
   g.save();
   g.translate(x, y + 8 * scale + lunge);
-  g.globalAlpha = 0.55 + threat * 0.45;
+  g.rotate(tilt);
 
   inkShape(g, PALETTE.fox, () => {
     g.beginPath();
@@ -207,6 +218,22 @@ export function drawFox(g, W, H, foxGap, threat, animT) {
     g.fill();
     g.stroke();
   }
+  // Bared teeth once it is close.
+  if (threat > 0.45) {
+    g.fillStyle = PALETTE.cream;
+    g.strokeStyle = PALETTE.ink;
+    g.lineWidth = 1.2;
+    for (let i = 0; i < 3; i++) {
+      const tx = s * (0.62 + i * 0.18);
+      g.beginPath();
+      g.moveTo(tx, s * 0.02);
+      g.lineTo(tx + s * 0.07, s * 0.2);
+      g.lineTo(tx + s * 0.14, s * 0.02);
+      g.closePath();
+      g.fill();
+      g.stroke();
+    }
+  }
   // Eye gleam
   g.fillStyle = '#f0e6d0';
   g.beginPath();
@@ -226,7 +253,6 @@ export function drawFox(g, W, H, foxGap, threat, animT) {
   });
 
   g.restore();
-  g.globalAlpha = 1;
 
   // Teeth flash when very close
   if (threat > 0.75) {
