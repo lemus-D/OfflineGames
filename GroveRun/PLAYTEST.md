@@ -125,3 +125,9 @@ Feel, art/polish, design, content. Player's voice.
 - Harness before → after: tools/qa/out/GroveRun/compare/trial-r1f__trial-r2/compare.md (draw only, identical inputs)
 - Final run: tools/qa/out/GroveRun/trial-final/
 - Left for owner: run-band, as above.
+
+### Round 3
+- Addressed (art director, trial-final): fox now larger with threat, galloping, teeth, shadow, a body-length back (f9d51fa); obstacle art with contact shadows, log grain and cut end, arched root, lit rock (a31e0aa); edge-only threat vignette, lighter hit flash, inked "FOX CLOSE!" that never fades out (this commit's parent).
+- Harness before → after: tools/qa/out/GroveRun/compare/trial-final__trial-r3a/, trial-r3a__trial-r3b/, trial-r3b__trial-r3c/ (draw only, identical inputs)
+- Left for owner: straight vs winding path (pitch says winding; a taste and scope call); no on-screen catch animation; summary lacks the plan's "fox was X m back" line; run-band, as above.
+
