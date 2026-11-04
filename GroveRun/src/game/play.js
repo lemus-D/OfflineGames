@@ -190,10 +190,10 @@ export class PlaySession {
   _spawnAhead() {
     while (this._spawnAt < this.distance + 420) {
       this._spawnWave(this._spawnAt);
-      const span = RUN.spawnGapMax - RUN.spawnGapMin;
-      // Tighter gaps as speed rises.
+      // Tighter gaps in time as speed rises, never tighter than spawnGapLateS.
       const t = clamp((this.speed - RUN.baseSpeed) / (RUN.maxSpeed - RUN.baseSpeed), 0, 1);
-      const gap = RUN.spawnGapMax - span * t * 0.7 - this.rng() * span * 0.25;
+      const gapS = RUN.spawnGapEarlyS - (RUN.spawnGapEarlyS - RUN.spawnGapLateS) * t;
+      const gap = this.speed * (gapS - this.rng() * 0.08);
       this._spawnAt += Math.max(RUN.spawnGapMin * 0.85, gap);
     }
   }

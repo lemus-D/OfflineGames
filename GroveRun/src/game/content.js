@@ -82,7 +82,10 @@ export const RUN = {
   scorePerUnit: 0.35,
   /** Spawn spacing along path early / late. */
   spawnGapMin: 95,
-  spawnGapMax: 160,
+  /** Wave spacing in seconds at base / max speed, so two lane switches
+      (2 × laneSwitchTime) always fit between waves however fast the run. */
+  spawnGapEarlyS: 0.9,
+  spawnGapLateS: 0.55,
   /** First carrot target distance. */
   firstCarrotDist: 70,
   /** Soft hit vs hard: rock is hard (instant fail); log/root soft if jumped wrong. */
