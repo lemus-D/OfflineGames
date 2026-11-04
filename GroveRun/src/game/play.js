@@ -63,7 +63,9 @@ export class PlaySession {
     // Seed a few early entities so the path isn't empty.
     this._spawnWave(40);
     this._spawnWave(RUN.firstCarrotDist);
-    this._spawnWave(RUN.firstCarrotDist + 90);
+    // The first-carrot wave ends with a rock 130 past it; regular waves
+    // start one gap after that, so they never stack on the seeded ones.
+    this._spawnAt = RUN.firstCarrotDist + 130 + RUN.spawnGapMin;
   }
 
   get score() {
