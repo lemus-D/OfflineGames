@@ -240,7 +240,9 @@ export function drawEntity(g, W, H, e) {
   if (depth <= 0.02) return;
   g.save();
   g.translate(x, y);
-  g.globalAlpha = Math.min(1, 0.4 + depth * 0.6);
+  // Fade in from the horizon; fade out once passed (culled at z = -40).
+  const passed = e.z < 12 ? Math.max(0, (e.z + 40) / 52) : 1;
+  g.globalAlpha = Math.min(1, 0.4 + depth * 0.6) * passed;
 
   if (e.kind === 'carrot') {
     const s = 10 * scale;
@@ -325,16 +327,10 @@ export function drawFrame(g, W, H, session, animT) {
   drawPath(g, W, H, session.distance);
 
   const sorted = session.entities.slice().sort((a, b) => b.z - a.z);
-  for (const e of sorted) {
-    if (e.z > 12) drawEntity(g, W, H, e);
-  }
-
+  // Passed entities, the fox, then the bunny last: the bunny is never hidden.
+  for (const e of sorted) drawEntity(g, W, H, e);
   drawFox(g, W, H, session.foxGap, session.foxThreat, animT);
   drawBunny(g, W, H, session.player, animT);
-
-  for (const e of sorted) {
-    if (e.z <= 12) drawEntity(g, W, H, e);
-  }
 
   drawParticles(g, W, H, session.particles);
   drawHitFlash(g, W, H, session.flash);
