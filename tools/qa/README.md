@@ -88,7 +88,8 @@ screenshots replayed from a Node bot run and paused on exact ticks.
 ## Adding a game
 
 Four small pieces, all written or copied by the build agent at scaffold
-time. `GroveRun` is the worked example.
+time. `GroveRun` (arcade) and `Break` (turn-based, vs its own AI) are the
+worked examples.
 
 ### 1. `<Game>/qa/adapter.mjs`
 
@@ -115,6 +116,10 @@ Translates the game for the harness. No strategy goes here.
 The default copy needs the game's `src/core/rng.js` to expose `clone()` (the
 scaffold version does). The self-check fails loudly if copies drift.
 
+A one-seat game against its own AI plays the AI inside `tick()`, the way
+`main.js` does but without the think delay, and `main.js` skips its own AI
+while `qa.replaying()`. `Break/qa/adapter.mjs` is the worked example.
+
 ### 2. `src/core/qa.js`
 
 Copy `tools/qa/templates/qa.js` unchanged and add it to `sw.js` PRECACHE. It
@@ -127,7 +132,7 @@ does nothing unless the URL has `?qa=1`. Then wire it in:
 | starting a run | `const seed = qa.seed(timeSeed)`; games with variants also `qa.variant(chosen)` |
 | stepping | `if (qa.replaying()) qa.step(session, dt); else session.step(dt, controls);` |
 | draw calls | pass `qa.clock(animTime)` as the animation time |
-| draining events | `qa.record(ev)` for each raw event |
+| events | `qa.record(ev)` for each raw event main.js drains — or, when the game has no event queue and the adapter works events out (Break), `qa.poll(session)` once per frame |
 | draw code | `qa.rect(role, x, y, w, h)` for `'player'`, `'hazard'`, `'pickup'` and any role expect.json names |
 
 ### 3. `index.html`

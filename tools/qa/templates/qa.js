@@ -29,11 +29,19 @@ export const qa = {
     if (enabled) rects.push({ role, x, y, w, h });
   },
 
-  /** main.js, for each raw simulation event it drains. */
+  /** main.js, for each raw simulation event it drains. Use this when the
+      game has its own event queue that main.js already empties. */
   record(raw) {
     if (!adapter) return;
     const ev = adapter.mapEvent(raw);
     if (ev) events.push(ev);
+  },
+
+  /** main.js, once per frame after stepping — instead of record() when the
+      game has no event queue and the adapter works events out itself. */
+  poll(session) {
+    if (!adapter || !session) return;
+    for (const raw of adapter.drainEvents(session)) this.record(raw);
   },
 
   /** main.js, when a run starts: the seed to use. Starts an armed replay. */

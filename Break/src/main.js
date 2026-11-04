@@ -13,6 +13,7 @@ import {
 import { PHYSICS, DIFFICULTIES, pocketCenters } from './game/content.js';
 import { PlaySession } from './game/play.js';
 import { chooseAiShot, difficultyThinkSec } from './game/ai.js';
+import { qa } from './core/qa.js';
 import {
   fitView,
   drawTable,
@@ -167,8 +168,8 @@ function refreshMenuMeta() {
 
 function startRun(difficulty) {
   armAudio();
-  selectedDifficulty = difficulty || 'medium';
-  const seed = (Date.now() ^ (performance.now() * 1000)) >>> 0;
+  selectedDifficulty = qa.variant(difficulty || 'medium');
+  const seed = qa.seed((Date.now() ^ (performance.now() * 1000)) >>> 0);
   session = new PlaySession(
     seed,
     {
@@ -442,10 +443,16 @@ function drawMenuBackdrop() {
 
 function drawPlay(dt) {
   const s = session;
-  tickAi(dt);
-  s.step(dt);
+  if (qa.replaying()) {
+    // The replay plays both sides through the qa adapter, AI included.
+    qa.step(s, dt);
+  } else {
+    tickAi(dt);
+    s.step(dt);
+  }
+  qa.poll(s);
 
-  if (pendingShot && s.phase === 'aiming' && !s.isAiTurn) {
+  if (pendingShot && s.phase === 'aiming' && !s.isAiTurn && !qa.replaying()) {
     s.shoot(pendingShot.dx, pendingShot.dy, pendingShot.power, pendingShot.english);
     pendingShot = null;
     englishDial.reset();
@@ -453,7 +460,7 @@ function drawPlay(dt) {
 
   clearFrame();
   const view = fitView(W, H);
-  drawTable(g, view, animTime);
+  drawTable(g, view, qa.clock(animTime));
 
   if (s.phase === 'ballInHand' && !s.isAiTurn) drawKitchenHint(g, view);
 
@@ -462,7 +469,7 @@ function drawPlay(dt) {
     !s.isAiTurn &&
     s.onTheEight('player')
   ) {
-    drawPocketCallHints(g, view, s.calledPocket.player, animTime);
+    drawPocketCallHints(g, view, s.calledPocket.player, qa.clock(animTime));
   }
 
   for (const b of s.balls) {
@@ -495,6 +502,7 @@ function frame(ts) {
   const dt = Math.min(0.05, (ts - lastTs) / 1000);
   lastTs = ts;
   animTime += dt;
+  qa.beginFrame();
 
   if (state === 'menu') {
     if (!session || session.phase === 'won') {
@@ -505,7 +513,7 @@ function frame(ts) {
     clearFrame();
     const view = fitView(W, H);
     if (session) {
-      drawTable(g, view, animTime);
+      drawTable(g, view, qa.clock(animTime));
       for (const b of session.balls) drawBall(g, b, view);
     }
   } else if (session) {
@@ -576,6 +584,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 
+qa.expose({ state: () => state });
 refreshMenuMeta();
 resize();
 show(els.menu);

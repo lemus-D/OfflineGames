@@ -2,6 +2,7 @@
 
 import { TABLE, pocketCenters, PHYSICS, BALL_R } from './content.js';
 import { predictAim } from './aim.js';
+import { qa } from '../core/qa.js';
 
 export function tableToScreen(x, y, view) {
   return {
@@ -309,6 +310,7 @@ export function drawBall(g, ball, view) {
   const s = tableToScreen(ball.x, ball.y, view);
   const r = ball.r * view.scale * scale;
   if (r < 0.4) return;
+  if (!ball.falling) qa.rect(ball.id === 0 ? 'player' : 'ball', s.x - r, s.y - r, r * 2, r * 2);
 
   g.save();
   g.globalAlpha = alpha;

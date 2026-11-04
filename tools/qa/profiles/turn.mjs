@@ -123,15 +123,33 @@ export function checks(m, { adapter, runBand, expect }) {
     );
 
     if (variants.length > 1) {
-      const rates = variants.map((v) => at('searcher', v).winRate);
-      const monotonic = rates.every((r, i) => i === 0 || r <= rates[i - 1] + slack);
+      // Judge difficulty with the human-like bot: that is who settings are for.
+      // 20 games per variant is noisy, so differences count only past two
+      // standard errors.
+      const human = variants.map((v) => at('humanish', v));
+      const apart = (a, b) => {
+        const se = Math.sqrt((a.winRate * (1 - a.winRate)) / a.runs + (b.winRate * (1 - b.winRate)) / b.runs);
+        return (a.winRate - b.winRate) / (se || 1e-9);
+      };
+      const reversed = [];
+      for (let i = 1; i < variants.length; i++) {
+        for (let k = 0; k < i; k++) {
+          if (apart(human[i], human[k]) > 2) reversed.push(`${variants[i]} is easier than ${variants[k]}`);
+        }
+      }
+      const spread = apart(human[0], human[human.length - 1]);
+      const rates = variants.map((v, i) => `${v} ${pct(human[i].winRate)}`).join(', ');
       add(
         'variants-ordered',
-        monotonic ? 'pass' : 'fail',
-        `searcher win rate by variant: ${variants.map((v, i) => `${v} ${pct(rates[i])}`).join(', ')}`,
+        reversed.length ? 'fail' : spread > 2 ? 'pass' : 'warn',
+        reversed.length
+          ? `humanish win rate: ${rates} — ${reversed.join('; ')}`
+          : spread > 2
+            ? `humanish win rate: ${rates}`
+            : `humanish win rate: ${rates} — easiest and hardest are not measurably different`,
         'Each harder setting should actually be harder (Break needed this for its AI tiers).'
       );
-      const hardest = rates[rates.length - 1];
+      const hardest = at('searcher', variants[variants.length - 1]).winRate;
       add(
         'hardest-beatable',
         hardest > 0 ? 'pass' : 'warn',

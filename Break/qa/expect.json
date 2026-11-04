@@ -1,0 +1,11 @@
+{
+  "minSpritePx": 10,
+  "rects": [
+    {
+      "rule": "visible",
+      "role": "ball",
+      "why": "Object balls have to be on screen at every key moment until the rack is cleared."
+    }
+  ],
+  "note": "No QC brief yet (BREAKPLAN.md has none), so run length, inputs and sound are not checked. minSpritePx 10 is a placeholder: pool balls are small by nature; the owner should set the real floor."
+}

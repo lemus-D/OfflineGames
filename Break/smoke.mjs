@@ -39,6 +39,7 @@ for (const file of [
   'src/core/rng.js',
   'src/core/save.js',
   'src/core/audio.js',
+  'src/core/qa.js',
 ]) {
   const src = readFileSync(new URL(file, import.meta.url), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')
