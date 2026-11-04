@@ -34,7 +34,9 @@ export function drawBackground(g, W, H, distance, threat) {
   g.fillStyle = '#121820';
   for (let i = 0; i < 14; i++) {
     const h = hash2i(i, 3, 9);
-    const x = ((i * 97 - scroll) % (W + 80)) - 40;
+    // Positive modulo: JS % keeps the sign, so trees used to drift off-screen for good.
+    const span = W + 80;
+    const x = ((((i * 97 - scroll) % span) + span) % span) - 40;
     const treeH = 60 + h * 100;
     const base = H * 0.34;
     g.beginPath();
