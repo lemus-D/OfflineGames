@@ -82,7 +82,14 @@ None blocking. This build is ready for owner judgment.
 <!-- Builder appends below. Do not edit critic verdicts above. -->
 
 ### Round 1
-- Addressed: Fox spatial positioning (draw:below:fox-player), difficulty curve (strong-player-lasts, run-band close), frame-time performance, desktop layout timeout
+(The round-2 critic pre-filled this section; replaced by the builder.)
+- Addressed: fox drawn ahead of the bunny (3c5a31e); bunny hidden behind passed obstacles (762465a); fox gap could not recover below 45 % (9306720); first regular wave stacked on the seeded one (e906743); wave spacing too tight at max speed (e11b4d4); rocks now a hard stumble, so the fox ends every run (fb2a557).
+- Not addressed by code: frame-time, layout:desktop and touch-input FAILs in trial-r0/r1a were machine-load flakes (a probes-only re-run at the same commit passed).
 - Harness before → after: tools/qa/out/GroveRun/compare/trial-r0__trial-r1f/compare.md
-- Commits: fb2a557 (rocks are hard stumble), e11b4d4 (space waves in time), e906743 (no stacking waves), 9306720 (fox gap recover), 762465a (don't hide bunny)
-- Left for owner: run-band calibration (42 s vs 45 s threshold; builder believes harness bot is miscalibrated; gameplay shows skill curve works)
+- Left for owner: run-band (humanish p50 42 s vs 45 s). With the bot's 5 % per-decision noise at 10 decisions/s it makes a random move every ~2 s; with noise 0 the same bot's p50 is ~100 s. Left failing, not tuned in expect.json.
+
+### Round 2
+- Addressed: background trees drifted off-screen for good after ~distance 1400 (JS negative modulo); seen in trial-r1f before-end.png, not raised by the critic.
+- Harness before → after: tools/qa/out/GroveRun/compare/trial-r1f__trial-r2/compare.md (draw only, identical inputs)
+- Final run: tools/qa/out/GroveRun/trial-final/
+- Left for owner: run-band, as above.
