@@ -311,12 +311,9 @@ export class PlaySession {
 
       // Hit.
       e.dead = true;
-      if (def.dodge === 'lane' && def.id === 'rock') {
-        this._die('obstacle');
-        return;
-      }
-      // Soft stumble — fox closes in.
-      this.foxGap -= FOX.stumbleClose;
+      // Rocks are a hard stumble, logs and roots a soft one; either way the
+      // fox closes in, and it is the fox that ends the run.
+      this.foxGap -= def.dodge === 'lane' ? FOX.hardClose : FOX.stumbleClose;
       this.flash = 1;
       p.invuln = BUNNY.hitInvuln;
       this.events.push({ kind: 'hit', kindObs: e.kind });

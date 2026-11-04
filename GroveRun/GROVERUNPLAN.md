@@ -31,7 +31,7 @@ Lane-hop and leap.
 1. Bunny starts mid-lane; path auto-scrolls forward; fox trails just off-screen.
 2. Pressure — rising scroll speed + fox gap that closes on hits/stumbles; idle into an obstacle ends the run within ~30 s.
 3. Reward — carrots every few seconds; first carrot inside 5 s; score from distance + carrots.
-4. Fail — hit a hard obstacle, or fox gap reaches zero after a stumble.
+4. Fail — the fox catches you: every hit closes the gap (rocks most), and the run ends when it reaches zero. **[proposal, changed in the GroveRun trial: rocks were instant death]**
 5. Run length: 45 s – 4 min for a good run.
 
 ## One more go **[proposal]**

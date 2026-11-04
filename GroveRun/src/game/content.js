@@ -62,6 +62,8 @@ export const FOX = {
   startGap: 150,
   /** Gap closes this much on a stumble (hit soft). */
   stumbleClose: 42,
+  /** Gap lost on hitting a rock (too tall to jump). */
+  hardClose: 100,
   /** Soft hit: lose this much gap; if gap ≤ catchGap → caught. */
   catchGap: 16,
   /** Passive close rate (units / sec) so idle pressure exists even without hits. */
