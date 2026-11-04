@@ -55,9 +55,10 @@ export function drawBackground(g, W, H, distance, threat) {
   g.fillRect(0, 0, W, H * 0.55);
 
   if (threat > 0.35) {
-    const v = g.createRadialGradient(W * 0.5, H * 0.5, W * 0.2, W * 0.5, H * 0.5, W * 0.75);
+    // Edge vignette only, so the dusk palette survives the hottest moments.
+    const v = g.createRadialGradient(W * 0.5, H * 0.55, H * 0.32, W * 0.5, H * 0.55, H * 0.62);
     v.addColorStop(0, 'rgba(0,0,0,0)');
-    v.addColorStop(1, `rgba(80, 10, 10, ${0.15 + threat * 0.35})`);
+    v.addColorStop(1, `rgba(120, 16, 12, ${0.2 + threat * 0.45})`);
     g.fillStyle = v;
     g.fillRect(0, 0, W, H);
   }
@@ -254,12 +255,17 @@ export function drawFox(g, W, H, foxGap, threat, animT) {
 
   g.restore();
 
-  // Teeth flash when very close
-  if (threat > 0.75) {
-    g.fillStyle = `rgba(240, 230, 208, ${0.3 + Math.sin(animT * 20) * 0.2})`;
-    g.font = `bold ${Math.floor(14 + threat * 8)}px Trebuchet MS, Verdana, sans-serif`;
+  // Warning label: inked and always readable; it pulses, never vanishes.
+  if (threat > 0.6) {
+    const px = Math.floor(18 + threat * 10);
+    g.font = `bold ${px}px Trebuchet MS, Verdana, sans-serif`;
     g.textAlign = 'center';
-    g.fillText('CLOSE', W * 0.5, H * 0.18);
+    g.lineJoin = 'round';
+    g.lineWidth = 4;
+    g.strokeStyle = PALETTE.ink;
+    g.strokeText('FOX CLOSE!', W * 0.5, H * 0.2);
+    g.fillStyle = `rgba(240, 120, 64, ${0.8 + Math.sin(animT * 12) * 0.2})`;
+    g.fillText('FOX CLOSE!', W * 0.5, H * 0.2);
   }
 }
 
@@ -377,7 +383,7 @@ export function drawParticles(g, W, H, particles) {
 
 export function drawHitFlash(g, W, H, flash) {
   if (flash <= 0) return;
-  g.fillStyle = `rgba(200, 40, 30, ${flash * 0.35})`;
+  g.fillStyle = `rgba(200, 40, 30, ${flash * 0.22})`;
   g.fillRect(0, 0, W, H);
 }
 
