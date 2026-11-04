@@ -1,11 +1,11 @@
-# Playtest — GroveRun @ trial-final
+# Playtest — GroveRun @ trial-final2
 
 Date: 2026-11-04
 Tester: game-art-director (fresh agent; no source edits, game not run)
 Round: final
-Harness run: tools/qa/out/GroveRun/trial-final/ — 32 checks: 31 PASS, 1 FAIL (`run-band`, humanish p50 42 s vs 45 s). The skill says a FAIL blocks the review. The builder asked for it to be treated as a WARN and sent to the owner, so this review goes ahead and judges everything else. The FAIL is still there.
-Compared with: trial-r1f — tools/qa/out/GroveRun/compare/trial-r1f__trial-final/
-Recording (final round): tools/qa/out/GroveRun/trial-final/recording.webm (30 s of the long bot run, real speed; not watched by this reviewer)
+Harness run: tools/qa/out/GroveRun/trial-final2/ — 32 checks: 31 PASS, 1 FAIL (`run-band`, humanish p50 42 s vs 45 s). The builder asked for it to be treated as a WARN and sent to the owner, so this review judges everything else. The FAIL is still there.
+Compared with: trial-final. `node tools/qa/compare.mjs GroveRun trial-final trial-final2` crashed twice with `Z_BUF_ERROR: unexpected end of file` in `decodePng`, which means one of the PNGs in the two runs is truncated. No `pairs/` were produced, so I compared the two runs' `moments/*.png` and `filmstrip.png` by eye.
+Recording (final round): tools/qa/out/GroveRun/trial-final2/recording.webm (30 s of the long bot run, real speed; not watched by this reviewer)
 
 ## Pitch (verbatim)
 
@@ -20,94 +20,93 @@ tone=dusk woodland, ink outlines, cute bunny vs mean fox; readable silhouettes p
 
 **not_ready**
 
-This overturns the round-2 `ready_for_owner`. That review marked every cell "yes". The same frames, looked at again, show placement and finish problems it did not record.
+The round-3 work is real and visible. The fox, obstacles and danger label are clearly better, with no regressions. But the build is still not the game that was pitched, and the scenery still looks like a diagram.
 
 Top reasons, player's voice:
 
-1. **"This isn't a winding path. It's a brown triangle."** Every frame shows the same straight trapezoid, fixed in place. The road never bends, and nothing passes beside it. The ground on both sides is an empty flat gradient, and its top edge is a hard horizontal line with a band of flat tree triangles sitting on it. The only sense of speed comes from the centre dashes. The pitch says "Temple Run–style … winding path", and the plan's Look section says "winding path perspective", so this misses the pitch, not just the polish.
-2. **"The fox doesn't scare me. It looks like a pancake with ears."** The fox is a small, flat, russet shape lying prone behind the bunny. It has no visible teeth, no lunge, no eye glint, and no change in pose when it is about to catch you. The gap goes from 162 to 31, and the fox shuffles up the screen but stays about the same size. The plan promised "fox silhouette larger" and "fox leap", and neither shows in any still. At first-danger and before-end its ears draw over the bunny's feet, so it looks stuck to the bunny rather than chasing it.
-3. **"The obstacles look like placeholders and I died without warning."** The logs are brown ellipses on a brown path with almost no outline, and they nearly vanish. The root is a plain dark triangle. The rock is a flat grey polygon, and at before-end the bunny is drawn on top of it. The ink outlines the brief asks for are thin or missing on everything except the bunny. In the filmstrip the "CLOSE" warning blinks down to near-invisible and is gone in the last two frames. The HUD reads FOX GAP 49, and the next screen is "The fox caught you."
+1. **"It's still a straight brown triangle, not a winding path."** In every frame the road is the same trapezoid with its far end pinned at one point on the horizon. The bottom of the road sways a few pixels left and right across the filmstrip, but it never bends and nothing goes past it. Both sides are empty flat colour, and the trees are a row of flat triangles standing on a ruler-straight horizon line. "Winding path" is in the pitch's second sentence and in the plan's Look section. The builder has passed this to the owner as a taste and scope call. As written, the pitch is not met.
+2. **"The fox is scarier now, but it's running sideways, and I never see it catch me."** The new fox is bigger, has teeth, an eye and a shadow, and now reads as mean. But it is drawn in profile with its snout pointing right, across the path, in every frame. It looks like it is crossing the road rather than coming up behind me. In the stills it holds the same pose through all 16 filmstrip frames. If it gallops, that cannot be seen at 0.1 s spacing. The catch still happens off camera: the last gameplay frame shows FOX GAP 49, and the next screen is a modal. Behind the modal there is a faint shape that might be the fox on the bunny, but you cannot read it.
+3. **"The hit flash still eats the dusk, and I can't tell what one rock costs."** At early (t180) and first-damage (t174) the whole screen is still plum and crimson. It is a little less red than last round, but the indigo dusk is gone at the exact moment the chase gets hot. In the filmstrip one hit takes FOX GAP from 73 to 31. The run then ends at 49 when the bunny meets a rock. Nothing on screen tells the player that a rock means death below about 45. "FOX CLOSE!" is on from gap 31 to 49 alike and on at every gameplay moment where the gap is below about 85, so it carries no information about how close death is.
 
 ## Rubric by key moment
 
 | Moment | R1 player | R2 danger/reward | R3 grounded | R4 HUD | R5 tone | R6 feedback | R7 finished | R8 pitch | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| early (t180) | yes | no | no | yes | partial | yes | no | partial | Bunny is clear, with a pink hit tint and a dust puff. The two logs up the path are brown ovals on a brown path and barely read as obstacles. The carrot is about 10 px. Fox ear tips touch the bunny's feet. The tree band ends on a hard horizontal line. The whole frame is washed red from the t174 hit, so there is no dusk indigo. |
-| first-reward (t110) | yes | partial | no | yes | yes | yes | no | partial | This is the best frame: the indigo dusk reads, and the carrot pickup particles are visible on the bunny. The root is a bare dark triangle sitting at the path edge with no outline and no shading, which is programmer art. The logs and rock are flat fills. The road is straight. |
-| first-damage (t174) | yes | no | no | yes | partial | yes | no | partial | Feedback is strong: a full-screen red wash and a pink bunny. With the red wash the logs disappear into the path. The fox is pressed against the bunny's heels with the ears overlapping. The path's far end is a flat cut in front of the trees, with no fog or fade. |
-| first-danger (t256) | yes | partial | no | partial | partial | partial | no | yes | The fox's ears and head draw over the bunny's legs, so the two sprites merge into one blob. The "CLOSE" label is dull rose on dark red and reads as a watermark, not an alarm. No vignette is visible, though the plan promised one. This is the only moment that truly shows the chase. |
-| before-end (t2519) | yes | yes | no | yes | yes | no | no | partial | The bunny is drawn overlapping the grey rock, with no clear in-front/behind and no impact. The fox overlaps the bunny's feet. The background trees are fixed (see pairs). HUD shows FOX GAP 49 in red, and nothing else in the frame says "you are about to die". |
-| summary | yes | n/a | yes | yes | yes | partial | yes | partial | A clean, readable modal: score, distance, carrots, best, and one-tap Play again. The summary line the plan promised ("fox was X m back") is missing and has been replaced by a generic "So close — one more clean dodge." The catch itself is never shown. |
+| early (t180) | yes | partial | yes | yes | no | yes | no | partial | The cream bunny is clear, with a hit tint and an orange puff. The logs now read as logs, with grain, cut ends and outlines, though they are small at that distance. The carrot is a thin 8–10 px sliver. The fox sits a clear body-length back with no overlap. The frame is fixed from last round. The whole scene is still washed plum and crimson from the t174 hit. The ground on both sides is empty, and the tree band stands on a hard seam. |
+| first-reward (t110) | yes | yes | yes | yes | yes | yes | no | partial | This is the best frame. The indigo dusk reads. The root is now an arched, inked root with a knot instead of a bare triangle. The rock is lit, with an outline and a contact shadow. Carrot particles show on the bunny. Characters and obstacles look finished. The road and surroundings do not: straight trapezoid, flat empty sides, and the far end of the road is a hard cut with no fog. |
+| first-damage (t174) | yes | yes | yes | yes | no | yes | no | partial | Feedback is unmistakable. The logs no longer disappear into the path under the wash, which is fixed. The fox is behind the bunny, clear of its feet. The dusk palette is lost to the wash. Same scenery staging as above. |
+| first-danger (t256) | yes | yes | yes | yes | partial | yes | no | yes | "FOX CLOSE!" is now bold orange with an ink outline, and it reads as an alarm. Fixed. A red vignette shows at the top and bottom edges. The fox is big, toothed and right behind. This frame shows the chase best. FOX GAP shows 82 in white while the alarm is up, so the HUD and the banner disagree about how serious it is. |
+| before-end (t2519) | yes | yes | yes | yes | yes | partial | no | partial | The bunny stands in front of the rock, with correct depth order and contact shadows. The fox is close behind. Gap 41 in red and the alarm say danger. There is no hint that this rock ends the run. The trees are present. |
+| summary | yes | n/a | yes | yes | yes | partial | partial | partial | The modal is clean and has one-tap Play again. "FOX CLOSE!" is still drawn on the canvas behind the modal, which is leftover state on the end screen. The plan's "fox was X m back" line is still missing; the line reads "So close — one more clean dodge." The catch behind the modal cannot be read. |
 
-R3 and R7 are "no" at five of the six moments. Under the skill's verdict rule, that alone makes this `not_ready`.
+R1 and R3 are "yes" everywhere, which is a real step up from trial-final. R7 is "no" at every gameplay moment. That is no longer because of the sprites. It is because of the scenery: an empty flat field on both sides, triangle trees on a straight seam, and a road that ends in a cut. Under the skill's rule, an R7 "no" anywhere means `not_ready`.
 
 ## Pairs against the previous round
 
-Same seed and same inputs. trial-r1f is on the left, trial-final on the right. The only thing the builder fixed since then is the background trees drifting off-screen late in a run (Round 2 response).
+compare.mjs crashed (see header), so these are side-by-side reads of `trial-final/moments/*` (left) against `trial-final2/moments/*` (right). The builder said they fixed three things: the fox, the obstacle art, and danger readability (vignette, lighter flash, a label that never fades).
 
 | Moment | Better side | Anything worse? |
 |---|---|---|
-| early | same | No. Pixel-identical as far as I can see. |
-| first-reward | same | No art change. Left shows carrots 0 / dist 282 and right shows carrots 1 / dist 298, so the two captures are a few ticks apart even with "identical inputs". This is a harness capture oddity, not a regression. |
-| first-damage | same | No. |
-| first-danger | same | No. |
-| before-end | right | No. This is the real fix. On the left the tree band is gone and the sky is an empty gradient. On the right the trees are back. |
-| summary | right (slightly) | No. Trees are faintly visible behind the modal on the right. |
+| early | right | No. On the right the fox is bigger, has teeth and a shadow, and no longer touches the bunny's feet. The logs have outlines and cut ends instead of brown ovals. The "lighter flash" is barely visible: both frames are crimson. |
+| first-reward | right | No. On the right the root is an arch instead of a triangle, the rock is lit and outlined, the log has grain, and the fox has more presence. Same HUD numbers on both sides (dist 298, carrots 1). |
+| first-damage | right | No. On the right the wash is a little more plum than red, and the logs stay visible under it. |
+| first-danger | right | No. The left shows a faint rose "CLOSE" watermark with the fox under the bunny. The right shows an inked orange "FOX CLOSE!" with the fox behind. Note that the two frames are not the same game state: left dist 711 / gap 40, right dist 674 / gap 82. The gap or threshold rules changed this round, so this round was not draw-only. Not a regression, but the pair is not like-for-like. |
+| before-end | right | No. Right: gap 41 plus the alarm. Left: gap 49 with nothing. Depth order is the same on both sides: bunny in front of the rock. Again, the two frames are different states (dist 9538 vs 9460). |
+| summary | same | No. The final numbers are the same (3715 / 9543 / 15). The right side leaves "FOX CLOSE!" visible behind the modal, which is a small polish loss but not a regression in what the player reads. |
 
-No regressions. One fix is confirmed, and it was a real bug. The fix did nothing about the problems above, all of which are in the trial-r1f frames too.
+No regressions. Three fixes are confirmed: fox presence, obstacle art, and alarm legibility.
 
 ## Motion (final round, from filmstrip)
 
-The filmstrip is 16 frames about 0.1 s apart, at dist 9095 to 9533, ending at tick 2518, one tick before the catch.
+The filmstrip is 16 frames about 0.1 s apart, dist 9095 to 9533, ending at tick 2518.
 
-- **Player reads in every frame: yes.** The cream bunny stays at a fixed screen position in the left lane in all 16 frames. It never switches lanes or jumps in this window, so the strip shows no lane-slide or jump-arc motion.
-- **Hit (frames 3 to 4):** the bunny turns pink and the screen washes red. FOX GAP drops from 73 to 31 in one frame. The rock it hit is then drawn on top of the fox. It is a clear "something happened", but the rock and the bunny looked laterally offset in frame 3. This is my inference from stills: a player may feel the hitbox is wider than the drawing. Check this in recording.webm.
-- **Red wash fade:** it fades over about 4 frames (0.4 s). This is smooth and fine.
-- **"CLOSE" label pulses:** bright in frames 5, 6, 8, 9, 12 and 13, near-invisible in 7, 10, 11, 14 and 15, gone in 15 and 16. At the faint phase it cannot be read at all. It vanishes at gap 49, about 0.2 s before the run ends.
-- **Pop-in:** none. Obstacles and carrots are born tiny at the horizon and grow smoothly.
-- **Smear or ghosting:** none, which agrees with `clears-each-frame` PASS.
-- **Off-screen kill:** effectively yes. The last frame shows gap 49 with a rock touching the bunny. The next capture is "The fox caught you." The catch is never shown on camera, neither the fox leap nor any freeze frame. From the player's side, the death arrives without a visible cause. I could not see why gap 49 became 0, because the strip stops one tick short. The owner should watch the end of recording.webm.
-- **Fox motion:** it shifts a few pixels between frames and stays the same size and pose. It never animates as running. In 1.6 s of stills it looks like a sliding decal, not a predator.
+- **Player reads in every frame: yes.** The bunny stays in the left lane all 16 frames. It never switches lanes or jumps in this window, so the slide and the jump arc are still unseen in any still I have reviewed across two final rounds.
+- **Hit (frames 3 to 4):** the bunny runs into the arched root in its own lane. Then the bunny turns pink, the screen goes red, and FOX GAP drops from 73 to 31. Cause and effect read. This is better than last round, where the offending obstacle looked offset.
+- **Wash fade:** the wash fades over about 3 to 4 frames. This is smooth.
+- **"FOX CLOSE!":** it is solid from frame 4 to frame 16 and never fades. The fix is confirmed. Its weakness now is the opposite one: it is always on.
+- **Fox position:** in frame 4 the fox is a lane to the right of the bunny. By frame 5 it is directly under it, so it moves a lane in 0.1 s or less. That reads as a snap, not a chase (inferred from stills). In frames 5 to 8 (gap 31) the fox's ear tips touch the bunny's feet, so the "body-length back" spacing collapses when the gap is low. In frames 13 to 16 (gap 40 to 49) they are clearly apart.
+- **Fox pose:** I cannot see any gallop cycle at this scale. The silhouette, a sideways profile with the snout to the right, looks the same in all 16 frames. The owner should check this in recording.webm.
+- **Duplicate frames:** frames 2 and 3, 6 and 7, 8 and 9, and 12 and 13 show identical dist and score, four repeats. trial-final had two. This is either capture cadence or a sim hitch. I cannot tell which from stills. `frame-time` PASS says p95 is 33.4 ms, so it is probably capture, but the owner should check for stutter in the recording.
+- **Pop-in / smear:** none. Obstacles grow smoothly from the horizon, which agrees with `clears-each-frame` PASS.
+- **Off-screen kill:** partly fixed. In frame 16 the rock is visibly in the bunny's lane at its feet, so the cause of death is now on screen. The catch itself is not: the strip ends at gap 49 and the next image is the modal.
 
 ## Intent match
 
-- Verb: lane-hop and leap exist and the harness confirms they matter (`skill-matters` PASS: humanish p50 42 s vs random 4 s). Neither verb is visible in any of the 22 frames I reviewed, so their feel is unverified.
-- Pressure / fail: the numbers say pressure works. The visuals barely carry it. A number in the HUD and a faint pulsing word do most of the work. The fox, the thing that should be the pressure, does not change in a way you can feel.
-- Tone / art direction: dusk is there in the colour scheme (indigo and russet) when the screen is not red. Ink outlines are present on the bunny and fox only, and thin. The obstacles have none. "Mean fox" is not delivered. "Cute bunny" is.
-- Promised content: lanes, jump, carrots, logs, rocks, roots, fox gap, best score: present. Winding path: missing. Fox leap on catch, larger fox when close, edge vignette, and the "fox was X m back" summary line: all promised in the plan, none visible.
-- Verdict: **partial** — "It's a working three-lane dodge game with a fox icon behind you, but it isn't yet the winding, predatory Temple Run chase that was pitched."
+- Verb: the harness shows lane-hop and leap matter (`skill-matters` humanish p50 42 s vs random 4 s). No frame shows either verb in motion, so their feel is unverified.
+- Pressure / fail: the fox now looks like a threat, and the alarm is legible. Because the alarm is on at nearly every moment, and one rock can end a run from gap 49, a player gets no warning before the hit that kills them.
+- Tone / art direction: the cute bunny is delivered. The mean fox is mostly delivered; it is let down by the sideways pose. Ink outlines are now on the bunny, fox, logs, root and rock. Dusk indigo shows when the screen is not tinted. The woodland is a strip of flat triangles over empty ground, which is a backdrop rather than a place.
+- Promised content: lanes, jump, carrots, logs, rocks, roots, fox gap, vignette, larger fox when close, and best score are all present. Still missing: the winding path, the fox leap or catch on screen, and the "fox was X m back" summary line.
+- Verdict: **partial** — "The characters are finished and the fox finally looks hungry, but the world is a straight ramp through an empty field, and the chase never pays off on camera."
 
 ## Harness numbers that shaped the verdict
 
 (Quoted from report.md; not re-measured.)
 
-- `run-band` FAIL: "humanish p50 42 s; brief run_band 45–240 s". Treated as WARN on the builder's instruction. It is an owner call whether the bot's 5 % noise is unfair. A typical decent run landing 3 s under the band floor is plausible for a real player too.
-- `strong-player-lasts` PASS: "searcher p10 85 s". `has-ceiling` PASS: "7/20 searcher runs hit the time cap". Skill is rewarded, and a top player can run forever. Nothing changes visually as you go (speed only), so long runs are also visually monotonous. That second point is inferred from before-end looking just like early.
-- `events:danger` humanish 169.82/min. Danger fires almost three times a second, which suggests the "CLOSE" state is on nearly all the time. That matches the filmstrip: it shows CLOSE in 12 of 16 frames. A warning that is always on stops being a warning. This is inferred from the number plus the filmstrip, not observed in play.
-- `draw:below:fox-player` PASS and `draw:hudClear:player` PASS. The harness checks position, not overlap. Fox-over-bunny overlap is visible at three moments even though both checks pass.
-- `frame-time` p95 33.4 ms at 4× throttle, `offline` PASS, `console-clean` PASS. The platform side is solid.
+- `run-band` FAIL: "humanish p50 42 s; brief run_band 45–240 s". Treated as WARN on instruction. It is an owner call, per the builder's noise argument in Round 1.
+- `events:danger` humanish "169.82/min, 124/run". The danger state is effectively always on, which matches the always-lit "FOX CLOSE!" in 13 of 16 filmstrip frames. The alarm is legible, but at that rate it does not tell the player anything new.
+- `strong-player-lasts` searcher p10 85 s and `has-ceiling` 7/20 capped. Long runs exist. Before-end (dist 9460) looks the same as first-reward (dist 298) apart from the HUD. Over a 4-minute run nothing visual changes, which is inferred from those two frames.
+- `draw:below:fox-player`, `draw:hudClear:player`, `draw:minSize:player` PASS. These agree with what I see in the key stills. They do not catch the ear-on-feet touching at gap 31 in the filmstrip.
+- `frame-time` p95 33.4 ms at 4× throttle, plus `offline`, `layout` and `console-clean` PASS. The platform side is solid.
 
 ## Complaints (ranked)
 
 Feel, art/polish, design, content. Player's voice.
 
-1. **Straight, static road (content/pitch).** "Winding path" is in the pitch's first sentence. With no curves, no turns and no roadside scenery, every second of every run looks the same. Whether the MVP may ship a straight road is an owner call. The pitch as written says it may not.
-2. **The fox is not predatory (art/pitch).** It needs to be bigger and closer when the gap is small, and it needs a running or lunging pose, visible eyes or teeth, and an on-screen catch. The current prone silhouette reads as cute, which is the bunny's job.
-3. **Sprite overlap and no depth order (R3).** Fox over bunny at early, first-damage, first-danger and before-end. Bunny over rock at before-end. Nothing reads as standing on the ground: there are no contact shadows under the obstacles and only a faint one under the bunny.
-4. **Obstacle art is placeholder (R7, R2).** Logs blend into the path, especially under the red wash. The root is a bare triangle. The brief's ink outlines are missing on all obstacles.
-5. **Danger feedback is weak and constant.** "CLOSE" is low-contrast, blinks to invisible, and is on most of the time. Three of the five gameplay key moments are washed solid red, so the dusk mood is lost exactly when the chase is hottest. The plan's edge vignette would do better.
-6. **Unexplained death.** At gap 49 the warning is off, and then you are caught. The catch is never shown. Players will feel cheated.
-7. **Scenery staging.** The tree band sits on a hard horizontal seam. The path's far end is a flat cut with no fog. The flat ground on both sides is empty. Together these make the scene look like a diagram of a forest.
-8. **Summary is missing the promised "fox was X m back" line.** Minor, but it is the one "one more go" hook the plan named.
+1. **Straight road, empty world (pitch, R7).** It needs a road that visibly bends, or at least curves with the horizon shifting, plus things going past beside it: trunks, ferns, stumps, fireflies. The flat field and the triangle trees on a seam are what make every frame look unfinished. If the owner rules that a straight MVP road is fine, the roadside scenery is still needed for R7.
+2. **No on-screen catch (feel).** The run ends on a modal. A half-second of the fox lunging and the frame freezing before the summary would pay off the whole chase. This was promised in the plan's feedback table ("fox leap").
+3. **The fox faces across the path (art).** A chaser seen from behind the runner should point up the screen toward the bunny: a three-quarter view, or head-on with the jaws toward the camera. The sideways profile undercuts "behind you".
+4. **Hit wash still kills the dusk (tone).** Early and first-damage are wholly plum or crimson. Keep the red to the edges, as the new vignette does, and leave the centre indigo.
+5. **Danger has one level (design).** The same "FOX CLOSE!" shows at gap 82 and at gap 31, while one rock can end the run from 49. The alarm and vignette should get stronger as the gap gets smaller, or the HUD should show the gap as a bar with a "one more hit" mark.
+6. **Fox snaps a lane at a time and touches the bunny at low gap (motion).** Seen in filmstrip frames 4 to 8.
+7. **Carrots are tiny.** An 8–10 px sliver, even close to the bunny. This is the reward you are told to grab, and it is the smallest thing on screen.
+8. **Summary:** "FOX CLOSE!" is still drawn behind the modal, and the promised "fox was X m back" line is missing.
 
 ## Not checked
 
-- recording.webm was not watched (the skill does not require it). The catch animation, lane-slide and jump arc are therefore unverified. The owner should watch the last seconds.
-- The menu screen. There is no key moment for it. `canvas-drawn:menu` and `layout` PASS are the only evidence.
-- Portrait vs landscape vs desktop composition. All key moments are portrait (390 px wide). `layout` PASS covers clipping, not looks.
-- Sound. `audio` PASS (peak RMS 0.0124) only shows that there is sound. Whether it is tasteful and "minimal" was not judged.
-- Install flow. `offline` PASS only.
-- Whether the frame-3 rock was actually in the bunny's lane (hitbox fairness). This was inferred from stills only.
+- recording.webm was not watched. Still unverified: the gallop cycle, lane-slide, jump arc, the catch behind the modal, and whether the duplicate filmstrip frames are stutter.
+- Pairs were not produced, because compare.mjs crashed on a truncated PNG in trial-final or trial-final2. I did not find out which file. The pair verdicts above are by eye from the moments folders.
+- Before-end (tick 2519, dist 9460, gap 41) does not line up with the filmstrip's end (tick 2518, dist 9533, gap 49). This is a harness capture oddity and was not investigated.
+- The menu screen, desktop and landscape composition, sound taste, and the install flow. Only PASS checks are evidence for these.
 
 ## Builder response
 
