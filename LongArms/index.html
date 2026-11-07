@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>LongArms</title>
+<meta name="description" content="Goofy half-court basketball. Jump to throw. Noodle arms required." />
+<meta name="theme-color" content="#e85d4c" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%237ec8c4'/><circle cx='22' cy='10' r='5' fill='%23f07828'/><path stroke='%23f2c4a0' stroke-width='3' fill='none' d='M8 28c2-10 8-14 14-16'/><circle cx='10' cy='12' r='4' fill='%23e85d4c'/></svg>" />
+<style>
+  :root {
+    --ink: #1a1a2e;
+    --paper: #f8f4ec;
+    --muted: #5a6478;
+    --sky: #7ec8c4;
+    --tomato: #e85d4c;
+    --berry: #3d6ea5;
+    --ball: #f07828;
+    --court: #e8b86a;
+    --panel: rgba(248, 244, 236, 0.88);
+    --font-display: "Trebuchet MS", "Verdana", "Geneva", sans-serif;
+    --font-body: "Verdana", "Geneva", "Trebuchet MS", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--sky);
+    color: var(--ink);
+    font-family: var(--font-body);
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  #stage {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    touch-action: none;
+    background: var(--sky);
+  }
+
+  .hidden { display: none !important; }
+
+  .overlay {
+    position: fixed; inset: 0;
+    display: flex;
+    pointer-events: none;
+  }
+  .overlay > * { pointer-events: auto; }
+
+  #menu .menu-panel, #summary .menu-panel {
+    width: min(400px, 92vw);
+    margin: auto;
+    padding: 28px 26px 22px;
+    background: var(--panel);
+    border: 3px solid var(--ink);
+    border-radius: 18px;
+    box-shadow: 6px 8px 0 rgba(26, 26, 46, 0.18);
+  }
+
+  .brand {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(2.6rem, 10vw, 3.8rem);
+    line-height: 0.92;
+    letter-spacing: -0.04em;
+    color: var(--tomato);
+    margin: 0 0 6px;
+  }
+
+  .tag {
+    margin: 0 0 18px;
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.35;
+  }
+
+  .meta-row {
+    display: flex;
+    gap: 18px;
+    margin: 0 0 18px;
+    font-size: 0.9rem;
+    color: var(--ink);
+  }
+  .meta-row strong { color: var(--berry); }
+
+  .btn {
+    appearance: none;
+    border: 3px solid var(--ink);
+    background: var(--ball);
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.15rem;
+    padding: 12px 18px;
+    border-radius: 14px;
+    cursor: pointer;
+    width: 100%;
+    box-shadow: 3px 4px 0 var(--ink);
+  }
+  .btn:active { transform: translate(1px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+  .btn.secondary { background: var(--paper); margin-top: 10px; }
+
+  .hint {
+    margin: 16px 0 0;
+    font-size: 0.8rem;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  #hud {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 12px 16px;
+    pointer-events: none;
+    font-family: var(--font-display);
+  }
+
+  .scoreboard {
+    display: flex;
+    gap: 10px;
+    background: var(--panel);
+    border: 3px solid var(--ink);
+    border-radius: 14px;
+    padding: 8px 12px;
+    font-weight: 800;
+    font-size: 1.35rem;
+  }
+  .scoreboard .you { color: var(--tomato); }
+  .scoreboard .them { color: var(--berry); }
+  .scoreboard .sep { color: var(--muted); }
+
+  .clock {
+    background: var(--panel);
+    border: 3px solid var(--ink);
+    border-radius: 14px;
+    padding: 8px 14px;
+    font-weight: 800;
+    min-width: 3.2rem;
+    text-align: center;
+  }
+  .clock.warn {
+    background: #ffd4cc;
+    color: var(--tomato);
+    animation: pulse 0.5s ease-in-out infinite alternate;
+  }
+  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.06); } }
+
+  .sum-title {
+    font-family: var(--font-display);
+    font-size: 1.8rem;
+    font-weight: 800;
+    margin: 0 0 6px;
+    color: var(--tomato);
+  }
+  .sum-score {
+    font-family: var(--font-display);
+    font-size: 2.4rem;
+    font-weight: 800;
+    margin: 0 0 8px;
+  }
+  .sum-near { margin: 0 0 12px; color: var(--muted); }
+  .sum-meta { margin: 0 0 16px; font-size: 0.9rem; }
+
+  #summary .menu-panel { text-align: center; }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div id="menu" class="overlay">
+  <div class="menu-panel">
+    <h1 class="brand">LongArms</h1>
+    <p class="tag">Half-court hoops with rubber-hose limbs. Jump and you throw — first to 12.</p>
+    <div class="meta-row">
+      <span>Best <strong id="bestVal">0</strong></span>
+      <span>Wins <strong id="winsVal">0</strong></span>
+    </div>
+    <button class="btn" id="btnPlay" type="button">Play</button>
+    <p class="hint">Move ← → / A D · Jump (throw) Space / W · Touch: left = move, JUMP pad = toss</p>
+  </div>
+</div>
+
+<div id="hud" class="hidden">
+  <div class="scoreboard">
+    <span class="you" id="scoreYou">0</span>
+    <span class="sep">–</span>
+    <span class="them" id="scoreThem">0</span>
+  </div>
+  <div class="clock" id="clockVal" title="Shot clock">—</div>
+</div>
+
+<div id="summary" class="overlay hidden">
+  <div class="menu-panel">
+    <div id="summaryBody"></div>
+    <button class="btn" id="btnAgain" type="button">Again</button>
+    <button class="btn secondary" id="btnMenu" type="button">Menu</button>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
