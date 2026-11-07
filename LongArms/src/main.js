@@ -1,4 +1,4 @@
-/* Boot, menus, HUD, frame loop for LongArms. */
+/* Boot, menus, HUD, frame loop for LongArms (Basket Random vibes). */
 
 import { Input } from './core/input.js';
 import { Save } from './core/save.js';
@@ -14,6 +14,8 @@ import {
   drawParticles,
   drawJumpPad,
   drawMoveHint,
+  drawDunkCinema,
+  drawRemorphBanner,
 } from './game/draw.js';
 
 const canvas = document.getElementById('stage');
@@ -61,7 +63,7 @@ addEventListener('resize', resize);
 function clearFrame() {
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalAlpha = 1;
-  g.fillStyle = '#7ec8c4';
+  g.fillStyle = '#7ec8f0';
   g.fillRect(0, 0, canvas.width, canvas.height);
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
@@ -102,12 +104,12 @@ function endGame() {
   state = 'summary';
   hide(els.hud);
   show(els.summary);
-  const title = sum.won ? 'You win!' : 'Noodle wins';
+  const title = sum.won ? 'You win!' : 'Blue wins';
   els.summaryBody.innerHTML = `
     <p class="sum-title">${title}</p>
     <p class="sum-score">${sum.you} – ${sum.them}</p>
     <p class="sum-near">${sum.nearMiss}</p>
-    <p class="sum-meta">Your points this match: <strong>${sum.you}</strong> · Best: ${profile.bestScore}</p>
+    <p class="sum-meta">Remorphs: <strong>${sum.remorphs}</strong> · Best: ${profile.bestScore}</p>
   `;
   if (sum.won) audio.win();
   else audio.lose();
@@ -131,17 +133,26 @@ function handleEvents(events) {
       case 'throw':
         audio.throw();
         break;
+      case 'dunk':
+        audio.dunk();
+        break;
       case 'score':
         audio.score();
         break;
       case 'bounce':
         audio.bounce();
         break;
+      case 'dribble':
+        audio.dribble();
+        break;
       case 'steal':
         audio.steal();
         break;
       case 'pickup':
         audio.pickup();
+        break;
+      case 'remorph':
+        audio.remorph();
         break;
       case 'clock_warn':
         audio.clockWarn();
@@ -155,30 +166,63 @@ function handleEvents(events) {
   }
 }
 
+function drawWorld(cam) {
+  drawBackground(g, W, H, cam);
+  drawHoop(g, cam);
+}
+
 function frame(ts) {
   const dt = lastTs ? Math.min(0.05, (ts - lastTs) / 1000) : 0;
   lastTs = ts;
 
   clearFrame();
-  const cam = camera(W, H);
 
   if (state === 'menu') {
-    drawBackground(g, W, H, cam, 7);
+    const cam = camera(W, H, 40);
+    drawWorld(cam);
+    const ghost = {
+      morph: { arm: 1.6, leg: 0.8, body: 1, head: 1.1, speed: 1, jump: 1, reach: 1 },
+      def: { jersey: '#e23b3b', skin: '#f0c8a0', accent: '#fff', bodyR: 18 },
+      facing: 1,
+      stretch: 0.4,
+      airborne: false,
+      bodyR: 18,
+    };
+    drawGuy(g, cam, ghost, { x: -40, y: 18 }, false);
+    drawGuy(
+      g,
+      cam,
+      {
+        ...ghost,
+        morph: { ...ghost.morph, arm: 0.9, leg: 1.5, body: 1.3 },
+        def: { jersey: '#2f6fe0', skin: '#e8b890', accent: '#fff', bodyR: 18 },
+        facing: -1,
+      },
+      { x: 90, y: 22 },
+      false
+    );
     drawHoop(g, cam);
   } else if (state === 'playing' && session) {
     const controls = input.controls();
     session.step(dt, controls);
-    const events = session.drainEvents();
-    handleEvents(events);
+    handleEvents(session.drainEvents());
     updateHud();
 
     const pose = session.renderPose();
-    drawBackground(g, W, H, cam, session.seed);
-    drawHoop(g, cam);
+    const cam = camera(W, H, pose.camX);
+    drawWorld(cam);
     drawGuy(g, cam, session.ai, { ...session.ai, ...pose.ai }, session.ball.holder === 'ai');
     drawGuy(g, cam, session.human, { ...session.human, ...pose.human }, session.ball.holder === 'human');
     drawBall(g, cam, pose.ball);
     drawParticles(g, cam, session.particles);
+
+    if (session.phase === 'remorph') {
+      drawRemorphBanner(g, W, H, Math.min(1, session.phaseTimer / 0.2));
+    }
+    if (session.dunking) {
+      const who = session.dunking.who === 'human' ? session.human : session.ai;
+      drawDunkCinema(g, W, H, session.dunking, who);
+    }
 
     if (showTouch) {
       const pad = drawJumpPad(g, W, H);
@@ -188,8 +232,8 @@ function frame(ts) {
 
     if (session.over) endGame();
   } else if (state === 'summary' && session) {
-    drawBackground(g, W, H, cam, session.seed);
-    drawHoop(g, cam);
+    const cam = camera(W, H, session.camX || 40);
+    drawWorld(cam);
   }
 
   input.endFrame();

@@ -1,11 +1,11 @@
 {
   "name": "LongArms",
   "short_name": "LongArms",
-  "description": "Goofy half-court basketball. Jump to throw with noodle arms.",
+  "description": "Basket Random vibes — remorphing arms, jump to throw, chaotic 1v1.",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#7ec8c4",
-  "theme_color": "#e85d4c",
+  "background_color": "#7ec8f0",
+  "theme_color": "#e23b3b",
   "orientation": "any",
   "icons": [
     {

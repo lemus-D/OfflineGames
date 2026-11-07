@@ -1,141 +1,131 @@
-/* Canvas 2D: goofy rubber-hose basketball court. */
+/* Canvas 2D: Basket Random-ish flat court + remorphing noodle bodies. */
 
-import { hash2i } from '../core/rng.js';
 import { COURT, HOOP, BALL } from './content.js';
 
 const PAL = {
-  skyTop: '#9ad9d4',
-  skyBot: '#6eb8c0',
-  wall: '#f0d9b0',
-  wallStripe: '#e2c498',
-  floor: '#e8b86a',
-  floorLine: '#f5d9a8',
-  ink: '#1a1a2e',
-  rim: '#e85d4c',
-  net: '#f8f4ec',
-  backboard: '#f4f0e6',
-  ball: '#f07828',
-  ballLine: '#1a1a2e',
+  sky: '#7ec8f0',
+  skyDeep: '#5aaee0',
+  wall: '#d9efe8',
+  floor: '#f0c987',
+  line: '#ffffff',
+  ink: '#222033',
+  rim: '#ff4d4d',
+  net: '#f7f7f7',
+  backboard: '#f4f4f4',
+  ball: '#ff7a1a',
+  ballLine: '#222033',
 };
 
 /**
- * Map world → screen. Origin: floor center bottomish.
  * @param {number} W
  * @param {number} H
+ * @param {number} [camX]
  */
-export function camera(W, H) {
-  const worldW = COURT.maxX - COURT.minX;
-  const pad = 24;
-  const scale = Math.min((W - pad * 2) / worldW, (H - 80) / 280);
+export function camera(W, H, camX = 0) {
+  const viewW = 420;
+  const scale = Math.min(W / viewW, (H - 40) / 300);
   const ox = W / 2;
-  const oy = H - 36;
+  const oy = H - 28;
+  const focus = camX;
   return {
     scale,
+    focus,
     toScreen(x, y) {
       return {
-        x: ox + (x - (COURT.minX + COURT.maxX) / 2) * scale,
+        x: ox + (x - focus) * scale,
         y: oy - y * scale,
       };
     },
   };
 }
 
-export function drawBackground(g, W, H, cam, seed = 1) {
-  const grd = g.createLinearGradient(0, 0, 0, H);
-  grd.addColorStop(0, PAL.skyTop);
-  grd.addColorStop(1, PAL.skyBot);
+export function drawBackground(g, W, H, cam) {
+  const grd = g.createLinearGradient(0, 0, 0, H * 0.7);
+  grd.addColorStop(0, PAL.sky);
+  grd.addColorStop(1, PAL.skyDeep);
   g.fillStyle = grd;
   g.fillRect(0, 0, W, H);
 
-  // Gym wall
-  const wallTop = cam.toScreen(0, 260).y;
   const floorY = cam.toScreen(0, 0).y;
+  const wallTop = cam.toScreen(0, 280).y;
+
   g.fillStyle = PAL.wall;
-  g.fillRect(0, wallTop, W, floorY - wallTop);
+  g.fillRect(0, wallTop, W, Math.max(0, floorY - wallTop));
 
-  // Window stripes
-  for (let i = 0; i < 5; i++) {
-    const wx = W * (0.12 + i * 0.18);
-    g.fillStyle = 'rgba(255,255,255,0.35)';
-    g.fillRect(wx, wallTop + 20, 36, Math.max(40, floorY - wallTop - 80));
-    g.strokeStyle = PAL.ink;
-    g.lineWidth = 2;
-    g.strokeRect(wx, wallTop + 20, 36, Math.max(40, floorY - wallTop - 80));
-  }
-
-  // Floor
-  g.fillStyle = PAL.floor;
-  g.fillRect(0, floorY, W, H - floorY);
-  g.strokeStyle = PAL.floorLine;
-  g.lineWidth = 3;
-  for (let i = 0; i < 8; i++) {
-    const y = floorY + 8 + i * 14;
+  // Soft crowd blobs
+  for (let i = 0; i < 14; i++) {
+    const x = ((i * 97) % W) + 10;
+    g.fillStyle = i % 2 ? 'rgba(255,255,255,0.25)' : 'rgba(30,40,60,0.12)';
     g.beginPath();
-    g.moveTo(0, y);
-    g.lineTo(W, y + hash2i(i, 2, seed) * 4 - 2);
-    g.stroke();
+    g.arc(x, wallTop + 28 + (i % 3) * 8, 10 + (i % 4), 0, Math.PI * 2);
+    g.fill();
   }
 
-  // Court key outline
-  const left = cam.toScreen(COURT.minX + 20, 0);
-  const right = cam.toScreen(COURT.maxX - 20, 0);
-  g.strokeStyle = 'rgba(26,26,46,0.35)';
-  g.lineWidth = 3;
+  g.fillStyle = PAL.floor;
+  g.fillRect(0, floorY, W, H - floorY + 2);
+
+  g.strokeStyle = PAL.line;
+  g.lineWidth = Math.max(2, 3 * cam.scale);
   g.beginPath();
-  g.moveTo(left.x, floorY - 2);
-  g.lineTo(right.x, floorY - 2);
+  g.moveTo(0, floorY);
+  g.lineTo(W, floorY);
   g.stroke();
 
-  // Center circle
+  // Center line + circle in world
   const mid = cam.toScreen(COURT.midX, 0);
   g.beginPath();
-  g.arc(mid.x, floorY - 2, 36 * cam.scale, Math.PI, 0);
+  g.moveTo(mid.x, floorY);
+  g.lineTo(mid.x, floorY - 8);
   g.stroke();
+  g.beginPath();
+  g.arc(mid.x, floorY, 42 * cam.scale, Math.PI, 0);
+  g.stroke();
+
+  // Key under hoop
+  const k0 = cam.toScreen(HOOP.x - 70, 0);
+  const k1 = cam.toScreen(HOOP.x + 10, 0);
+  g.strokeStyle = 'rgba(255,255,255,0.85)';
+  g.strokeRect(k0.x, floorY - 70 * cam.scale, k1.x - k0.x, 70 * cam.scale);
 }
 
 export function drawHoop(g, cam) {
-  const boardTL = cam.toScreen(HOOP.backboardX - 2, HOOP.backboardTop);
-  const boardBR = cam.toScreen(HOOP.backboardX + 6, HOOP.backboardBot);
-  const rim = cam.toScreen(HOOP.x, HOOP.rimY);
   const s = cam.scale;
+  const board = cam.toScreen(HOOP.backboardX, HOOP.backboardTop);
+  const boardBot = cam.toScreen(HOOP.backboardX, HOOP.backboardBot);
+  const rim = cam.toScreen(HOOP.x, HOOP.rimY);
+  const pole = cam.toScreen(HOOP.backboardX + 6, 0);
 
-  // Pole
   g.strokeStyle = PAL.ink;
-  g.lineWidth = 5;
-  const poleBase = cam.toScreen(HOOP.backboardX + 4, 0);
+  g.lineWidth = 6;
   g.beginPath();
-  g.moveTo(poleBase.x, poleBase.y);
-  g.lineTo(boardBR.x + 4, boardBR.y);
+  g.moveTo(pole.x, pole.y);
+  g.lineTo(boardBot.x + 4, boardBot.y);
   g.stroke();
 
-  // Backboard
+  const bh = boardBot.y - board.y;
   g.fillStyle = PAL.backboard;
   g.strokeStyle = PAL.ink;
   g.lineWidth = 3;
-  const bw = Math.abs(boardBR.x - boardTL.x) + 10;
-  const bh = Math.abs(boardBR.y - boardTL.y);
-  g.fillRect(boardTL.x - 4, boardTL.y, bw, bh);
-  g.strokeRect(boardTL.x - 4, boardTL.y, bw, bh);
+  g.fillRect(board.x - 8, board.y, 18 * s + 10, bh);
+  g.strokeRect(board.x - 8, board.y, 18 * s + 10, bh);
   g.strokeStyle = PAL.rim;
   g.lineWidth = 3;
-  g.strokeRect(boardTL.x + 6, boardTL.y + bh * 0.35, bw * 0.45, bh * 0.35);
+  g.strokeRect(board.x - 2, board.y + bh * 0.3, 12 * s, bh * 0.35);
 
-  // Rim
   g.strokeStyle = PAL.rim;
-  g.lineWidth = 4;
+  g.lineWidth = 5;
   g.beginPath();
-  g.ellipse(rim.x, rim.y, HOOP.rimR * s, 5 * s, 0, 0, Math.PI * 2);
+  g.ellipse(rim.x, rim.y, HOOP.rimR * s, 4.5 * s, 0, 0, Math.PI * 2);
   g.stroke();
 
-  // Net
   g.strokeStyle = PAL.net;
   g.lineWidth = 1.5;
-  for (let i = 0; i < 6; i++) {
-    const t = i / 5;
+  for (let i = 0; i < 7; i++) {
+    const t = i / 6;
     const x0 = rim.x - HOOP.rimR * s + t * HOOP.rimR * 2 * s;
     g.beginPath();
     g.moveTo(x0, rim.y);
-    g.quadraticCurveTo(rim.x + (t - 0.5) * 8, rim.y + 18 * s, rim.x + (t - 0.5) * 10 * s, rim.y + 28 * s);
+    g.lineTo(rim.x + (t - 0.5) * 12 * s, rim.y + 26 * s);
     g.stroke();
   }
 }
@@ -143,98 +133,115 @@ export function drawHoop(g, cam) {
 export function drawGuy(g, cam, guy, pose, holding) {
   const p = cam.toScreen(pose.x, pose.y);
   const s = cam.scale;
-  const def = guy.def;
+  const m = guy.morph;
   const face = guy.facing;
   const stretch = guy.stretch || 0;
-  const arm = (def.armLen + stretch * 22) * s;
+
+  const bodyW = 22 * m.body * s;
+  const bodyH = 28 * m.body * s;
+  const headR = 12 * m.head * s;
+  const legLen = 18 * m.leg * s;
+  const armLen = (PHYSICS_ARM(m) + stretch * 18) * s;
 
   g.save();
   g.translate(p.x, p.y);
 
   // Shadow
-  g.fillStyle = 'rgba(26,26,46,0.18)';
+  g.fillStyle = 'rgba(34,32,51,0.18)';
   g.beginPath();
-  g.ellipse(0, def.bodyR * s + 2, 18 * s, 5 * s, 0, 0, Math.PI * 2);
+  g.ellipse(0, guy.bodyR * s + 2, 16 * m.body * s, 5 * s, 0, 0, Math.PI * 2);
   g.fill();
 
-  // Legs (goofy)
-  g.strokeStyle = PAL.ink;
-  g.lineWidth = 4;
+  const swing = Math.sin(pose.x * 0.12) * (guy.airborne ? 0.15 : 0.55);
+
+  // Legs
+  g.strokeStyle = guy.def.skin;
+  g.lineWidth = Math.max(3, 4.5 * s);
   g.lineCap = 'round';
-  const legSwing = Math.sin((pose.x + pose.y) * 0.08) * (guy.airborne ? 0.2 : 0.5);
   g.beginPath();
-  g.moveTo(-6 * s, 0);
-  g.lineTo((-10 - legSwing * 8) * s, def.bodyR * s);
-  g.moveTo(6 * s, 0);
-  g.lineTo((10 + legSwing * 8) * s, def.bodyR * s);
+  g.moveTo(-bodyW * 0.25, 0);
+  g.lineTo((-10 - swing * 10) * s, legLen);
+  g.moveTo(bodyW * 0.25, 0);
+  g.lineTo((10 + swing * 10) * s, legLen);
   g.stroke();
 
   // Shoes
   g.fillStyle = PAL.ink;
-  g.fillRect((-16 - legSwing * 8) * s, def.bodyR * s - 2, 12 * s, 6 * s);
-  g.fillRect((4 + legSwing * 8) * s, def.bodyR * s - 2, 12 * s, 6 * s);
+  g.fillRect((-16 - swing * 10) * s, legLen - 2, 11 * s, 5 * s);
+  g.fillRect((5 + swing * 10) * s, legLen - 2, 11 * s, 5 * s);
 
   // Torso
-  g.fillStyle = def.jersey;
+  g.fillStyle = guy.def.jersey;
   g.strokeStyle = PAL.ink;
   g.lineWidth = 3;
   g.beginPath();
-  g.roundRect(-12 * s, -28 * s, 24 * s, 32 * s, 8 * s);
+  g.rect(-bodyW / 2, -bodyH, bodyW, bodyH);
   g.fill();
   g.stroke();
 
-  // Head
-  g.fillStyle = def.skin;
+  // Number-ish dash
+  g.strokeStyle = guy.def.accent;
+  g.lineWidth = 2;
   g.beginPath();
-  g.arc(0, -40 * s, 14 * s, 0, Math.PI * 2);
+  g.moveTo(-4 * s, -bodyH * 0.55);
+  g.lineTo(4 * s, -bodyH * 0.55);
+  g.stroke();
+
+  // Head
+  g.fillStyle = guy.def.skin;
+  g.beginPath();
+  g.arc(0, -bodyH - headR * 0.15, headR, 0, Math.PI * 2);
   g.fill();
+  g.strokeStyle = PAL.ink;
+  g.lineWidth = 3;
   g.stroke();
 
   // Face
   g.fillStyle = PAL.ink;
   g.beginPath();
-  g.arc(face * 4 * s, -42 * s, 2.2 * s, 0, Math.PI * 2);
-  g.arc(face * 9 * s, -42 * s, 2.2 * s, 0, Math.PI * 2);
+  g.arc(face * headR * 0.25, -bodyH - headR * 0.25, 2 * s, 0, Math.PI * 2);
+  g.arc(face * headR * 0.55, -bodyH - headR * 0.25, 2 * s, 0, Math.PI * 2);
   g.fill();
   g.lineWidth = 2;
   g.beginPath();
-  g.arc(face * 6 * s, -36 * s, 4 * s, 0.1, Math.PI - 0.1);
+  g.arc(face * headR * 0.4, -bodyH + headR * 0.05, 3.5 * s, 0.15, Math.PI - 0.15);
   g.stroke();
 
-  // Noodle arms
-  g.strokeStyle = def.skin;
-  g.lineWidth = 5 * s;
-  const handX = face * arm;
-  const handY = (-8 + stretch * -12) * s;
+  // Arms (the whole joke)
+  g.strokeStyle = guy.def.skin;
+  g.lineWidth = Math.max(3, 5 * s * Math.min(1.4, m.arm * 0.7));
+  const handX = face * armLen;
+  const handY = -bodyH * 0.35 - stretch * 16 * s;
   g.beginPath();
-  g.moveTo(face * 10 * s, -18 * s);
-  g.quadraticCurveTo(face * arm * 0.55, (-30 - stretch * 20) * s, handX, handY);
+  g.moveTo(face * bodyW * 0.45, -bodyH * 0.7);
+  g.quadraticCurveTo(face * armLen * 0.5, -bodyH - stretch * 20 * s, handX, handY);
   g.stroke();
-  // Second arm
   g.beginPath();
-  g.moveTo(-face * 8 * s, -16 * s);
-  g.quadraticCurveTo(-face * 20 * s, 0, -face * 16 * s, 10 * s);
+  g.moveTo(-face * bodyW * 0.4, -bodyH * 0.65);
+  g.quadraticCurveTo(-face * 22 * s, -bodyH * 0.1, -face * 18 * s, 6 * s);
   g.stroke();
 
-  // Hands
-  g.fillStyle = def.skin;
+  g.fillStyle = guy.def.skin;
   g.strokeStyle = PAL.ink;
   g.lineWidth = 2;
   g.beginPath();
-  g.arc(handX, handY, 6 * s, 0, Math.PI * 2);
+  g.arc(handX, handY, 5.5 * s, 0, Math.PI * 2);
   g.fill();
   g.stroke();
 
   if (holding) {
-    // Ball drawn separately at world pos; highlight grip
-    g.strokeStyle = 'rgba(240,120,40,0.5)';
+    g.strokeStyle = 'rgba(255,122,26,0.55)';
     g.lineWidth = 2;
     g.beginPath();
-    g.arc(handX, handY, 10 * s, 0, Math.PI * 2);
+    g.arc(handX, handY, 9 * s, 0, Math.PI * 2);
     g.stroke();
   }
 
   g.restore();
+}
+
+function PHYSICS_ARM(m) {
+  return 36 * m.arm;
 }
 
 export function drawBall(g, cam, pose) {
@@ -242,9 +249,9 @@ export function drawBall(g, cam, pose) {
   const s = cam.scale;
   const r = BALL.radius * s;
 
-  g.fillStyle = 'rgba(26,26,46,0.15)';
+  g.fillStyle = 'rgba(34,32,51,0.16)';
   g.beginPath();
-  g.ellipse(p.x, cam.toScreen(pose.x, 0).y + 2, r * 0.9, r * 0.35, 0, 0, Math.PI * 2);
+  g.ellipse(p.x, cam.toScreen(pose.x, 0).y + 2, r * 0.95, r * 0.35, 0, 0, Math.PI * 2);
   g.fill();
 
   g.fillStyle = PAL.ball;
@@ -258,11 +265,11 @@ export function drawBall(g, cam, pose) {
   g.strokeStyle = PAL.ballLine;
   g.lineWidth = 1.5;
   g.beginPath();
-  g.arc(p.x, p.y, r * 0.55, -0.8, 0.8);
+  g.arc(p.x, p.y, r * 0.55, -0.9, 0.9);
   g.stroke();
   g.beginPath();
   g.moveTo(p.x, p.y - r);
-  g.quadraticCurveTo(p.x + r * 0.4, p.y, p.x, p.y + r);
+  g.quadraticCurveTo(p.x + r * 0.35, p.y, p.x, p.y + r);
   g.stroke();
 }
 
@@ -273,9 +280,65 @@ export function drawParticles(g, cam, particles) {
     g.globalAlpha = t;
     g.fillStyle = p.color;
     g.beginPath();
-    g.arc(sp.x, sp.y, 4 * t * cam.scale, 0, Math.PI * 2);
+    g.arc(sp.x, sp.y, 5 * t * cam.scale, 0, Math.PI * 2);
     g.fill();
   }
+  g.globalAlpha = 1;
+}
+
+/** Basket Random-style dunk close-up flash. */
+export function drawDunkCinema(g, W, H, dunking, guy) {
+  if (!dunking) return;
+  const t = dunking.t / dunking.life;
+  g.fillStyle = `rgba(10,14,28,${0.55 * (1 - t)})`;
+  g.fillRect(0, 0, W, H);
+
+  const cx = W * 0.5;
+  const cy = H * 0.42;
+  const zoom = 1.6 + Math.sin(t * Math.PI) * 0.35;
+  g.save();
+  g.translate(cx, cy);
+  g.scale(zoom, zoom);
+
+  // Giant arm slam silhouette
+  g.strokeStyle = guy.def.skin;
+  g.lineWidth = 14;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(-40, 30);
+  g.quadraticCurveTo(-10, -80, 50, -40);
+  g.stroke();
+
+  g.fillStyle = guy.def.jersey;
+  g.strokeStyle = PAL.ink;
+  g.lineWidth = 4;
+  g.beginPath();
+  g.rect(-28, -10, 40, 50);
+  g.fill();
+  g.stroke();
+
+  g.fillStyle = PAL.ball;
+  g.beginPath();
+  g.arc(55, -45, 18, 0, Math.PI * 2);
+  g.fill();
+  g.stroke();
+
+  g.fillStyle = '#fff';
+  g.font = '800 22px "Trebuchet MS", sans-serif';
+  g.textAlign = 'center';
+  g.fillText('SLAM!', 0, 70);
+  g.restore();
+}
+
+export function drawRemorphBanner(g, W, H, alpha = 1) {
+  g.globalAlpha = alpha;
+  g.fillStyle = 'rgba(34,32,51,0.35)';
+  g.fillRect(0, H * 0.38, W, 54);
+  g.fillStyle = '#ffe66d';
+  g.font = '800 28px "Trebuchet MS", sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('RANDOM BODIES!', W / 2, H * 0.38 + 27);
   g.globalAlpha = 1;
 }
 
@@ -284,14 +347,14 @@ export function drawJumpPad(g, W, H) {
   const padH = Math.min(72, H * 0.12);
   const x = W - padW - 16;
   const y = H - padH - 18;
-  g.fillStyle = 'rgba(26,26,46,0.45)';
-  g.strokeStyle = 'rgba(248,244,236,0.7)';
+  g.fillStyle = 'rgba(34,32,51,0.5)';
+  g.strokeStyle = 'rgba(255,255,255,0.75)';
   g.lineWidth = 3;
   g.beginPath();
-  g.roundRect(x, y, padW, padH, 16);
+  g.roundRect(x, y, padW, padH, 14);
   g.fill();
   g.stroke();
-  g.fillStyle = '#f8f4ec';
+  g.fillStyle = '#fff';
   g.font = `700 ${Math.round(padH * 0.32)}px "Trebuchet MS", sans-serif`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
@@ -301,11 +364,11 @@ export function drawJumpPad(g, W, H) {
 
 export function drawMoveHint(g, W, H) {
   const zoneW = W * 0.42;
-  g.fillStyle = 'rgba(26,26,46,0.2)';
+  g.fillStyle = 'rgba(34,32,51,0.22)';
   g.beginPath();
   g.roundRect(12, H - 70, zoneW, 52, 14);
   g.fill();
-  g.fillStyle = 'rgba(248,244,236,0.65)';
+  g.fillStyle = 'rgba(255,255,255,0.7)';
   g.font = '600 13px "Trebuchet MS", sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';

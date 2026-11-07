@@ -1,5 +1,5 @@
 /* LongArms service worker — precache, versioned cache name. */
-const CACHE = 'longarms-v2';
+const CACHE = 'longarms-v3';
 const PRECACHE = [
   './',
   './index.html',

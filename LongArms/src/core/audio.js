@@ -91,4 +91,18 @@ export class Audio {
   pickup() {
     this._beep(300, 0.08, 'triangle', 0.06, 100);
   }
+
+  dunk() {
+    this._beep(90, 0.12, 'square', 0.1, 40);
+    this._beep(180, 0.2, 'sawtooth', 0.08, 220);
+  }
+
+  dribble() {
+    this._beep(70, 0.04, 'triangle', 0.035, -10);
+  }
+
+  remorph() {
+    this._beep(160, 0.14, 'triangle', 0.09, 280);
+    this._beep(320, 0.16, 'sine', 0.06, 160);
+  }
 }
