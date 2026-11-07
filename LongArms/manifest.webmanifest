@@ -1,0 +1,18 @@
+{
+  "name": "LongArms",
+  "short_name": "LongArms",
+  "description": "Basket Random vibes — remorphing arms, jump to throw, chaotic 1v1.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#7ec8f0",
+  "theme_color": "#e23b3b",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'><rect width='128' height='128' fill='%237ec8c4'/><circle cx='90' cy='36' r='18' fill='%23f07828'/><path stroke='%23f2c4a0' stroke-width='10' fill='none' stroke-linecap='round' d='M28 110c10-40 36-58 62-66'/><circle cx='40' cy='44' r='16' fill='%23e85d4c'/><rect x='32' y='56' width='16' height='28' rx='6' fill='%23e85d4c'/></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
